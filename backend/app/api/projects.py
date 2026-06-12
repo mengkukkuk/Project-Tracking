@@ -16,7 +16,7 @@ from ..validation import (
     status_field,
     str_field,
 )
-from .helpers import log_activity
+from .helpers import log_activity, require_owner_or_admin
 
 bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
@@ -39,6 +39,8 @@ def _resolve_tags(names):
         name = str(raw).strip()
         if not name:
             continue
+        if len(name) > 48:
+            raise ValidationError({"tags": f"tag name must be at most 48 characters: '{name[:20]}...'"})
         tag = Session.query(Tag).filter_by(name=name).first()
         if not tag:
             tag = Tag(name=name)
@@ -148,8 +150,11 @@ def update_project(pid):
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
-    data = require_dict(request.get_json(silent=True))
     user = current_user()
+    denied = require_owner_or_admin(user, p.owner_id)
+    if denied:
+        return denied
+    data = require_dict(request.get_json(silent=True))
 
     changes = []
     if "name" in data:
@@ -195,6 +200,10 @@ def delete_project(pid):
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
+    user = current_user()
+    denied = require_owner_or_admin(user, p.owner_id)
+    if denied:
+        return denied
     Session.delete(p)
     Session.commit()
     return "", 204

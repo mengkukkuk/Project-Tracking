@@ -12,6 +12,7 @@ const ui = useUiStore()
 const mode = ref('login') // 'login' | 'register'
 const form = ref({ name: '', email: '', password: '' })
 const loading = ref(false)
+const isDev = import.meta.env.DEV
 
 async function submit() {
   loading.value = true
@@ -31,6 +32,7 @@ async function submit() {
 }
 
 function fillDemo() {
+  if (!isDev) return
   mode.value = 'login'
   form.value = { name: '', email: 'admin@scada.local', password: 'admin123' }
 }
@@ -72,7 +74,7 @@ function fillDemo() {
         </template>
       </div>
 
-      <button class="demo" @click="fillDemo">ใช้บัญชีเดโม (admin@scada.local)</button>
+      <button v-if="isDev" class="demo" @click="fillDemo">ใช้บัญชีเดโม (admin@scada.local)</button>
     </div>
   </div>
 </template>

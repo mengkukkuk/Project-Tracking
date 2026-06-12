@@ -14,7 +14,7 @@ from .api import blueprints as api_blueprints
 from .auth import bp as auth_bp
 from .config import Config
 from .errors import register_error_handlers
-from .extensions import Session, engine, init_engine, jwt
+from .extensions import Session, engine, init_engine, jwt, limiter
 from .models import Base
 
 
@@ -28,8 +28,15 @@ def create_app(config: Config = None) -> Flask:
 
     # Extensions
     jwt.init_app(app)
+    limiter.init_app(app)
     origins = config.CORS_ORIGINS
-    CORS(app, resources={r"/api/*": {"origins": "*" if origins == "*" else origins.split(",")}})
+    if origins == "*":
+        allowed_origins = "*"
+    elif origins:
+        allowed_origins = [o.strip() for o in origins.split(",") if o.strip()]
+    else:
+        allowed_origins = []
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
     # JWT error responses share the standard envelope.
     @jwt.unauthorized_loader

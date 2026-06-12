@@ -11,7 +11,7 @@ from ..validation import (
     require_dict,
     str_field,
 )
-from .helpers import log_activity
+from .helpers import log_activity, require_owner_or_admin
 
 bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -61,6 +61,11 @@ def delete_task(tid):
     task = Session.get(Task, tid)
     if not task:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
+    user = current_user()
+    project = Session.get(Project, task.project_id)
+    denied = require_owner_or_admin(user, project.owner_id if project else None)
+    if denied:
+        return denied
     Session.delete(task)
     Session.commit()
     return "", 204

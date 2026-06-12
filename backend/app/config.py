@@ -32,7 +32,8 @@ class Config:
 
     # --- CORS -----------------------------------------------------------
     # Comma-separated list of allowed origins. "*" allows any (dev only).
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+    # Empty string = same-origin only (safe default for production).
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "")
 
     # --- Misc -----------------------------------------------------------
     DEBUG = _bool("FLASK_DEBUG", False)

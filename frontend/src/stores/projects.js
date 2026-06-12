@@ -154,7 +154,9 @@ export const useProjectsStore = defineStore('projects', {
     async refreshStats() {
       try {
         this.stats = await api.stats()
-      } catch { /* non-fatal */ }
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('[refreshStats]', e)
+      }
     },
 
     // --- Detail drawer ---

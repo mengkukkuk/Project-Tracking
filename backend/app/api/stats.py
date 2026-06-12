@@ -3,11 +3,14 @@
 The SPA can derive most of these from the project list, but exposing them here
 keeps heavy dashboards cheap and lets non-SPA clients (reports, exports) reuse
 the same numbers.
+
+Aggregations run entirely in SQL to avoid loading all project rows into Python.
 """
 from datetime import date, timedelta
 
 from flask import Blueprint
 from flask_jwt_extended import jwt_required
+from sqlalchemy import func
 
 from ..extensions import Session
 from ..models import PRIORITIES, STAGES, Project
@@ -18,49 +21,76 @@ bp = Blueprint("stats", __name__, url_prefix="/api/stats")
 @bp.get("")
 @jwt_required()
 def stats():
-    rows = Session.query(Project).all()
-
-    funnel = {s: {"count": 0, "value": 0.0} for s in STAGES}
-    by_fy = {}
-    by_domain = {}
-    by_priority = {p: 0 for p in PRIORITIES}
-    total_value = 0.0
-    overdue = 0
     today = date.today()
     soon = today + timedelta(days=14)
-    upcoming = []
 
-    for r in rows:
-        val = float(r.value or 0)
-        total_value += val
+    # --- Scalar aggregates ---
+    total, total_value, avg_progress = Session.query(
+        func.count(Project.id),
+        func.coalesce(func.sum(Project.value), 0),
+        func.coalesce(func.avg(Project.progress), 0),
+    ).one()
+    total_value = float(total_value)
+    avg_progress = round(float(avg_progress), 1)
 
-        if r.status in funnel:
-            funnel[r.status]["count"] += 1
-            funnel[r.status]["value"] += val
+    # --- Funnel: count + value per status ---
+    funnel = {s: {"count": 0, "value": 0.0} for s in STAGES}
+    for status, cnt, val in Session.query(
+        Project.status,
+        func.count(Project.id),
+        func.coalesce(func.sum(Project.value), 0),
+    ).group_by(Project.status).all():
+        if status in funnel:
+            funnel[status] = {"count": int(cnt), "value": float(val)}
 
-        fy = r.fiscal_year or "future"
+    # --- By fiscal year + status ---
+    by_fy: dict = {}
+    for fy, status, cnt in Session.query(
+        func.coalesce(Project.fiscal_year, "future"),
+        Project.status,
+        func.count(Project.id),
+    ).group_by(Project.fiscal_year, Project.status).all():
         by_fy.setdefault(fy, {s: 0 for s in STAGES})
-        if r.status in STAGES:
-            by_fy[fy][r.status] += 1
+        if status in STAGES:
+            by_fy[fy][status] = int(cnt)
 
-        if r.domain:
-            by_domain[r.domain] = by_domain.get(r.domain, 0) + 1
+    # --- By domain ---
+    by_domain = {
+        domain: int(cnt)
+        for domain, cnt in Session.query(Project.domain, func.count(Project.id))
+        .filter(Project.domain.isnot(None))
+        .group_by(Project.domain)
+        .all()
+    }
 
-        if r.priority in by_priority:
-            by_priority[r.priority] += 1
+    # --- By priority ---
+    by_priority = {p: 0 for p in PRIORITIES}
+    for priority, cnt in Session.query(
+        Project.priority, func.count(Project.id)
+    ).group_by(Project.priority).all():
+        if priority in by_priority:
+            by_priority[priority] = int(cnt)
 
-        if r.due_date and r.status != "Completed":
-            if r.due_date < today:
-                overdue += 1
-            elif r.due_date <= soon:
-                upcoming.append(r.to_dict())
+    # --- Overdue count ---
+    overdue = Session.query(func.count(Project.id)).filter(
+        Project.due_date < today, Project.status != "Completed"
+    ).scalar() or 0
 
-    upcoming.sort(key=lambda p: p["dueDate"] or "")
+    # --- Upcoming (sorted, limited in SQL) ---
+    upcoming_rows = (
+        Session.query(Project)
+        .filter(
+            Project.due_date >= today,
+            Project.due_date <= soon,
+            Project.status != "Completed",
+        )
+        .order_by(Project.due_date.asc())
+        .limit(8)
+        .all()
+    )
 
     completed = funnel["Completed"]["count"]
-    total = len(rows)
-    avg_progress = round(sum((r.progress or 0) for r in rows) / total, 1) if total else 0
-
+    total = int(total)
     return {
         "totalProjects": total,
         "totalValue": total_value,
@@ -70,11 +100,11 @@ def stats():
         "completed": completed,
         "completionRate": round(completed / total * 100, 1) if total else 0,
         "avgProgress": avg_progress,
-        "overdue": overdue,
+        "overdue": int(overdue),
         "funnel": [{"stage": s, **funnel[s]} for s in STAGES],
         "byFiscalYear": by_fy,
         "byDomain": by_domain,
         "byPriority": by_priority,
-        "upcoming": upcoming[:8],
+        "upcoming": [r.to_dict() for r in upcoming_rows],
         "stages": STAGES,
     }

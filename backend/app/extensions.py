@@ -5,10 +5,13 @@ session is removed at the end of every request via a teardown hook (registered
 in ``app/__init__.py``) so connections are never leaked between requests.
 """
 from flask_jwt_extended import JWTManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 jwt = JWTManager()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 # Populated by init_engine() at app-creation time.
 engine = None

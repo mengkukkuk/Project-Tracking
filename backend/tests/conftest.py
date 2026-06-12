@@ -28,7 +28,7 @@ def auth(client):
     """Register a user and return an Authorization header dict."""
     res = client.post(
         "/api/auth/register",
-        json={"name": "Tester", "email": "tester@x.com", "password": "secret1"},
+        json={"name": "Tester", "email": "tester@x.com", "password": "secret123"},
     )
     assert res.status_code == 201, res.get_json()
     token = res.get_json()["token"]

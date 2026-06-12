@@ -12,7 +12,7 @@ from flask_jwt_extended import (
     jwt_required,
 )
 
-from .extensions import Session
+from .extensions import Session, limiter
 from .models import User
 from .validation import require_dict, str_field
 
@@ -34,15 +34,16 @@ def _token_for(user: User) -> str:
 
 
 @bp.post("/register")
+@limiter.limit("5 per minute")
 def register():
     data = require_dict(request.get_json(silent=True))
     name = str_field(data, "name", required=True, max_len=128)
     email = str_field(data, "email", required=True, max_len=255).lower()
     password = str_field(data, "password", required=True)
-    if len(password) < 6:
+    if len(password) < 8:
         from .validation import ValidationError
 
-        raise ValidationError({"password": "must be at least 6 characters"})
+        raise ValidationError({"password": "must be at least 8 characters"})
 
     if Session.query(User).filter_by(email=email).first():
         from .validation import ValidationError
@@ -59,6 +60,7 @@ def register():
 
 
 @bp.post("/login")
+@limiter.limit("10 per minute")
 def login():
     data = require_dict(request.get_json(silent=True))
     email = str_field(data, "email", required=True).lower()
