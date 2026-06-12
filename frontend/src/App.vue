@@ -72,7 +72,7 @@ watch(
         <div class="logo mono">MML</div>
         <div class="brand-text">
           <div class="brand-name">ติดตามโครงการ</div>
-          <div class="brand-sub">SCADA · Project Tracker</div>
+          <div class="brand-sub">Project-Tracking</div>
         </div>
       </div>
 

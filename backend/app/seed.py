@@ -1,4 +1,4 @@
-"""Seed demo data resembling the original SCADA MML dashboard.
+"""Seed demo data for Project-Tracking.
 
 Creates a default admin user and a spread of projects with tasks, tags and
 comments so every view has something to show. Idempotent-ish: it clears and

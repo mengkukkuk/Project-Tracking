@@ -25,10 +25,10 @@ class Config:
     )
 
     # --- Database -------------------------------------------------------
-    # PostgreSQL: postgresql+psycopg2://user:pass@host:5432/scada_mml
-    # MSSQL:      mssql+pyodbc://user:pass@host/scada_mml?driver=ODBC+Driver+18+for+SQL+Server
+    # PostgreSQL: postgresql+psycopg2://user:pass@host:5432/ProjectTracking
+    # MSSQL:      mssql+pyodbc://user:pass@host/ProjectTracking?driver=ODBC+Driver+18+for+SQL+Server
     # SQLite (default): zero-config fallback for local dev / demo
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///scada_mml.db")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///project_tracking.db")
 
     # --- CORS -----------------------------------------------------------
     # Comma-separated list of allowed origins. "*" allows any (dev only).

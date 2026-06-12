@@ -42,7 +42,7 @@ function fillDemo() {
   <div class="auth">
     <div class="panel card">
       <div class="logo mono">MML</div>
-      <h1>ติดตามโครงการ SCADA</h1>
+      <h1>Project-Tracking</h1>
       <p class="sub">{{ mode === 'login' ? 'เข้าสู่ระบบเพื่อดำเนินการต่อ' : 'สร้างบัญชีใหม่' }}</p>
 
       <form @submit.prevent="submit">
