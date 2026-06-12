@@ -8,6 +8,7 @@ import Toasts from '@/components/Toasts.vue'
 import Modal from '@/components/Modal.vue'
 import ProjectForm from '@/components/ProjectForm.vue'
 import ProjectDetail from '@/components/ProjectDetail.vue'
+import AppIcon from '@/components/AppIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,9 +17,9 @@ const auth = useAuthStore()
 const ui = useUiStore()
 
 const nav = [
-  { to: '/', label: 'ภาพรวมโครงการ', icon: '▦' },
-  { to: '/kanban', label: 'บอร์ดงาน (Kanban)', icon: '☰' },
-  { to: '/table', label: 'ตารางโครงการ', icon: '▤' },
+  { to: '/', label: 'Overview', icon: 'overview' },
+  { to: '/kanban', label: 'Kanban', icon: 'kanban' },
+  { to: '/table', label: 'Table', icon: 'table' },
 ]
 
 const isPublic = computed(() => route.meta.public)
@@ -48,7 +49,6 @@ function logout() {
   router.push('/login')
 }
 
-// Load data whenever we're authenticated and on a private route.
 watch(
   () => [auth.isAuthed, isPublic.value],
   ([authed, pub]) => {
@@ -59,34 +59,37 @@ watch(
 </script>
 
 <template>
-  <!-- Public (login) layout -->
   <template v-if="isPublic">
     <RouterView />
     <Toasts />
   </template>
 
-  <!-- App shell -->
   <div v-else class="app">
     <aside class="sidebar">
       <div class="brand">
         <div class="logo mono">MML</div>
         <div class="brand-text">
-          <div class="brand-name">ติดตามโครงการ</div>
-          <div class="brand-sub">Project-Tracking</div>
+          <div class="brand-name">Project Tracking</div>
+          <div class="brand-sub">Engineering delivery cockpit</div>
         </div>
       </div>
 
-      <button class="new-btn btn" @click="openCreate">＋ โครงการใหม่</button>
+      <button class="new-btn btn" @click="openCreate">
+        <AppIcon name="plus" :size="16" />
+        New project
+      </button>
 
-      <nav>
+      <nav aria-label="Main navigation">
         <RouterLink v-for="n in nav" :key="n.to" :to="n.to" class="nav-item">
-          <span class="nav-icon">{{ n.icon }}</span>{{ n.label }}
+          <AppIcon class="nav-icon" :name="n.icon" :size="17" />
+          <span>{{ n.label }}</span>
         </RouterLink>
       </nav>
 
       <div class="sidebar-foot">
         <button class="theme-btn" @click="ui.toggleTheme">
-          {{ ui.isDark ? '☀ โหมดสว่าง' : '☾ โหมดมืด' }}
+          <AppIcon :name="ui.isDark ? 'sun' : 'moon'" :size="15" />
+          {{ ui.isDark ? 'Light mode' : 'Dark mode' }}
         </button>
         <div class="user">
           <span class="avatar">{{ auth.initials }}</span>
@@ -94,24 +97,25 @@ watch(
             <div class="user-name">{{ auth.user?.name }}</div>
             <div class="user-role">{{ auth.user?.role }}</div>
           </div>
-          <button class="logout" title="ออกจากระบบ" @click="logout">⏻</button>
+          <button class="logout" title="Sign out" @click="logout">
+            <AppIcon name="logout" :size="16" />
+          </button>
         </div>
       </div>
     </aside>
 
     <main class="main">
-      <div v-if="store.loading && !store.projects.length" class="state">กำลังโหลด...</div>
+      <div v-if="store.loading && !store.projects.length" class="state">Loading projects...</div>
       <div v-else-if="store.error" class="state err">
         {{ store.error }}
-        <button class="btn ghost sm" @click="store.fetchAll">ลองใหม่</button>
+        <button class="btn ghost sm" @click="store.fetchAll">Try again</button>
       </div>
       <RouterView v-else />
     </main>
 
-    <!-- Global modals -->
     <Modal
       v-if="formProject !== undefined"
-      :title="formProject ? 'แก้ไขโครงการ' : 'สร้างโครงการใหม่'"
+      :title="formProject ? 'Edit project' : 'Create project'"
       wide
       @close="formProject = undefined"
     >
@@ -136,16 +140,16 @@ watch(
 <style scoped>
 .app { display: flex; min-height: 100vh; }
 .sidebar {
-  width: 238px; flex-shrink: 0; background: var(--sidebar);
+  width: 248px; flex-shrink: 0; background: var(--sidebar);
   display: flex; flex-direction: column; padding: 20px 14px; position: sticky; top: 0; height: 100vh;
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 6px 20px; }
 .logo {
-  width: 38px; height: 38px; border-radius: 9px; background: var(--accent); color: #fff;
+  width: 38px; height: 38px; border-radius: 8px; background: var(--accent); color: #fff;
   font-weight: 700; font-size: 13px; display: grid; place-items: center;
 }
-.brand-name { font-size: 14px; font-weight: 600; color: var(--sidebar-text); }
-.brand-sub { font-size: 10px; color: var(--sidebar-dim); margin-top: 1px; }
+.brand-name { font-size: 14px; font-weight: 700; color: var(--sidebar-text); }
+.brand-sub { font-size: 10px; color: var(--sidebar-dim); margin-top: 1px; white-space: nowrap; }
 .new-btn { width: 100%; margin-bottom: 16px; }
 nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .nav-item {
@@ -153,32 +157,37 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
   font-size: 13px; color: var(--sidebar-dim); text-decoration: none; transition: background .12s, color .12s;
 }
 .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
-.nav-item.router-link-exact-active { background: var(--accent); color: #fff; font-weight: 600; }
-.nav-icon { font-size: 14px; width: 16px; text-align: center; }
+.nav-item.router-link-exact-active { background: var(--accent); color: #fff; font-weight: 700; }
+.nav-icon { width: 17px; }
 .sidebar-foot { display: flex; flex-direction: column; gap: 12px; }
 .theme-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
   padding: 9px; border: 1px solid var(--sidebar-hover); background: transparent;
   color: var(--sidebar-dim); border-radius: 8px; font-size: 12px; cursor: pointer; font-family: inherit;
 }
 .theme-btn:hover { color: var(--sidebar-text); }
-.user { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 9px; background: var(--sidebar-hover); }
-.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center; flex-shrink: 0; }
+.user { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 8px; background: var(--sidebar-hover); }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
 .user-info { flex: 1; min-width: 0; }
-.user-name { font-size: 12px; font-weight: 600; color: var(--sidebar-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-role { font-size: 10px; color: var(--sidebar-dim); }
-.logout { background: none; border: none; color: var(--sidebar-dim); cursor: pointer; font-size: 15px; padding: 4px; }
+.user-name { font-size: 12px; font-weight: 700; color: var(--sidebar-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 10px; color: var(--sidebar-dim); text-transform: uppercase; }
+.logout { display: grid; place-items: center; background: none; border: none; color: var(--sidebar-dim); cursor: pointer; padding: 4px; }
 .logout:hover { color: var(--danger); }
 .main { flex: 1; padding: 28px 32px; overflow-x: hidden; min-width: 0; }
 .state { padding: 60px; text-align: center; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .state.err { color: var(--danger); }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .app { flex-direction: column; }
-  .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; }
-  .brand { padding: 0; }
-  nav { flex-direction: row; flex: 1 1 100%; order: 3; }
-  .new-btn { width: auto; margin: 0; order: 2; }
-  .sidebar-foot { flex-direction: row; order: 2; }
+  .sidebar { width: 100%; height: auto; position: static; display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+  .brand { padding: 0; min-width: 0; }
+  .brand-sub { white-space: normal; }
+  nav { grid-column: 1 / -1; flex-direction: row; overflow-x: auto; padding-bottom: 2px; }
+  .nav-item { flex: 1; justify-content: center; min-width: 96px; }
+  .new-btn { width: auto; margin: 0; }
+  .sidebar-foot { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+  .theme-btn { min-width: 112px; }
+  .user { flex: 1; }
   .main { padding: 18px; }
 }
 </style>

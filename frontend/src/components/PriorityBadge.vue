@@ -2,7 +2,7 @@
 import { PRIORITY_COLORS } from '@/composables/useChartTheme'
 defineProps({ priority: String })
 
-const LABEL = { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สูง', critical: 'วิกฤต' }
+const LABEL = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 </script>
 
 <template>
@@ -14,7 +14,7 @@ const LABEL = { low: 'ต่ำ', medium: 'ปานกลาง', high: 'สู
 <style scoped>
 .pri {
   display: inline-block; padding: 2px 8px; border-radius: 6px;
-  font-size: 11px; font-weight: 600; border: 1px solid;
+  font-size: 11px; font-weight: 700; border: 1px solid;
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 </style>

@@ -1,7 +1,8 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+import AppIcon from './AppIcon.vue'
 
-const props = defineProps({
+defineProps({
   title: String,
   wide: Boolean,
 })
@@ -20,7 +21,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       <div class="modal" :class="{ wide }">
         <header class="modal-head">
           <h2>{{ title }}</h2>
-          <button class="icon-btn" @click="emit('close')" aria-label="ปิด">✕</button>
+          <button class="icon-btn" @click="emit('close')" aria-label="Close">
+            <AppIcon name="close" :size="16" />
+          </button>
         </header>
         <div class="modal-body">
           <slot />
@@ -44,7 +47,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 @keyframes ovl { from { opacity: 0; } to { opacity: 1; } }
 .modal {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 14px; box-shadow: var(--shadow-lg);
+  border-radius: 8px; box-shadow: var(--shadow-lg);
   width: 100%; max-width: 540px; animation: pop .2s ease;
 }
 .modal.wide { max-width: 880px; }
