@@ -1,0 +1,87 @@
+def _create(client, auth, **over):
+    payload = {
+        "name": "Test Project",
+        "domain": "IoT",
+        "customer": "ACME",
+        "status": "Pre-Sale",
+        "priority": "high",
+        "value": 1_000_000,
+        "progress": 20,
+        "fiscalYear": "70",
+        "tags": ["alpha", "beta"],
+    }
+    payload.update(over)
+    return client.post("/api/projects", json=payload, headers=auth)
+
+
+def test_create_project(client, auth):
+    res = _create(client, auth)
+    assert res.status_code == 201
+    data = res.get_json()
+    assert data["name"] == "Test Project"
+    assert data["value"] == 1_000_000
+    assert {t["name"] for t in data["tags"]} == {"alpha", "beta"}
+    # creation is recorded in the activity feed
+    assert any(a["action"] == "created" for a in data["activities"])
+
+
+def test_create_validation_errors(client, auth):
+    res = client.post("/api/projects", json={"value": -5}, headers=auth)
+    assert res.status_code == 422
+    fields = res.get_json()["error"]["fields"]
+    assert "name" in fields  # required
+
+    res = _create(client, auth, status="Nonsense")
+    assert res.status_code == 422
+
+    res = _create(client, auth, progress=999)
+    # progress is clamped at the validator boundary -> rejected as > maximum
+    assert res.status_code == 422
+
+
+def test_list_filter_search_sort(client, auth):
+    _create(client, auth, name="Alpha", status="Pre-Sale", value=100)
+    _create(client, auth, name="Bravo", status="Completed", value=300)
+    _create(client, auth, name="Charlie", status="Completed", value=200)
+
+    res = client.get("/api/projects?status=Completed", headers=auth)
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["total"] == 2
+    assert all(p["status"] == "Completed" for p in body["items"])
+
+    res = client.get("/api/projects?q=brav", headers=auth)
+    assert res.get_json()["total"] == 1
+
+    res = client.get("/api/projects?sort=value&dir=asc", headers=auth)
+    values = [p["value"] for p in res.get_json()["items"]]
+    assert values == sorted(values)
+
+
+def test_get_update_delete(client, auth):
+    pid = _create(client, auth).get_json()["id"]
+
+    res = client.get(f"/api/projects/{pid}", headers=auth)
+    assert res.status_code == 200
+
+    res = client.patch(
+        f"/api/projects/{pid}", json={"status": "Award", "progress": 50}, headers=auth
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["status"] == "Award"
+    assert data["progress"] == 50
+    # a status change logs a "moved" activity
+    assert any(a["action"] == "moved" for a in data["activities"])
+
+    assert client.delete(f"/api/projects/{pid}", headers=auth).status_code == 204
+    assert client.get(f"/api/projects/{pid}", headers=auth).status_code == 404
+
+
+def test_pagination(client, auth):
+    for i in range(5):
+        _create(client, auth, name=f"P{i}")
+    res = client.get("/api/projects?perPage=2&page=1", headers=auth)
+    body = res.get_json()
+    assert body["total"] == 5
+    assert len(body["items"]) == 2

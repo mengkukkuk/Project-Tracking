@@ -1,0 +1,16 @@
+# Core runtime
+Flask>=3.0
+flask-cors>=4.0
+Flask-JWT-Extended>=4.6
+SQLAlchemy>=2.0
+python-dotenv>=1.0
+
+# Production WSGI server (pick one for deployment)
+waitress>=3.0        # Windows-friendly
+# gunicorn>=22.0     # Linux
+
+# --- Database drivers (install the one you use) ---
+# PostgreSQL:
+# psycopg2-binary>=2.9
+# MSSQL (needs system ODBC Driver 17/18):
+# pyodbc>=5.0
