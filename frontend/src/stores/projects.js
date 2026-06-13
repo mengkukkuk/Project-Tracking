@@ -10,6 +10,14 @@ export const STAGES = [
   'Completed',
 ]
 
+// Progress is derived from task completion: checked tasks / total tasks.
+// Every project (list row or detail) carries taskCount/taskDone, kept fresh by
+// _syncTaskCounts, so this stays live as the checklist is toggled.
+export function taskProgress(p) {
+  const total = p?.taskCount || 0
+  return total ? Math.round(((p.taskDone || 0) / total) * 100) : 0
+}
+
 export const useProjectsStore = defineStore('projects', {
   state: () => ({
     projects: [],
@@ -106,9 +114,17 @@ export const useProjectsStore = defineStore('projects', {
 
     _upsert(project) {
       const i = this.projects.findIndex((x) => x.id === project.id)
-      // Keep the lightweight list shape; detail payloads carry extra keys.
-      if (i !== -1) this.projects[i] = { ...this.projects[i], ...project }
-      else this.projects.unshift(project)
+      // Replace the array reference (not in-place) so @tanstack/vue-table, which
+      // memoizes its row model by data identity, rebuilds and re-runs accessors
+      // (e.g. the task-derived progress column) without a manual refresh.
+      if (i !== -1) {
+        const next = this.projects.slice()
+        // Keep the lightweight list shape; detail payloads carry extra keys.
+        next[i] = { ...next[i], ...project }
+        this.projects = next
+      } else {
+        this.projects = [project, ...this.projects]
+      }
     },
 
     async createProject(data) {
@@ -183,10 +199,21 @@ export const useProjectsStore = defineStore('projects', {
       return task
     },
 
+    // Optimistic toggle: flip immediately so the checklist + progress bar update
+    // on the same frame, then reconcile with the server. Roll back on failure.
     async toggleTask(task) {
-      const updated = await api.updateTask(task.id, { done: !task.done })
-      Object.assign(task, updated)
+      const prev = task.done
+      task.done = !prev
       this._syncTaskCounts(task.projectId)
+      try {
+        const updated = await api.updateTask(task.id, { done: task.done })
+        Object.assign(task, updated)
+        this._syncTaskCounts(task.projectId)
+      } catch (e) {
+        task.done = prev
+        this._syncTaskCounts(task.projectId)
+        throw e
+      }
     },
 
     async deleteTask(task) {
@@ -198,11 +225,14 @@ export const useProjectsStore = defineStore('projects', {
     _syncTaskCounts(pid) {
       if (!this.current || this.current.id !== pid) return
       const tasks = this.current.tasks
-      this._upsert({
-        id: pid,
+      const counts = {
         taskCount: tasks.length,
         taskDone: tasks.filter((t) => t.done).length,
-      })
+      }
+      // Keep the open detail object live too, so the checklist header and the
+      // task-derived progress bar update immediately when tasks are toggled.
+      Object.assign(this.current, counts)
+      this._upsert({ id: pid, ...counts })
     },
 
     async addComment(pid, body) {

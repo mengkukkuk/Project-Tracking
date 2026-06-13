@@ -1,6 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
 
 :root {
+  /* Single project-wide typeface. Use var(--font) everywhere — do not
+     introduce additional font families in future development. */
+  --font: 'IBM Plex Sans Thai', system-ui, sans-serif;
   --accent: #14b8a6;
   --accent-dim: #0d9488;
   --bg: #f1f5f9;
@@ -45,7 +48,7 @@
 html, body { height: 100%; }
 
 body {
-  font-family: 'IBM Plex Sans Thai', system-ui, sans-serif;
+  font-family: var(--font);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -54,7 +57,8 @@ body {
 
 #app { min-height: 100vh; }
 
-.mono { font-family: 'IBM Plex Mono', monospace; }
+/* Retained for figures/labels: same typeface, with aligned tabular numerals. */
+.mono { font-family: var(--font); font-variant-numeric: tabular-nums; }
 
 .view { animation: fade .25s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

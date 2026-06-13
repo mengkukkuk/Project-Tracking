@@ -24,7 +24,6 @@ const form = reactive({
   status: p?.status || 'Pre-Sale',
   priority: p?.priority || 'medium',
   value: p?.value ?? 0,
-  progress: p?.progress ?? 0,
   fiscalYear: p?.fiscalYear || 'future',
   startDate: p?.startDate || '',
   dueDate: p?.dueDate || '',
@@ -36,7 +35,6 @@ function submit() {
   emit('submit', {
     ...form,
     value: Number(form.value) || 0,
-    progress: Number(form.progress) || 0,
     startDate: form.startDate || null,
     dueDate: form.dueDate || null,
     tags: tags.value,
@@ -126,10 +124,10 @@ function submit() {
           <input v-model="form.dueDate" type="date" class="input" />
         </label>
 
-        <label class="field span2 progress-field">
-          <span>Progress: {{ form.progress }}%</span>
-          <input v-model="form.progress" type="range" min="0" max="100" step="5" />
-        </label>
+        <p class="field span2 progress-note">
+          <span>Progress</span>
+          Calculated automatically from completed tasks in the project checklist.
+        </p>
       </div>
     </section>
 
@@ -177,9 +175,10 @@ function submit() {
   font-size: 11px;
   font-weight: 700;
 }
-.progress-field input {
-  width: 100%;
-  accent-color: var(--accent);
+.progress-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
 .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 @media (max-width: 640px) {

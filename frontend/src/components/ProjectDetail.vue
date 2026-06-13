@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { useProjectsStore, STAGES } from '@/stores/projects'
+import { useProjectsStore, STAGES, taskProgress } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
 import StatusBadge from './StatusBadge.vue'
@@ -126,17 +126,10 @@ function dueClass(iso) {
               </select>
             </label>
             <label>
-              <span>Progress</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                :value="store.current.progress"
-                @change="quickUpdate({ progress: Number($event.target.value) })"
-              />
+              <span>Progress (from tasks)</span>
+              <ProgressBar :value="taskProgress(store.current)" :height="8" />
             </label>
-            <strong class="progress-value mono">{{ store.current.progress }}%</strong>
+            <strong class="progress-value mono">{{ taskProgress(store.current) }}%</strong>
           </section>
 
           <nav class="tabs" aria-label="Project detail sections">
@@ -167,7 +160,7 @@ function dueClass(iso) {
 
               <div class="prog">
                 <span class="sec-label">Progress</span>
-                <ProgressBar :value="store.current.progress" :height="8" show-label />
+                <ProgressBar :value="taskProgress(store.current)" :height="8" show-label />
               </div>
 
               <div v-if="store.current.tags?.length" class="tags">

@@ -59,6 +59,12 @@ npm run build      # production bundle → dist/
 
 ## Key Decisions
 
+### Typography (project default)
+- **Single typeface: IBM Plex Sans Thai** — the only font used across the entire app.
+- Defined once as the `--font` CSS variable in `frontend/src/assets/main.css` and loaded via Google Fonts there.
+- **Always use `font-family: var(--font)`** (or `inherit`) in new components. Do NOT introduce additional font families (no serif display faces, no monospace).
+- The `.mono` helper class is kept for figures/labels but now maps to `var(--font)` with `font-variant-numeric: tabular-nums` for column alignment — it is no longer a monospaced face.
+
 ### Authorization model
 - **Admin**: full access to all resources
 - **Member**: can only edit/delete their own projects and tasks; can delete own comments

@@ -6,7 +6,7 @@ import {
   getSortedRowModel,
   FlexRender,
 } from '@tanstack/vue-table'
-import { useProjectsStore } from '@/stores/projects'
+import { useProjectsStore, taskProgress } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
 import StatusSelect from '@/components/StatusSelect.vue'
 import PriorityBadge from '@/components/PriorityBadge.vue'
@@ -40,7 +40,8 @@ const columns = [
   { accessorKey: 'priority', header: 'Priority', cell: (i) => h(PriorityBadge, { priority: i.getValue() }) },
   { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusSelect, { id: i.row.original.id, status: i.getValue() }) },
   {
-    accessorKey: 'progress',
+    id: 'progress',
+    accessorFn: (row) => taskProgress(row),
     header: 'Progress',
     cell: (i) => h(ProgressBar, { value: i.getValue(), showLabel: true }),
   },
@@ -65,7 +66,7 @@ function exportCsv() {
   const headers = ['Domain', 'Name', 'PM', 'Customer', 'Value', 'Priority', 'Status', 'Progress', 'FiscalYear', 'DueDate']
   const lines = rows.map((r) => {
     const p = r.original
-    return [p.domain, p.name, p.pm, p.customer, p.value, p.priority, p.status, p.progress, p.fiscalYear, p.dueDate]
+    return [p.domain, p.name, p.pm, p.customer, p.value, p.priority, p.status, taskProgress(p), p.fiscalYear, p.dueDate]
       .map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`)
       .join(',')
   })
@@ -169,12 +170,10 @@ function exportCsv() {
 </template>
 
 <style scoped>
-/* Editorial display serif for the masthead & project names. Pairs with the
-   app's IBM Plex Mono (figures) and IBM Plex Sans Thai (body). */
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500;1,6..72,600&display=swap');
-
 .register {
-  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  /* Project uses a single typeface (IBM Plex Sans Thai via --font). The
+     masthead/title weight + size carry the editorial character instead. */
+  --serif: var(--font);
   --rule: color-mix(in srgb, var(--text) 78%, transparent);
 }
 
@@ -292,7 +291,7 @@ table { width: 100%; border-collapse: collapse; min-width: 880px; }
 thead th {
   text-align: left;
   padding: 11px 14px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -336,7 +335,7 @@ tbody td {
   vertical-align: middle;
 }
 td.num {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -.01em;

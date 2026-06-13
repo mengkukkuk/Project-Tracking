@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useFormat } from '@/composables/useFormat'
 import { DOMAIN_COLORS } from '@/composables/useChartTheme'
+import { taskProgress } from '@/stores/projects'
 import ProgressBar from './ProgressBar.vue'
 import PriorityBadge from './PriorityBadge.vue'
 import AppIcon from './AppIcon.vue'
@@ -61,7 +62,7 @@ const taskLabel = computed(() => {
       <span class="value mono">{{ baht(project.value) }}</span>
     </span>
 
-    <ProgressBar :value="project.progress" :height="4" />
+    <ProgressBar :value="taskProgress(project)" :height="4" />
   </button>
 </template>
 
