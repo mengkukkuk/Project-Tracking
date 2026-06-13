@@ -18,7 +18,7 @@ const ui = useUiStore()
 
 const nav = [
   { to: '/', label: 'Overview', icon: 'overview' },
-  { to: '/kanban', label: 'Kanban', icon: 'kanban' },
+  { to: '/pipeline', label: 'pipeline', icon: 'pipeline' },
   { to: '/table', label: 'Table', icon: 'table' },
 ]
 
@@ -67,10 +67,10 @@ watch(
   <div v-else class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo mono">MML</div>
+        <div class="logo mono">PTrk</div>
         <div class="brand-text">
           <div class="brand-name">Project Tracking</div>
-          <div class="brand-sub">Engineering delivery cockpit</div>
+          <div class="brand-sub">Engineering Off-Site</div>
         </div>
       </div>
 

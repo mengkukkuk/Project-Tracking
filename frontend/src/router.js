@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 const routes = [
   { path: '/login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
   { path: '/', component: () => import('@/views/OverviewView.vue') },
-  { path: '/kanban', component: () => import('@/views/KanbanView.vue') },
+  { path: '/pipeline', component: () => import('@/views/PipelineView.vue') },
   { path: '/table', component: () => import('@/views/TableView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

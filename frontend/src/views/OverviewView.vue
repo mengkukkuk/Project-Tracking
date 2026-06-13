@@ -81,7 +81,7 @@ function dueLabel(iso) {
       <KpiCard label="Projects" :value="s.totalProjects ?? 0" icon="overview" accent="#14b8a6" />
       <KpiCard label="Total value" :value="baht(s.totalValue)" icon="money" accent="#3b82f6" />
       <KpiCard label="Pipeline value" :value="baht(s.pipelineValue)" icon="target" accent="#f59e0b" />
-      <KpiCard label="In delivery" :value="s.inDelivery ?? 0" icon="kanban" accent="#8b5cf6" actionable @click="store.setFilter({ status: 'Project Delivery' })" />
+      <KpiCard label="In delivery" :value="s.inDelivery ?? 0" icon="pipeline" accent="#8b5cf6" actionable @click="store.setFilter({ status: 'Project Delivery' })" />
       <KpiCard label="Completed" :value="`${s.completed ?? 0}`" :sub="`${s.completionRate ?? 0}% complete`" icon="check" accent="#10b981" actionable @click="store.setFilter({ status: 'Completed' })" />
       <KpiCard label="Overdue" :value="riskCounts.overdue" :sub="`${riskCounts.dueSoon} due this week`" icon="alert" accent="#ef4444" />
     </div>

@@ -25,7 +25,7 @@ defineProps({
       <rect x="3" y="14" width="7" height="7" rx="1.5" />
       <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </template>
-    <template v-else-if="name === 'kanban'">
+    <template v-else-if="name === 'pipelines'">
       <rect x="3" y="4" width="5" height="16" rx="1.5" />
       <rect x="10" y="4" width="5" height="10" rx="1.5" />
       <rect x="17" y="4" width="4" height="13" rx="1.5" />
