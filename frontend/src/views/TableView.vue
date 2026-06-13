@@ -1,5 +1,5 @@
 <script setup>
-import { ref, h } from 'vue'
+import { ref, h, computed } from 'vue'
 import {
   useVueTable,
   getCoreRowModel,
@@ -8,7 +8,7 @@ import {
 } from '@tanstack/vue-table'
 import { useProjectsStore } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
-import StatusBadge from '@/components/StatusBadge.vue'
+import StatusSelect from '@/components/StatusSelect.vue'
 import PriorityBadge from '@/components/PriorityBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import ProjectFilters from '@/components/ProjectFilters.vue'
@@ -19,6 +19,13 @@ const { baht, date } = useFormat()
 
 const sorting = ref([{ id: 'dueDate', desc: false }])
 const density = ref('comfortable')
+
+const today = new Date()
+  .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+  .toUpperCase()
+
+// Right-aligned, figure-style columns get the ledger numeral treatment.
+const NUM_COLS = new Set(['value'])
 
 const columns = [
   { accessorKey: 'domain', header: 'Domain' },
@@ -31,7 +38,7 @@ const columns = [
   { accessorKey: 'customer', header: 'Customer' },
   { accessorKey: 'value', header: 'Value', cell: (i) => baht(i.getValue()) },
   { accessorKey: 'priority', header: 'Priority', cell: (i) => h(PriorityBadge, { priority: i.getValue() }) },
-  { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusBadge, { status: i.getValue() }) },
+  { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusSelect, { id: i.row.original.id, status: i.getValue() }) },
   {
     accessorKey: 'progress',
     header: 'Progress',
@@ -50,6 +57,8 @@ const table = useVueTable({
   getCoreRowModel: getCoreRowModel(),
   getSortedRowModel: getSortedRowModel(),
 })
+
+const shownCount = computed(() => table.getSortedRowModel().rows.length)
 
 function exportCsv() {
   const rows = table.getSortedRowModel().rows
@@ -71,56 +80,87 @@ function exportCsv() {
 </script>
 
 <template>
-  <div class="view">
-    <header class="page-header">
-      <div>
-        <div class="page-kicker">Project register</div>
-        <h1 class="page-title">Table</h1>
-        <p class="page-subtitle">Sort, filter, inspect, and export the current project register.</p>
+  <div class="view register">
+    <!-- Editorial masthead ------------------------------------------------ -->
+    <header class="masthead">
+      <div class="dateline mono">
+        <span>Project&nbsp;Register</span>
+        <span class="sep">·</span>
+        <span>Vol. {{ store.projects.length }}</span>
+        <span class="sep">·</span>
+        <span>{{ today }}</span>
       </div>
-      <div class="actions">
-        <div class="segmented" aria-label="Table density">
-          <button type="button" :class="{ active: density === 'comfortable' }" @click="density = 'comfortable'">Comfort</button>
-          <button type="button" :class="{ active: density === 'compact' }" @click="density = 'compact'">Compact</button>
+
+      <div class="masthead-row">
+        <h1 class="masthead-title">The&nbsp;Project <em>Register</em></h1>
+
+        <div class="actions">
+          <div class="segmented" aria-label="Table density">
+            <button type="button" :class="{ active: density === 'comfortable' }" @click="density = 'comfortable'">Comfort</button>
+            <button type="button" :class="{ active: density === 'compact' }" @click="density = 'compact'">Compact</button>
+          </div>
+          <button class="btn ghost" @click="exportCsv">
+            <AppIcon name="download" :size="16" />
+            Export CSV
+          </button>
         </div>
-        <button class="btn ghost" @click="exportCsv">
-          <AppIcon name="download" :size="16" />
-          Export CSV
-        </button>
       </div>
+
+      <p class="masthead-sub">
+        A live ledger of the current engineering pipeline — sort, filter, inspect, and export.
+      </p>
     </header>
 
     <ProjectFilters compact />
 
-    <div class="meta-row muted">
-      Showing {{ table.getSortedRowModel().rows.length }} of {{ store.projects.length }} projects
+    <div class="byline mono">
+      <span class="folio">{{ String(shownCount).padStart(2, '0') }}</span>
+      entr{{ shownCount === 1 ? 'y' : 'ies' }} in view
+      <span class="of">of {{ store.projects.length }} on record</span>
     </div>
 
-    <div class="table-wrap card" :class="density">
+    <!-- The ledger --------------------------------------------------------- -->
+    <div class="ledger" :class="density">
       <table>
         <thead>
           <tr v-for="hg in table.getHeaderGroups()" :key="hg.id">
+            <th class="folio-col">№</th>
             <th
               v-for="header in hg.headers"
               :key="header.id"
-              :class="{ sortable: header.column.getCanSort() }"
+              :class="{ sortable: header.column.getCanSort(), num: NUM_COLS.has(header.column.id) }"
               @click="header.column.getToggleSortingHandler()?.($event)"
             >
-              <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-              <span v-if="header.column.getIsSorted()" class="sort-ind">
-                {{ header.column.getIsSorted() === 'asc' ? '▲' : '▼' }}
+              <span class="th-label">
+                <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
+                <span class="sort-ind" :class="{ on: header.column.getIsSorted() }">
+                  {{ header.column.getIsSorted() === 'asc' ? '▲' : header.column.getIsSorted() === 'desc' ? '▼' : '◆' }}
+                </span>
               </span>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in table.getRowModel().rows" :key="row.id" class="row" @click="store.openDetail(row.original.id)">
-            <td v-for="cell in row.getVisibleCells()" :key="cell.id">
+          <tr
+            v-for="(row, idx) in table.getRowModel().rows"
+            :key="row.id"
+            class="row"
+            @click="store.openDetail(row.original.id)"
+          >
+            <td class="folio-col mono">{{ String(idx + 1).padStart(2, '0') }}</td>
+            <td
+              v-for="cell in row.getVisibleCells()"
+              :key="cell.id"
+              :class="{ num: NUM_COLS.has(cell.column.id) }"
+            >
               <FlexRender :render="cell.column.columnDef.cell ?? cell.column.columnDef.accessorKey" :props="cell.getContext()" />
             </td>
           </tr>
           <tr v-if="!table.getRowModel().rows.length">
-            <td :colspan="columns.length" class="empty">No projects match the current view.</td>
+            <td :colspan="columns.length + 1" class="empty">
+              <span class="empty-mark">—</span>
+              No entries match the current view.
+            </td>
           </tr>
         </tbody>
       </table>
@@ -129,7 +169,74 @@ function exportCsv() {
 </template>
 
 <style scoped>
-.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* Editorial display serif for the masthead & project names. Pairs with the
+   app's IBM Plex Mono (figures) and IBM Plex Sans Thai (body). */
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500;1,6..72,600&display=swap');
+
+.register {
+  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --rule: color-mix(in srgb, var(--text) 78%, transparent);
+}
+
+/* ---- Masthead ---- */
+.masthead {
+  border-top: 2px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 12px 0 16px;
+  margin-bottom: 18px;
+  animation: mast-in .5s cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes mast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.dateline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.dateline .sep { color: var(--accent); }
+
+.masthead-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.masthead-title {
+  font-family: var(--serif);
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: .98;
+  letter-spacing: -.015em;
+  color: var(--text);
+  margin: 0;
+}
+.masthead-title em {
+  font-style: italic;
+  font-weight: 600;
+  color: var(--accent-dim);
+}
+.masthead-sub {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text-dim);
+  margin-top: 10px;
+  max-width: 60ch;
+}
+
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 4px; }
 .segmented {
   display: inline-flex;
   padding: 3px;
@@ -143,32 +250,132 @@ function exportCsv() {
   color: var(--text-dim);
   border-radius: 6px;
   min-height: 28px;
-  padding: 0 9px;
+  padding: 0 11px;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: color .12s, background .12s;
 }
-.segmented button.active {
-  background: var(--accent);
-  color: #fff;
+.segmented button.active { background: var(--accent); color: #fff; }
+
+/* ---- Byline / folio line ---- */
+.byline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 14px 0 10px;
 }
-.meta-row { font-size: 12px; margin-bottom: 12px; }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 820px; }
-th { text-align: left; padding: 12px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--text-dim); background: var(--bg-sunken); border-bottom: 1px solid var(--border); user-select: none; white-space: nowrap; }
-th.sortable { cursor: pointer; }
-th.sortable:hover { color: var(--text); }
-.sort-ind { margin-left: 4px; font-size: 9px; }
-td { padding: 11px 14px; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--border); }
-.compact td { padding: 7px 12px; }
-.compact th { padding: 9px 12px; }
-.row { cursor: pointer; transition: background .1s; }
-.row:hover { background: var(--bg-sunken); }
-tbody tr:last-child td { border-bottom: none; }
-.empty { text-align: center; color: var(--text-dim); padding: 40px; }
-:deep(.project-cell) {
+.byline .folio {
+  font-size: 13px;
+  color: var(--accent-dim);
   font-weight: 700;
+}
+.byline .of { color: var(--border); }
+.byline .of { color: color-mix(in srgb, var(--text-dim) 70%, transparent); }
+
+/* ---- The ledger table ---- */
+.ledger {
+  overflow-x: auto;
+  border-top: 1.5px solid var(--rule);
+  border-bottom: 1.5px solid var(--rule);
+}
+table { width: 100%; border-collapse: collapse; min-width: 880px; }
+
+thead th {
+  text-align: left;
+  padding: 11px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-dim);
+  background: transparent;
+  border-bottom: 1.5px solid var(--rule);
+  user-select: none;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.th-label { display: inline-flex; align-items: center; gap: 6px; }
+th.sortable { cursor: pointer; transition: color .12s; }
+th.sortable:hover { color: var(--text); }
+th.num, td.num { text-align: right; }
+th.num .th-label { flex-direction: row-reverse; }
+
+.sort-ind {
+  font-size: 8px;
+  opacity: 0;
+  color: var(--accent);
+  transition: opacity .12s, transform .12s;
+}
+th.sortable:hover .sort-ind { opacity: .35; }
+.sort-ind.on { opacity: 1; }
+
+.folio-col {
+  width: 1%;
+  text-align: right;
+  padding-right: 10px !important;
+  color: color-mix(in srgb, var(--text-dim) 65%, transparent);
+  font-size: 11px;
+}
+thead .folio-col { font-size: 11px; }
+
+tbody td {
+  padding: 13px 14px;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+td.num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.compact tbody td { padding: 8px 12px; }
+.compact thead th { padding: 8px 12px; }
+
+.row {
+  cursor: pointer;
+  position: relative;
+  transition: background .12s;
+}
+.row td:first-child { box-shadow: inset 0 0 0 0 var(--accent); transition: box-shadow .12s; }
+.row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.row:hover td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
+.row:hover .folio-col { color: var(--accent-dim); }
+tbody tr:last-child td { border-bottom: none; }
+
+.empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 48px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+}
+.empty-mark { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
+
+:deep(.project-cell) {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -.005em;
+  line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .masthead-row { align-items: stretch; }
+  .masthead-sub { font-size: 14px; }
 }
 </style>
