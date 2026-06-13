@@ -6,7 +6,7 @@ import { BarChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { STAGES } from '@/stores/projects'
-import { STAGE_COLORS, useChartTheme } from '@/composables/useChartTheme'
+import { useChartTheme } from '@/composables/useChartTheme'
 import { useFormat } from '@/composables/useFormat'
 
 use([BarChart, TooltipComponent, LegendComponent, GridComponent, CanvasRenderer])
@@ -39,7 +39,6 @@ const option = computed(() => ({
     name: stage,
     type: 'bar',
     stack: 'total',
-    itemStyle: { color: STAGE_COLORS[stage] },
     data: props.breakdown.map((b) => b[stage]),
   })),
 }))
@@ -48,7 +47,7 @@ const option = computed(() => ({
 <template>
   <div class="card chart-card">
     <h3 class="card-title">โครงการแยกตามปีงบประมาณ</h3>
-    <v-chart class="chart" :option="option" autoresize />
+    <v-chart class="chart" theme="macarons" :option="option" autoresize />
   </div>
 </template>
 

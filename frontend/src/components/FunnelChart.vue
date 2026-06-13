@@ -5,7 +5,7 @@ import { use } from 'echarts/core'
 import { FunnelChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { STAGE_COLORS, useChartTheme } from '@/composables/useChartTheme'
+import { useChartTheme } from '@/composables/useChartTheme'
 
 use([FunnelChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
@@ -32,7 +32,6 @@ const option = computed(() => ({
       data: props.funnel.map((f) => ({
         name: f.stage,
         value: f.count,
-        itemStyle: { color: STAGE_COLORS[f.stage] },
       })),
     },
   ],
@@ -42,7 +41,7 @@ const option = computed(() => ({
 <template>
   <div class="card chart-card">
     <h3 class="card-title">Pipeline ตามขั้นตอน</h3>
-    <v-chart class="chart" :option="option" autoresize />
+    <v-chart class="chart" theme="macarons" :option="option" autoresize />
   </div>
 </template>
 

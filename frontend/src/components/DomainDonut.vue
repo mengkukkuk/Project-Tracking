@@ -5,7 +5,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { DOMAIN_COLORS, useChartTheme } from '@/composables/useChartTheme'
+import { useChartTheme } from '@/composables/useChartTheme'
 
 use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
@@ -31,7 +31,6 @@ const option = computed(() => ({
       data: props.data.map((d) => ({
         name: d.name,
         value: d.value,
-        itemStyle: { color: DOMAIN_COLORS[d.name] || '#64748b' },
       })),
     },
   ],
@@ -41,7 +40,7 @@ const option = computed(() => ({
 <template>
   <div class="card chart-card">
     <h3 class="card-title">สัดส่วนตามกลุ่มงาน</h3>
-    <v-chart class="chart" :option="option" autoresize />
+    <v-chart class="chart" theme="macarons" :option="option" autoresize />
   </div>
 </template>
 
