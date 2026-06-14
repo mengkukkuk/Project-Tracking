@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CI/CD Pipeline Testing Guide — Project Tracking</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #6366f1;
+    --accent2: #22d3ee;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --code-bg: #0d1117;
+    --font: 'Segoe UI', system-ui, sans-serif;
+    --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.7; }
+  a { color: var(--accent2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .layout { display: flex; min-height: 100vh; }
+
+  nav {
+    width: 260px; flex-shrink: 0;
+    background: var(--surface); border-right: 1px solid var(--border);
+    padding: 32px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  nav .logo {
+    padding: 0 24px 24px; font-size: 13px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+    border-bottom: 1px solid var(--border); margin-bottom: 16px;
+  }
+  nav ul { list-style: none; }
+  nav li a {
+    display: block; padding: 7px 24px; color: var(--muted);
+    font-size: 13.5px; transition: color .15s, background .15s;
+    border-left: 2px solid transparent;
+  }
+  nav li a:hover, nav li a.active {
+    color: var(--text); background: var(--surface2);
+    border-left-color: var(--accent); text-decoration: none;
+  }
+  nav .section-label {
+    padding: 16px 24px 4px; font-size: 11px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  }
+
+  main { flex: 1; padding: 48px 64px; max-width: 900px; }
+
+  h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+  h2 {
+    font-size: 1.35rem; font-weight: 700; margin: 48px 0 16px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border); color: var(--text);
+  }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 28px 0 10px; color: var(--accent2); }
+  p { margin-bottom: 14px; color: var(--muted); }
+  p strong { color: var(--text); }
+
+  .hero {
+    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 32px 36px; margin-bottom: 36px;
+  }
+  .hero h1 { background: linear-gradient(90deg, #a5b4fc, #67e8f9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { margin: 8px 0 0; font-size: 15px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.green { background: #052e16; border-color: #166534; color: #4ade80; }
+  .badge.blue  { background: #0c1a4b; border-color: #1e40af; color: #93c5fd; }
+  .badge.purple{ background: #1e1b4b; border-color: #4338ca; color: #a5b4fc; }
+  .badge .dot  { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Pipeline diagram */
+  .pipeline { display: flex; align-items: center; gap: 0; margin: 20px 0 28px; overflow-x: auto; padding-bottom: 4px; }
+  .pipeline-job {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 18px; min-width: 148px;
+    text-align: center; flex-shrink: 0;
+  }
+  .pipeline-job .job-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .pipeline-job .job-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pipeline-job.trigger { border-color: var(--accent); }
+  .pipeline-job.gn { border-color: var(--green); }
+  .pipeline-job.bl { border-color: var(--accent2); }
+  .pipeline-arrow { font-size: 18px; color: var(--border); padding: 0 8px; flex-shrink: 0; }
+  .pipeline-split { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+  /* Code */
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; overflow-x: auto; margin: 12px 0 20px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.6;
+  }
+  .cm { color: #6e7681; }
+  .cd { color: #79c0ff; }
+  .cs { color: #a5d6ff; }
+  .ck { color: #ff7b72; }
+  .cv { color: #d2a8ff; }
+  .cg { color: #56d364; }
+  code {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--accent2);
+  }
+
+  /* Steps */
+  .steps { margin: 16px 0; }
+  .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+    color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { color: var(--text); display: block; margin-bottom: 4px; }
+  .step-body p { margin: 0; }
+
+  /* Checklist */
+  .checklist { list-style: none; margin: 12px 0 20px; }
+  .checklist li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;
+    background: var(--surface2); border: 1px solid var(--border); font-size: 14px;
+  }
+  .checklist li .ico { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .checklist li span { color: var(--muted); }
+  .checklist li span strong { color: var(--text); }
+
+  /* Callouts */
+  .callout { border-radius: 8px; padding: 14px 18px; margin: 16px 0; border-left: 4px solid; font-size: 14px; }
+  .callout.info    { background: #0c1a4b; border-color: #3b82f6; color: #93c5fd; }
+  .callout.warning { background: #1c1400; border-color: #ca8a04; color: #fde047; }
+  .callout.success { background: #052e16; border-color: #16a34a; color: #86efac; }
+  .callout.tip     { background: #1e1b4b; border-color: #7c3aed; color: #c4b5fd; }
+  .callout strong  { color: inherit; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 14px; }
+  th {
+    text-align: left; padding: 10px 14px; background: var(--surface2);
+    border: 1px solid var(--border); color: var(--muted);
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  }
+  td { padding: 10px 14px; border: 1px solid var(--border); color: var(--muted); vertical-align: top; }
+  td strong { color: var(--text); }
+  tr:hover td { background: var(--surface2); }
+
+  /* Pills */
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .pill.pass    { background: #052e16; color: #4ade80; }
+  .pill.fail    { background: #2d0a0a; color: #f87171; }
+  .pill.skip    { background: #1c1400; color: #fbbf24; }
+  .pill.pending { background: #1e1b4b; color: #a5b4fc; }
+  .pill.grey    { background: var(--surface2); color: var(--muted); }
+
+  /* Endpoints */
+  .endpoint {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px; margin: 6px 0;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .method { font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; }
+  .method.get    { background: #0c2d1e; color: #4ade80; }
+  .method.post   { background: #0c1a4b; color: #93c5fd; }
+  .method.patch  { background: #1c1400; color: #fbbf24; }
+  .method.delete { background: #2d0a0a; color: #f87171; }
+  .endpoint .path { color: var(--text); }
+  .endpoint .desc { color: var(--muted); margin-left: auto; font-size: 12px; font-family: var(--font); }
+
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar nav ──────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">⬡ Project Tracking</div>
+  <div class="section-label">Getting Started</div>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#prerequisites">Prerequisites</a></li>
+    <li><a href="#credentials">Demo Credentials</a></li>
+  </ul>
+  <div class="section-label">Local Testing</div>
+  <ul>
+    <li><a href="#backend-tests">Backend Tests</a></li>
+    <li><a href="#frontend-build">Frontend Build</a></li>
+    <li><a href="#e2e-tests">E2E Tests</a></li>
+  </ul>
+  <div class="section-label">CI/CD Pipeline</div>
+  <ul>
+    <li><a href="#pipeline">Pipeline Jobs</a></li>
+    <li><a href="#trigger">Triggering</a></li>
+    <li><a href="#results">Reading Results</a></li>
+  </ul>
+  <div class="section-label">Integrations</div>
+  <ul>
+    <li><a href="#sheets">Google Sheets</a></li>
+    <li><a href="#service">Windows Service</a></li>
+  </ul>
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#endpoints">API Endpoints</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ul>
+</nav>
+
+<!-- ── Main content ─────────────────────────────────────────────── -->
+<main>
+
+  <div class="hero">
+    <h1>CI/CD Pipeline Testing Guide</h1>
+    <p>Step-by-step instructions for running tests locally and verifying the GitHub Actions pipeline.</p>
+    <div class="badges">
+      <span class="badge green"><span class="dot"></span>Flask 3 · pytest</span>
+      <span class="badge blue"><span class="dot"></span>Vue 3 · Vite</span>
+      <span class="badge purple"><span class="dot"></span>Playwright E2E</span>
+      <span class="badge"><span class="dot"></span>GitHub Actions</span>
+    </div>
+  </div>
+
+  <!-- ── Overview ── -->
+  <h2 id="overview">Overview</h2>
+  <p>Three jobs run on every push or pull request to <code>main</code>. The E2E job only starts after both <strong>backend-test</strong> and <strong>frontend-build</strong> pass.</p>
+
+  <div class="pipeline">
+    <div class="pipeline-job trigger">
+      <div class="job-name">Push / PR</div>
+      <div class="job-sub">to main</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-split">
+      <div class="pipeline-job gn">
+        <div class="job-name">backend-test</div>
+        <div class="job-sub">pytest · SQLite</div>
+      </div>
+      <div class="pipeline-job gn">
+        <div class="job-name">frontend-build</div>
+        <div class="job-sub">vite build</div>
+      </div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-job bl">
+      <div class="job-name">e2e</div>
+      <div class="job-sub">Playwright · Chromium</div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>Job</th><th>Tests</th><th>Database</th><th>~Duration</th></tr>
+    <tr><td><strong>backend-test</strong></td><td>16 pytest tests — auth, projects, tasks, comments, stats</td><td>SQLite in-memory</td><td>30 s</td></tr>
+    <tr><td><strong>frontend-build</strong></td><td>Vite production build — catches import errors and broken aliases</td><td>—</td><td>45 s</td></tr>
+    <tr><td><strong>e2e</strong></td><td>Playwright — login flows, project CRUD, task toggle</td><td>SQLite + SEED_ON_START</td><td>2–3 min</td></tr>
+  </table>
+
+  <!-- ── Prerequisites ── -->
+  <h2 id="prerequisites">Prerequisites</h2>
+  <ul class="checklist">
+    <li><span class="ico">🐍</span><span><strong>Python 3.11</strong> — always use the project venv at <code>backend\.venv</code>, not global Python</span></li>
+    <li><span class="ico">🟩</span><span><strong>Node.js 22+</strong> — verify with <code>node -v</code></span></li>
+    <li><span class="ico">🗄️</span><span><strong>PostgreSQL running</strong> — backend <code>.env</code> must point to <code>DB_NAME=ProjectTracking</code></span></li>
+    <li><span class="ico">🔑</span><span><strong>backend/.env configured</strong> — copy from <code>.env.example</code> and adjust secrets</span></li>
+    <li><span class="ico">📦</span><span><strong>Backend deps</strong> — <code>.venv\Scripts\pip install -r requirements-dev.txt</code></span></li>
+    <li><span class="ico">📦</span><span><strong>Frontend deps</strong> — <code>cd frontend &amp;&amp; npm install</code></span></li>
+    <li><span class="ico">🎭</span><span><strong>Playwright browser</strong> — <code>npx playwright install chromium</code> (first time only)</span></li>
+  </ul>
+
+  <!-- ── Demo Credentials ── -->
+  <h2 id="credentials">Demo Credentials</h2>
+  <p>Created by <code>python seed.py</code> or <code>SEED_ON_START=true</code>. Used by E2E tests.</p>
+  <table>
+    <tr><th>Email</th><th>Password</th><th>Role</th></tr>
+    <tr><td><code>admin@scada.local</code></td><td><code>admin123</code></td><td><span class="pill pass">admin</span></td></tr>
+    <tr><td><code>a@scada.local</code></td><td><code>password</code></td><td><span class="pill pending">member</span></td></tr>
+    <tr><td><code>b@scada.local</code></td><td><code>password</code></td><td><span class="pill pending">member</span></td></tr>
+    <tr><td><code>c@scada.local</code></td><td><code>password</code></td><td><span class="pill pending">member</span></td></tr>
+  </table>
+
+  <!-- ── Backend Tests ── -->
+  <h2 id="backend-tests">Backend Tests (pytest)</h2>
+  <p>Run from the <code>backend/</code> directory. The global Python has a <code>hydra</code> package conflict — always use <code>.venv\Scripts\python</code>.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Run all 16 tests</strong>
+<pre><span class="cm"># From Project-Tracking/backend/</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/ -v</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Run a single file</strong>
+<pre><span class="cd">.venv\Scripts\python -m pytest tests/test_auth.py -v</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_projects.py -v</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_tasks_comments.py -v</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_stats.py -v</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Expected output</strong>
+<pre><span class="cm">collected 16 items
+
+tests/test_auth.py::test_register_ok          </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_auth.py::test_login_ok             </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_projects.py::test_create_project   </span><span class="cg">PASSED</span>
+<span class="cm">...
+</span><span class="cg">16 passed in 1.23s</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <strong>ℹ️ No Postgres needed for unit tests.</strong> All tests use <code>TestConfig</code> which sets <code>DATABASE_URL = "sqlite:///:memory:"</code>. The DB is created fresh for each test session.
+  </div>
+
+  <h3>Test files and coverage</h3>
+  <table>
+    <tr><th>File</th><th>What it covers</th></tr>
+    <tr><td><code>test_auth.py</code></td><td>Register, login, /me, duplicate email, short password rejection</td></tr>
+    <tr><td><code>test_projects.py</code></td><td>CRUD, owner-only authorization, 404 handling</td></tr>
+    <tr><td><code>test_tasks_comments.py</code></td><td>Task create/update/delete, comment CRUD, cascade delete</td></tr>
+    <tr><td><code>test_stats.py</code></td><td>Stats endpoint shape, funnel and fiscal year aggregations</td></tr>
+  </table>
+
+  <!-- ── Frontend Build ── -->
+  <h2 id="frontend-build">Frontend Build</h2>
+  <p>A production build catches missing imports, broken <code>@</code> aliases, and Vite config errors before E2E or deployment.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Install deps (if needed)</strong>
+<pre><span class="cm"># From Project-Tracking/frontend/</span>
+<span class="cd">npm install</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Build for production</strong>
+<pre><span class="cd">npm run build</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Expected output</strong>
+<pre><span class="cm">vite v6.x.x building for production...
+✓ 142 modules transformed.
+dist/index.html          0.45 kB
+dist/assets/index-*.js   312.80 kB │ gzip: 98.23 kB</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warning">
+    <strong>⚠️ If build fails with a missing module</strong> — run <code>npm install</code> first. <code>@playwright/test</code> was added recently and may not be installed yet in your local <code>node_modules</code>.
+  </div>
+
+  <!-- ── E2E Tests ── -->
+  <h2 id="e2e-tests">E2E Tests (Playwright)</h2>
+  <p>Playwright starts the Vite dev server automatically. You only need to start the Flask backend manually first.</p>
+
+  <div class="callout tip">
+    <strong>💡 Backend must be running with seeded data.</strong> Run <code>python seed.py</code> once, or set <code>SEED_ON_START=true</code> in <code>.env</code> and restart Flask.
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Start the backend (separate terminal)</strong>
+<pre><span class="cm"># From Project-Tracking/backend/</span>
+<span class="cd">.venv\Scripts\python wsgi.py</span>
+<span class="cm"># Confirm: * Running on http://127.0.0.1:5000</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Check backend health</strong>
+<pre><span class="cd">curl http://localhost:5000/api/health</span>
+<span class="cm">→ {"db":"postgresql","ok":true}</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Install Playwright browser (first time only)</strong>
+<pre><span class="cm"># From Project-Tracking/frontend/</span>
+<span class="cd">npx playwright install chromium</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Run all E2E tests</strong>
+<pre><span class="cd">npx playwright test</span>
+
+<span class="cm"># Headed mode (watch the browser):</span>
+<span class="cd">npx playwright test --headed</span>
+
+<span class="cm"># Single spec:</span>
+<span class="cd">npx playwright test e2e/auth.spec.js</span>
+<span class="cd">npx playwright test e2e/projects.spec.js</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>View failure report</strong>
+<pre><span class="cd">npx playwright show-report</span>
+<span class="cm"># Opens an HTML report with screenshots and traces</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>E2E test coverage</h3>
+  <table>
+    <tr><th>Spec</th><th>Test case</th><th>What it verifies</th></tr>
+    <tr><td rowspan="5"><code>auth.spec.js</code></td><td>login page loads</td><td>Unauthenticated user redirects to /login</td></tr>
+    <tr><td>wrong password shows error</td><td>401 message appears in UI</td></tr>
+    <tr><td>admin can log in</td><td>Token stored, nav visible after login</td></tr>
+    <tr><td>logout clears session</td><td>Redirect to /login, protected route guard active</td></tr>
+    <tr><td>unauthenticated route guard</td><td>/kanban → /login redirect</td></tr>
+    <tr><td rowspan="4"><code>projects.spec.js</code></td><td>overview KPI cards</td><td>"total projects" card visible on dashboard</td></tr>
+    <tr><td>table view lists rows</td><td>At least one seeded project in table</td></tr>
+    <tr><td>create and delete project</td><td>New row appears; deleted row disappears</td></tr>
+    <tr><td>toggle task checkbox</td><td>Checkbox state flips and persists</td></tr>
+  </table>
+
+  <!-- ── Pipeline Jobs ── -->
+  <h2 id="pipeline">CI/CD Pipeline Jobs</h2>
+  <p>Workflow file: <code>.github/workflows/ci.yml</code>. Runs on <code>push</code> and <code>pull_request</code> to <code>main</code>.</p>
+
+  <h3>Job 1 — backend-test</h3>
+  <ul class="checklist">
+    <li><span class="ico">🐍</span><span>Python 3.11 on <strong>ubuntu-latest</strong></span></li>
+    <li><span class="ico">📦</span><span>Installs <code>requirements-dev.txt</code> (includes dev tools + runtime deps)</span></li>
+    <li><span class="ico">🧪</span><span>Runs <code>python -m pytest tests/ -v --tb=short</code></span></li>
+    <li><span class="ico">🗄️</span><span>Uses <strong>SQLite in-memory</strong> via <code>TestConfig</code> — no external DB connection</span></li>
+  </ul>
+
+  <h3>Job 2 — frontend-build</h3>
+  <ul class="checklist">
+    <li><span class="ico">🟩</span><span>Node 22 on <strong>ubuntu-latest</strong></span></li>
+    <li><span class="ico">📦</span><span>Runs <code>npm ci</code> (clean install from lock file)</span></li>
+    <li><span class="ico">⚡</span><span>Runs <code>npm run build</code> — verifies Vite can compile the full bundle</span></li>
+    <li><span class="ico">💾</span><span>npm cache keyed to <code>frontend/package-lock.json</code> for fast re-runs</span></li>
+  </ul>
+
+  <h3>Job 3 — e2e (depends on jobs 1 &amp; 2)</h3>
+  <ul class="checklist">
+    <li><span class="ico">🎭</span><span>Playwright <strong>Chromium only</strong> in CI (headless, fastest)</span></li>
+    <li><span class="ico">🗄️</span><span>Flask started with <code>DATABASE_URL=sqlite:///ci_e2e.db</code> + <code>SEED_ON_START=true</code></span></li>
+    <li><span class="ico">🌐</span><span>Frontend served via <code>vite preview --port 5173</code> (pre-built in same job)</span></li>
+    <li><span class="ico">🔁</span><span>Flaky tests auto-retried up to <strong>2 times</strong> in CI</span></li>
+    <li><span class="ico">📸</span><span>Screenshots + videos uploaded as artifact on failure (7-day retention)</span></li>
+  </ul>
+
+  <!-- ── Triggering ── -->
+  <h2 id="trigger">Triggering the Pipeline</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Push to main (automatic)</strong>
+<pre><span class="cd">git add .
+git commit -m "feat: your change"
+git push origin main</span>
+<span class="cm"># Pipeline starts within seconds on GitHub</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Open a pull request (automatic)</strong>
+<pre><span class="cd">git checkout -b feature/my-branch
+git push origin feature/my-branch</span>
+<span class="cm"># Open PR on GitHub → pipeline runs against the branch</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Re-run a failed job manually</strong>
+        <p>GitHub → <strong>Actions</strong> tab → select the run → <strong>Re-run failed jobs</strong> button (top right)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Reading Results ── -->
+  <h2 id="results">Reading Results</h2>
+
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Action</th></tr>
+    <tr><td>🟢 <span class="pill pass">PASS</span></td><td>All jobs green</td><td>Safe to merge</td></tr>
+    <tr><td>🔴 <span class="pill fail">FAIL</span></td><td>At least one job failed</td><td>Click job → read logs → fix and push</td></tr>
+    <tr><td>🟡 <span class="pill skip">SKIP</span></td><td>e2e skipped — upstream job failed</td><td>Fix backend-test or frontend-build first</td></tr>
+    <tr><td>🔵 <span class="pill pending">RUNNING</span></td><td>In progress</td><td>Wait (~3 min total)</td></tr>
+  </table>
+
+  <h3>Downloading E2E failure artifacts</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Open the failed run</strong>
+        <p>GitHub → <strong>Actions</strong> → click the ✗ run → click the <strong>e2e</strong> job</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Download the artifact</strong>
+        <p>Scroll to bottom of the run page → <strong>Artifacts</strong> → download <code>playwright-report.zip</code></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>View report locally</strong>
+<pre><span class="cd">npx playwright show-report playwright-report/</span>
+<span class="cm"># Shows screenshots, videos, and trace for each failed test</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Google Sheets ── -->
+  <h2 id="sheets">Google Sheets Integration</h2>
+  <p>Export all projects to a Google Sheet, or bulk-import new rows from a sheet. <strong>Admin users only.</strong></p>
+
+  <h3>One-time setup</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Enable the Sheets API</strong>
+        <p>Google Cloud Console → APIs &amp; Services → Library → search <em>Google Sheets API</em> → Enable</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Create a Service Account and download key</strong>
+        <p>IAM &amp; Admin → Service Accounts → Create → Keys tab → Add Key → JSON → save as <code>backend/credentials.json</code></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Share the spreadsheet</strong>
+        <p>Open the Google Sheet → Share → paste the service account email (e.g. <code>app@project-id.iam.gserviceaccount.com</code>) → set role to <strong>Editor</strong></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Add to <code>backend/.env</code></strong>
+<pre><span class="ck">GOOGLE_SHEET_ID</span>=<span class="cv">your-spreadsheet-id-from-url</span>
+<span class="ck">GOOGLE_CREDENTIALS_FILE</span>=<span class="cv">credentials.json</span>
+<span class="ck">GOOGLE_SHEET_TAB</span>=<span class="cv">Projects</span>          <span class="cm"># optional, default: Projects</span></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Install packages and restart</strong>
+<pre><span class="cd">.venv\Scripts\pip install google-api-python-client google-auth</span>
+<span class="cd">.venv\Scripts\python wsgi.py</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>Testing the integration</h3>
+<pre><span class="cm"># Replace &lt;token&gt; with a JWT from POST /api/auth/login
+
+# 1. Check configuration (no network call)</span>
+<span class="cd">curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:5000/api/sheets/status</span>
+<span class="cm">→ {"configured":true,"sheetId":"...","tab":"Projects"}
+
+# 2. Export all projects to the sheet</span>
+<span class="cd">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://localhost:5000/api/sheets/export</span>
+<span class="cm">→ {"exported":14,"sheetId":"...","tab":"Projects","url":"https://docs.google.com/..."}
+
+# 3. Preview import (dry run — no DB changes)</span>
+<span class="cd">curl -X POST -H "Authorization: Bearer &lt;token&gt;" "http://localhost:5000/api/sheets/import?preview=1"</span>
+<span class="cm">→ {"created":3,"skipped":11,"preview":true,"rows":[...]}
+
+# 4. Execute import</span>
+<span class="cd">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://localhost:5000/api/sheets/import</span>
+<span class="cm">→ {"created":3,"skipped":11,"preview":false}</span></pre>
+
+  <div class="callout info">
+    <strong>ℹ️ Import rules:</strong> Rows whose <strong>ID</strong> column matches an existing project are skipped — no overwrites. Blank rows and rows with no Name are also skipped. New hand-typed rows (no ID) are always created.
+  </div>
+
+  <h3>Sheet column layout</h3>
+  <table>
+    <tr><th>Column</th><th>Format</th><th>On Import</th></tr>
+    <tr><td>ID</td><td>integer</td><td><span class="pill grey">Skip-check only</span></td></tr>
+    <tr><td>Name</td><td>text</td><td><span class="pill pass">Required</span></td></tr>
+    <tr><td>Domain, Customer, PM</td><td>text</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Status</td><td>Pre-Sale / Award / Project Delivery / Completed</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Priority</td><td>low / medium / high / critical</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Value (THB)</td><td>number</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Progress %</td><td>0–100</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Fiscal Year</td><td>69 / 70 / 71 / future</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Start Date, Due Date</td><td>YYYY-MM-DD or DD/MM/YYYY</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Tags</td><td>comma-separated</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Tasks Total, Tasks Done, Owner, Created, Updated</td><td>auto-generated</td><td><span class="pill fail">Export only</span></td></tr>
+  </table>
+
+  <!-- ── Windows Service ── -->
+  <h2 id="service">Windows Service (NSSM)</h2>
+  <p>The backend can run as a Windows service that starts automatically on boot using <strong>waitress</strong> as the WSGI server.</p>
+
+  <h3>Install (run once as Administrator)</h3>
+<pre><span class="cm"># From Project-Tracking/backend/</span>
+<span class="cd">start_service.bat</span>
+<span class="cm"># Installs ProjTracking service, sets auto-start, starts it immediately</span></pre>
+
+  <h3>Manage the service</h3>
+<pre><span class="cd">nssm status  ProjTracking</span>    <span class="cm"># SERVICE_RUNNING / STOPPED</span>
+<span class="cd">nssm start   ProjTracking</span>
+<span class="cd">nssm stop    ProjTracking</span>
+<span class="cd">nssm restart ProjTracking</span>    <span class="cm"># after .env changes</span>
+<span class="cd">nssm remove  ProjTracking confirm</span>  <span class="cm"># uninstall</span></pre>
+
+  <h3>Logs</h3>
+<pre><span class="cm"># Written to backend/logs/ — rotates daily at 10 MB</span>
+<span class="cd">type backend\logs\service.log</span>
+<span class="cd">type backend\logs\service_error.log</span></pre>
+
+  <div class="callout success">
+    <strong>✅ Auto-restart on crash</strong> — NSSM restarts the service after a 3-second delay. Logs rotate daily. Runs on port 5000 with 4 worker threads.
+  </div>
+
+  <!-- ── API Endpoints ── -->
+  <h2 id="endpoints">API Endpoints Reference</h2>
+
+  <h3>Auth</h3>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/auth/register</span><span class="desc">Create account · 5/min rate limit</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/auth/login</span><span class="desc">Get JWT · 10/min rate limit</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/auth/me</span><span class="desc">Current user + role</span></div>
+
+  <h3>Projects</h3>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/projects</span><span class="desc">List · ?q= &status= &domain= &sort= &page=</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/projects/:id</span><span class="desc">Detail with tasks, comments, activity</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/projects</span><span class="desc">Create project</span></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><span class="path">/api/projects/:id</span><span class="desc">Update · owner or admin only</span></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><span class="path">/api/projects/:id</span><span class="desc">Delete · owner or admin only</span></div>
+
+  <h3>Tasks &amp; Comments</h3>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/projects/:id/tasks</span><span class="desc">Add task</span></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><span class="path">/api/tasks/:id</span><span class="desc">Update task (toggle done, rename)</span></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><span class="path">/api/tasks/:id</span><span class="desc">Delete task · owner or admin</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/projects/:id/comments</span><span class="desc">Add comment</span></div>
+  <div class="endpoint"><span class="method delete">DELETE</span><span class="path">/api/comments/:id</span><span class="desc">Delete comment · author or admin</span></div>
+
+  <h3>Google Sheets</h3>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/sheets/status</span><span class="desc">Config check · no network call</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/sheets/export</span><span class="desc">Push all projects to sheet · admin</span></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="path">/api/sheets/import</span><span class="desc">Pull new rows from sheet · admin · ?preview=1</span></div>
+
+  <h3>Misc</h3>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/health</span><span class="desc">{"ok":true,"db":"postgresql"}</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/stats</span><span class="desc">Dashboard KPIs, funnel, fiscal breakdown</span></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="path">/api/users</span><span class="desc">All users (for picker dropdowns)</span></div>
+
+  <!-- ── Troubleshooting ── -->
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr>
+      <td><code>pytest</code> fails — hydra import error</td>
+      <td>Running global Python</td>
+      <td>Use <code>.venv\Scripts\python -m pytest</code></td>
+    </tr>
+    <tr>
+      <td>Login returns 500 — <em>column users.name does not exist</em></td>
+      <td><code>DB_NAME=postgres</code> points to legacy SCADA DB</td>
+      <td>Set <code>DB_NAME=ProjectTracking</code> in <code>backend/.env</code> and restart</td>
+    </tr>
+    <tr>
+      <td>CORS error in browser devtools</td>
+      <td><code>CORS_ORIGINS</code> not set for dev</td>
+      <td>Set <code>CORS_ORIGINS=*</code> in <code>backend/.env</code></td>
+    </tr>
+    <tr>
+      <td>Login 429 Too Many Requests</td>
+      <td>10 req/min cap hit during testing</td>
+      <td>Wait 60 s or restart Flask</td>
+    </tr>
+    <tr>
+      <td>Playwright — <em>Target closed</em></td>
+      <td>Backend not running when E2E starts</td>
+      <td>Start <code>python wsgi.py</code> before <code>npx playwright test</code></td>
+    </tr>
+    <tr>
+      <td>Playwright — selector not found</td>
+      <td>No seeded data in DB</td>
+      <td>Run <code>.venv\Scripts\python seed.py</code> once</td>
+    </tr>
+    <tr>
+      <td>Sheets export returns 503</td>
+      <td><code>GOOGLE_*</code> env vars missing</td>
+      <td>Add <code>GOOGLE_SHEET_ID</code> + <code>GOOGLE_CREDENTIALS_FILE</code> to <code>.env</code></td>
+    </tr>
+    <tr>
+      <td>Sheets export returns 502</td>
+      <td>Service account not shared on spreadsheet</td>
+      <td>Share the sheet with the service account email as <strong>Editor</strong></td>
+    </tr>
+    <tr>
+      <td>NSSM service won't start</td>
+      <td><code>waitress</code> not installed in venv</td>
+      <td><code>.venv\Scripts\pip install waitress</code></td>
+    </tr>
+    <tr>
+      <td>CI e2e job fails — <em>connect ECONNREFUSED :5000</em></td>
+      <td>Backend health check loop timed out</td>
+      <td>Check the "Start backend" step logs; usually a missing Python dep in CI</td>
+    </tr>
+  </table>
+
+  <footer>
+    <p>Project Tracking · CI/CD Testing Guide · 2026-06-14 · Flask 3 + Vue 3 + Playwright + GitHub Actions</p>
+  </footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav a[href^="#"]')
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'))
+        const link = document.querySelector(`nav a[href="#${e.target.id}"]`)
+        if (link) link.classList.add('active')
+      }
+    })
+  }, { rootMargin: '-20% 0px -70% 0px' })
+  document.querySelectorAll('h2[id]').forEach(h => observer.observe(h))
+</script>
+</body>
+</html>
