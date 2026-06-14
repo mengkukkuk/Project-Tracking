@@ -1,11 +1,11 @@
 -- =============================================================
--- Project Tracking — PostgreSQL initialisation script
+-- Project Tracking — PostgresSQL initialization script
 -- Usage:
 --   psql -U postgres -c "CREATE DATABASE \"ProjectTracking\";"
 --   psql -U postgres -d ProjectTracking -f init_db.sql
 --
 -- Idempotent: safe to re-run (IF NOT EXISTS / ON CONFLICT DO NOTHING).
--- Drop order honours FK dependencies (see bottom of file).
+-- Drop order honors FK dependencies (see bottom of file).
 -- =============================================================
 
 -- ── Extensions ────────────────────────────────────────────────
