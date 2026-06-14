@@ -6,6 +6,10 @@ Flask-Limiter>=3.5
 SQLAlchemy>=2.0
 python-dotenv>=1.0
 
+# Google Sheets integration (optional — remove if unused)
+google-api-python-client>=2.0
+google-auth>=2.0
+
 # Production WSGI server (pick one for deployment)
 waitress>=3.0        # Windows-friendly
 # gunicorn>=22.0     # Linux

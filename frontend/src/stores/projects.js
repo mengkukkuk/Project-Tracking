@@ -246,5 +246,32 @@ export const useProjectsStore = defineStore('projects', {
       if (this.current?.id === pid)
         this.current.comments = this.current.comments.filter((c) => c.id !== cid)
     },
+
+    async exportToSheets() {
+      const ui = useUiStore()
+      try {
+        const result = await api.sheetsExport()
+        ui.success(`ส่งออก ${result.exported} โครงการไปยัง Google Sheets แล้ว`)
+        return result
+      } catch (e) {
+        ui.error(e.message)
+        throw e
+      }
+    },
+
+    async importFromSheets(preview = false) {
+      const ui = useUiStore()
+      try {
+        const result = await api.sheetsImport(preview)
+        if (!preview) {
+          ui.success(`นำเข้า ${result.created} โครงการจาก Google Sheets แล้ว`)
+          await this.fetchAll()
+        }
+        return result
+      } catch (e) {
+        ui.error(e.message)
+        throw e
+      }
+    },
   },
 })

@@ -89,4 +89,10 @@ export const api = {
   // misc
   stats: () => req('/stats'),
   listUsers: () => req('/users'),
+
+  // google sheets
+  sheetsStatus: () => req('/sheets/status'),
+  sheetsExport: () => req('/sheets/export', { method: 'POST' }),
+  sheetsImport: (preview = false) =>
+    req(`/sheets/import${preview ? '?preview=1' : ''}`, { method: 'POST' }),
 }
