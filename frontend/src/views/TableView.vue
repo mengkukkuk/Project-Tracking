@@ -85,15 +85,15 @@ function exportCsv() {
     <!-- Editorial masthead ------------------------------------------------ -->
     <header class="masthead">
       <div class="dateline mono">
-        <span>Project&nbsp;Register</span>
+        <span>Project&nbsp;Tracking</span>
         <span class="sep">·</span>
-        <span>Vol. {{ store.projects.length }}</span>
+        <span>Total projects : {{ store.projects.length }}</span>
         <span class="sep">·</span>
         <span>{{ today }}</span>
       </div>
 
       <div class="masthead-row">
-        <h1 class="masthead-title">The&nbsp;Project <em>Register</em></h1>
+        <h1 class="masthead-title"><em>Project&nbsp;Table</em></h1>
 
         <div class="actions">
           <div class="segmented" aria-label="Table density">
@@ -108,7 +108,7 @@ function exportCsv() {
       </div>
 
       <p class="masthead-sub">
-        A live ledger of the current engineering pipeline — sort, filter, inspect, and export.
+        Lists of the current projects pipeline — sort, filter, inspect, and export.
       </p>
     </header>
 

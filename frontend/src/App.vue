@@ -18,7 +18,7 @@ const ui = useUiStore()
 
 const nav = [
   { to: '/', label: 'Overview', icon: 'overview' },
-  { to: '/pipeline', label: 'pipeline', icon: 'pipeline' },
+  { to: '/pipeline', label: 'Pipeline', icon: 'pipeline' },
   { to: '/table', label: 'Table', icon: 'table' },
 ]
 

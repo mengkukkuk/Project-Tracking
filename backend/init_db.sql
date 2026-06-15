@@ -5,7 +5,7 @@
 --   psql -U postgres -d ProjectTracking -f init_db.sql
 --
 -- Idempotent: safe to re-run (IF NOT EXISTS / ON CONFLICT DO NOTHING).
--- Drop order honors FK dependencies (see bottom of file).
+-- Drop order honors FK dependencies (see bottom of the file).
 -- =============================================================
 
 -- ── Extensions ────────────────────────────────────────────────
