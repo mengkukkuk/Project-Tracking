@@ -10,7 +10,8 @@ A full-stack project-tracking application for automation and engineering project
 │   │              overdue / upcoming list                      │
 │   ├─ Kanban      drag-and-drop status (optimistic + rollback) │
 │   ├─ Table       sort · filter · search · pagination         │
-│   └─ Detail      edit · tasks · comments · activity log      │
+│   └─ Detail      edit · tasks · process checklist · records  │
+│                  comments · activity log                      │
 │        │  /api  (Vite proxy in dev)                          │
 │        ▼                                                      │
 │  Flask REST API  (app factory · blueprints · Flask-Limiter)  │
@@ -18,6 +19,10 @@ A full-stack project-tracking application for automation and engineering project
 │   ├─ /api/projects    list / filter / search / CRUD          │
 │   ├─ /api/projects/:id/tasks · /api/tasks/:id                │
 │   ├─ /api/projects/:id/comments · /api/comments/:id          │
+│   ├─ /api/projects/:id/records/:resource  (ptrack, bom, ...) │
+│   ├─ /api/projects/:id/ptrack/generate  (backfill checklist) │
+│   ├─ /api/ptemplate   process checklist template             │
+│   ├─ /api/sheets      Google Sheets export / import          │
 │   ├─ /api/stats       SQL aggregations (no full-table scan)  │
 │   └─ /api/users · /api/health                                │
 │        ▼                                                      │
@@ -115,4 +120,7 @@ Set a strong `SECRET_KEY`, configure `CORS_ORIGINS` to your frontend origin, and
 - **Stats** — all aggregations run as SQL `GROUP BY` queries; no full-table Python loops.
 - **Kanban** — drag does an optimistic status update with automatic rollback on API failure.
 - **Activity feed** — every create / update / status-move is logged per project.
+- **Process-driven progress** — the project progress bar is derived from the per-project process checklist (`ptrack`); the same value drives the detail drawer, Table view, and Kanban cards. Falls back to task counts when no checklist exists. Older projects can backfill the checklist on demand via "Generate from template".
+- **Per-project records** — each project carries auxiliary records (`ptrack` process checklist, `survey`, `mom` meeting minutes, `bom` bill-of-materials, `verification`, `exceptions`) under `/api/projects/:id/records/:resource`.
+- **Google Sheets sync** — `/api/sheets/export` and `/api/sheets/import` round-trip the project list with a configured spreadsheet.
 - **Dark mode** — persisted in `localStorage`, respects OS preference on first visit.

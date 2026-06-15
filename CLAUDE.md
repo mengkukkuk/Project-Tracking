@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 16 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 25 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -29,15 +29,18 @@ npm run build      # production bundle → dist/
 |---|---|
 | `app/__init__.py` | App factory — wires DB, JWT, CORS, rate limiter, blueprints |
 | `app/config.py` | All config from env vars; `Config` (prod) and `TestConfig` |
-| `app/models.py` | SQLAlchemy ORM: `User`, `Project`, `Task`, `Comment`, `Activity`, `Tag` |
+| `app/models.py` | SQLAlchemy ORM: `User`, `Project`, `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
 | `app/auth.py` | `/api/auth/*` — register, login, `/me`; rate-limited |
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
 | `app/errors.py` | Centralized error handlers — all errors → `{"error": {...}}` |
 | `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` |
-| `app/api/projects.py` | Project CRUD with owner-or-admin authz |
+| `app/api/projects.py` | Project CRUD + `POST /<pid>/ptrack/generate` (backfill process checklist from template) |
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
+| `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions` |
+| `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
+| `app/api/sheets.py` | Google Sheets export/import |
 | `app/api/stats.py` | Dashboard aggregations via SQL `GROUP BY` (no Python loops) |
 | `app/seed.py` | Demo data seeder — drops and recreates schema; dev only |
 
@@ -54,8 +57,10 @@ npm run build      # production bundle → dist/
 | `views/KanbanView.vue` | Drag-and-drop board with optimistic move + rollback |
 | `views/TableView.vue` | Sortable, filterable, searchable project table |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
-| `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, comments, activity |
+| `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, process checklist, records, comments, activity |
 | `components/ProjectForm.vue` | Create / edit modal |
+| `components/ProcessChecklist.vue` | Grouped `ptrack` checkbox list; drives process-based progress; "Generate from template" empty state |
+| `components/RecordList.vue` / `RecordForm.vue` | Generic CRUD table + modal for the auxiliary record resources |
 
 ## Key Decisions
 
@@ -94,6 +99,13 @@ npm run build      # production bundle → dist/
 - Dev: `CORS_ORIGINS=*` in `.env`
 - Origin list is split and whitespace-stripped before passing to Flask-CORS
 
+### Process-driven progress
+- Every project's progress percentage is derived from its **process checklist** (`ptrack` rows): `processDone / processCount`.
+- Falls back to the Task-entity counts (`taskDone / taskCount`) for projects with no process checklist.
+- Backend ships `processCount` / `processDone` on **every** `Project.to_dict()` (list and detail), so the detail drawer bar, Table view Progress column, and Kanban cards stay consistent via the shared `taskProgress(p)` helper in `stores/projects.js`.
+- Toggling a process checkbox is optimistic with rollback (mirrors `toggleTask`); `_syncProcessCounts()` swaps the `projects` array reference so @tanstack/vue-table re-runs the progress accessor without a manual refresh.
+- Older projects (predating create-time seeding) get an empty state with a **Generate from template** button → `POST /api/projects/<pid>/ptrack/generate` (idempotent, owner/admin-gated).
+
 ### Database portability
 - SQLAlchemy ORM — no DB-specific types; works on SQLite, PostgreSQL, MSSQL
 - Schema auto-created on startup via `Base.metadata.create_all()`
@@ -106,7 +118,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 16 tests across auth, projects, tasks, comments, stats
+- 25 tests across auth, projects, tasks, comments, stats, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -139,3 +151,5 @@ To reseed: run `python seed.py` (drops + recreates all tables). Safe on dev DBs 
 - **Rate limit 429 in manual testing** — login cap is 10/min per IP; wait or restart Flask
 - **Tag names >48 chars** — `_resolve_tags()` raises 422 before the DB constraint fires
 - **Owner check on seeded projects** — `owner_id` is assigned from the `pm` field (not admin); test authz with the actual owning user, not admin
+- **`ptrack.checked` column name** — the ORM attribute is `checked` but maps the DB column literally named `"check"` (`Column("check", Boolean)`). Always access via the attribute, never raw SQL.
+- **`ptemplate` has no `process` column** — the process *name* lives in `process_tags`, joined by `processid`. `_seed_ptrack` and `ptemplate` API resolve the name at read time.
