@@ -251,4 +251,27 @@ function clearOne(key) {
     grid-column: 1 / -1;
   }
 }
+
+@media (max-width: 640px) {
+  .filters { gap: 8px; margin-bottom: 12px; }
+  .search-box { width: 100%; min-height: 38px; }
+  .saved {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    margin: 0 -14px;
+    padding: 2px 14px;
+    scroll-snap-type: x mandatory;
+  }
+  .saved::-webkit-scrollbar { display: none; }
+  .view-chip { flex-shrink: 0; scroll-snap-align: start; }
+  .selects {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .selects label { gap: 3px; }
+  .selects select { min-width: 0; width: 100%; height: 36px; font-size: 13px; }
+  .active { gap: 6px; }
+  .active-chip { font-size: 11px; padding: 4px 8px; min-height: 26px; }
+}
 </style>

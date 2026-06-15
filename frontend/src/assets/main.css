@@ -138,3 +138,16 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+@media (max-width: 640px) {
+  .page-title { font-size: 19px; }
+  .page-subtitle { font-size: 12px; }
+  .page-kicker { font-size: 11px; }
+  .page-header { gap: 8px; margin-bottom: 12px; }
+  .card { border-radius: 10px; }
+  /* Larger tap targets for primary controls */
+  .btn { min-height: 40px; padding: 9px 14px; }
+  .btn.sm { min-height: 34px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .input, .select, textarea.input { padding: 10px 12px; font-size: 14px; }
+}

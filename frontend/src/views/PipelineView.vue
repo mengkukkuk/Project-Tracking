@@ -114,4 +114,26 @@ function colRisk(stage) {
 @media (max-width: 960px) {
   .board { grid-template-columns: repeat(5, minmax(230px, 270px)); }
 }
+@media (max-width: 760px) {
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-x: visible;
+  }
+  .column { width: 100%; }
+  .col-head {
+    position: sticky;
+    top: 56px;
+    z-index: 5;
+    border-radius: 8px 8px 0 0;
+  }
+  .col-body {
+    min-height: 80px;
+    padding: 10px;
+  }
+  /* Collapse column body when empty to save vertical space */
+  .col-body:has(.col-empty) { min-height: 64px; padding: 8px; }
+  .col-empty { padding: 12px 0; }
+}
 </style>

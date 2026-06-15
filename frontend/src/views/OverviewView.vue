@@ -69,7 +69,7 @@ function dueLabel(iso) {
     <header class="page-header">
       <div>
         <div class="page-kicker">Command center</div>
-        <h1 class="page-title">Project overview</h1>
+        <h1 class="page-title">Project Tracking Overview</h1>
         <p class="page-subtitle">A focused view of delivery health, pipeline value, and projects that need attention.</p>
       </div>
       <span class="updated">Updated {{ new Date().toLocaleDateString('en-GB') }}</span>
@@ -290,6 +290,34 @@ function dueLabel(iso) {
 @media (max-width: 720px) {
   .section-head { display: grid; }
   .risk-strip { justify-content: flex-start; }
-  .attention-row { grid-template-columns: 1fr; }
+
+  /* Attention list — restructure as a stacked card */
+  .attention-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "reason  money"
+      "project project"
+      "badges  due";
+    align-items: start;
+    gap: 8px 10px;
+    padding: 12px;
+  }
+  .attention-row .reason { grid-area: reason; }
+  .attention-row .project { grid-area: project; }
+  .attention-row > :nth-child(3),
+  .attention-row > :nth-child(4) {
+    grid-area: badges;
+    display: inline-flex;
+    align-self: center;
+  }
+  .attention-row .money { grid-area: money; justify-self: end; font-weight: 700; color: var(--text); }
+  .attention-row .due { grid-area: due; justify-self: end; }
+}
+@media (max-width: 520px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .updated { font-size: 11px; padding: 5px 8px; }
+  .page-title { font-size: 19px; }
+  .upcoming { padding: 14px; }
+  .up-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
 </style>

@@ -62,4 +62,21 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   display: flex; justify-content: flex-end; gap: 10px;
   padding: 14px 20px; border-top: 1px solid var(--border);
 }
+
+@media (max-width: 640px) {
+  .overlay {
+    z-index: 1000;
+    align-items: flex-start;
+    padding: 0;
+  }
+  .modal, .modal.wide {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+  .modal-head { position: sticky; top: 0; background: var(--surface); z-index: 2; }
+  .modal-body { padding: 16px 14px calc(80px + env(safe-area-inset-bottom)); }
+}
 </style>

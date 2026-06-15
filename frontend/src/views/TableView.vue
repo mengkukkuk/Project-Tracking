@@ -93,7 +93,7 @@ function exportCsv() {
       </div>
 
       <div class="masthead-row">
-        <h1 class="masthead-title"><em>Project&nbsp;Table</em></h1>
+        <h1 class="masthead-title"> <em>Tracking&nbsp;Table</em> </h1>
 
         <div class="actions">
           <div class="segmented" aria-label="Table density">
@@ -373,8 +373,64 @@ tbody tr:last-child td { border-bottom: none; }
   line-height: 1.25;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .masthead-row { align-items: stretch; }
   .masthead-sub { font-size: 14px; }
+  .masthead-title { font-size: clamp(28px, 9vw, 40px); }
+  .dateline { gap: 6px; font-size: 9.5px; flex-wrap: wrap; }
+  .actions { width: 100%; justify-content: space-between; }
+
+  /* Stack each table row as an editorial card */
+  .ledger {
+    border: 0;
+    overflow: visible;
+  }
+  table { min-width: 0; display: block; }
+  thead { display: none; }
+  tbody, tr { display: block; }
+  .row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "folio name      status"
+      "folio meta      value"
+      "tags  tags      tags";
+    column-gap: 12px;
+    row-gap: 6px;
+    align-items: center;
+    padding: 14px 12px;
+    margin: 0 -2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row:hover { background: transparent; }
+  .row:hover td:first-child { box-shadow: none; }
+  .row td { padding: 0; border: 0; font-size: 13px; }
+  .row td:nth-child(1) { grid-area: folio; align-self: start; }
+  .row td:nth-child(3) { grid-area: name; font-size: 16px; }
+  .row td:nth-child(8) { grid-area: status; justify-self: end; }
+  .row td:nth-child(6) { grid-area: value; justify-self: end; font-weight: 700; }
+  /* meta line: domain · pm · customer · due  */
+  .row td:nth-child(2),
+  .row td:nth-child(4),
+  .row td:nth-child(5),
+  .row td:nth-child(10) {
+    grid-area: meta;
+    display: inline;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .row td:nth-child(2)::after,
+  .row td:nth-child(4)::after,
+  .row td:nth-child(5)::after {
+    content: ' · ';
+    color: var(--border);
+  }
+  .row td:nth-child(7) { display: none; } /* priority badge — implied by row */
+  .row td:nth-child(9) {                 /* progress bar full-width */
+    grid-area: tags;
+    display: block;
+  }
+  :deep(.project-cell) { font-size: 16px; }
+  .empty { padding: 32px 12px; }
 }
 </style>

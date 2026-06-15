@@ -409,13 +409,22 @@ function dueClass(iso) {
 .activity .time { display: block; margin-top: 2px; }
 
 @media (max-width: 680px) {
-  .drawer { width: 100vw; }
-  .quick { grid-template-columns: 1fr; }
-  .tabs { overflow-x: auto; }
-  .meta { grid-template-columns: 1fr 1fr; }
+  .drawer-overlay { z-index: 1000; }
+  .drawer { width: 100vw; height: 100dvh; }
+  .drawer-head { padding: 14px 16px; position: sticky; top: 0; background: var(--surface); z-index: 3; }
+  .quick { grid-template-columns: 1fr; margin: 12px 14px 0; }
+  .progress-value { justify-self: end; }
+  .hero { padding: 14px 14px 0; }
+  .tabs { overflow-x: auto; padding: 12px 14px 0; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { white-space: nowrap; padding: 10px 6px; }
+  .drawer-body { padding: 16px 14px calc(24px + env(safe-area-inset-bottom)); }
+  .meta { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .add input { font-size: 14px; }
 }
-@media (max-width: 460px) {
+@media (max-width: 420px) {
   .meta { grid-template-columns: 1fr; }
   .add { flex-direction: column; }
+  .drawer-head h2 { font-size: 16px; }
 }
 </style>
