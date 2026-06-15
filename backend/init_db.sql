@@ -1,8 +1,19 @@
 -- =============================================================
--- Project Tracking — PostgresSQL initialization script
+-- Project Tracking — PostgreSQL initialization script
 -- Usage:
---   psql -U postgres -d ProjectTracking -f init_db.sql
--- (script creates the pjtrk schema and sets search_path automatically)
+--   1. Create the database first:
+--        createdb -U postgres ProjectTracking
+--      (or  CREATE DATABASE "ProjectTracking";  in psql)
+--   2. Run this script:
+--        psql -U postgres -d ProjectTracking -f init_db.sql
+--
+-- The script creates the `pjtrk` schema and sets search_path automatically.
+-- The schema name MUST stay in sync with `app/extensions.py:init_engine`
+-- (which sets `options=-csearch_path=pjtrk` on every PostgreSQL connection).
+--
+-- This script is OPTIONAL: `python seed.py` will bootstrap the schema and
+-- tables automatically on a fresh DB. Use this script when you want the
+-- schema without the demo data (e.g. for production initialization).
 --
 -- Idempotent: safe to re-run (IF NOT EXISTS / ON CONFLICT DO NOTHING).
 -- Drop order honors FK dependencies (see bottom of the file).
@@ -250,12 +261,14 @@ ON CONFLICT (name) DO NOTHING;
 -- =============================================================
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
+-- SET search_path TO pjtrk;
 -- DROP TABLE IF EXISTS exception_log         CASCADE;
 -- DROP TABLE IF EXISTS internal_verification CASCADE;
 -- DROP TABLE IF EXISTS bom_and_costing       CASCADE;
 -- DROP TABLE IF EXISTS customer_mom          CASCADE;
 -- DROP TABLE IF EXISTS survey_report         CASCADE;
 -- DROP TABLE IF EXISTS ptrack                CASCADE;
+-- DROP TABLE IF EXISTS process_tags          CASCADE;
 -- DROP TABLE IF EXISTS ptemplate             CASCADE;
 -- DROP TABLE IF EXISTS activities            CASCADE;
 -- DROP TABLE IF EXISTS comments              CASCADE;
@@ -265,3 +278,5 @@ ON CONFLICT (name) DO NOTHING;
 -- DROP TABLE IF EXISTS tags                  CASCADE;
 -- DROP TABLE IF EXISTS users                 CASCADE;
 -- DROP FUNCTION IF EXISTS set_updated_at();
+-- -- Optional: drop the entire schema (also removes anything not listed above)
+-- -- DROP SCHEMA IF EXISTS pjtrk CASCADE;

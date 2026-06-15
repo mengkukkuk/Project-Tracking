@@ -6,6 +6,8 @@ recreates the schema, so only run it against a throwaway/dev database.
 """
 from datetime import date, timedelta
 
+from sqlalchemy import text
+
 from . import extensions
 from .extensions import Session
 from .models import (
@@ -19,6 +21,22 @@ from .models import (
     Task,
     User,
 )
+
+
+def _ensure_schema(engine):
+    """Create the ``pjtrk`` schema on PostgreSQL if it's missing.
+
+    SQLAlchemy is configured with ``search_path=pjtrk`` (see
+    ``extensions.init_engine``), so every CREATE TABLE expects that schema to
+    exist. On a brand-new database it doesn't yet — bootstrap it here so the
+    seed flow works on a fresh device without first running ``init_db.sql``.
+    No-op on SQLite/MSSQL.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.connect() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS pjtrk"))
+        conn.commit()
 
 # Default process/task checklist — bulk-copied into every project's ptrack.
 DEMO_PTEMPLATE = [
@@ -66,6 +84,7 @@ DEMO_TAGS = {
 def seed():
     engine = extensions.engine
 
+    _ensure_schema(engine)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
