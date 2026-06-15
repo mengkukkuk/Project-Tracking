@@ -243,7 +243,7 @@ function dueClass(iso) {
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .drawer {
-  width: min(760px, 100vw);
+  width: min(1000px, 100vw);
   height: 100vh;
   background: var(--surface);
   border-left: 1px solid var(--border);

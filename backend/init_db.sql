@@ -130,6 +130,94 @@ CREATE TABLE IF NOT EXISTS activities (
 CREATE INDEX IF NOT EXISTS ix_activities_project_id ON activities (project_id);
 CREATE INDEX IF NOT EXISTS ix_activities_created_at ON activities (created_at DESC);
 
+-- ── ptemplate (process / task template) ───────────────────────
+CREATE TABLE IF NOT EXISTS ptemplate (
+  id         SERIAL  PRIMARY KEY,
+  process    TEXT,
+  task       TEXT,
+  processid  INTEGER
+);
+
+-- ── ptrack (per-project process tracking) ─────────────────────
+CREATE TABLE IF NOT EXISTS ptrack (
+  id          SERIAL   PRIMARY KEY,
+  project_id  INTEGER,
+  process     TEXT,
+  pm          TEXT,
+  start_date  DATE     DEFAULT NOW(),
+  due_date    DATE     DEFAULT NOW(),
+  task        TEXT,
+  status      TEXT,
+  "check"     BOOLEAN  DEFAULT FALSE,
+  reference   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_ptrack_project_id ON ptrack (project_id);
+
+-- ── survey_report ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS survey_report (
+  id           SERIAL  PRIMARY KEY,
+  date         DATE    DEFAULT NOW(),
+  department   TEXT,
+  requirement  TEXT,
+  issue        TEXT,
+  limitation   TEXT,
+  result       TEXT,
+  conclude     TEXT
+);
+
+-- ── customer_mom (meeting minutes) ────────────────────────────
+CREATE TABLE IF NOT EXISTS customer_mom (
+  id           SERIAL  PRIMARY KEY,
+  date         DATE    DEFAULT NOW(),
+  participant  TEXT,
+  topic        TEXT,
+  concerns     TEXT,
+  conclude     TEXT,
+  todo         TEXT
+);
+
+-- ── bom_and_costing (bill of materials & costing) ─────────────
+CREATE TABLE IF NOT EXISTS bom_and_costing (
+  id            SERIAL  PRIMARY KEY,
+  date_approve  DATE    DEFAULT NOW(),
+  category      TEXT,
+  device_name   TEXT,
+  version       TEXT,
+  spec          TEXT,
+  quantity      INTEGER,
+  unit          TEXT,
+  "position"    TEXT,
+  unit_price    INTEGER,
+  total_price   INTEGER,
+  lead_time     INTEGER,
+  supplier      TEXT
+);
+
+-- ── internal_verification ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS internal_verification (
+  id           SERIAL   PRIMARY KEY,
+  date         DATE     DEFAULT NOW(),
+  approver     TEXT,
+  test_system  TEXT,
+  test_result  TEXT,
+  defected     TEXT,
+  solution     TEXT,
+  status       BOOLEAN  DEFAULT TRUE
+);
+
+-- ── exception_log ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS exception_log (
+  id            SERIAL  PRIMARY KEY,
+  date          DATE    DEFAULT NOW(),
+  informer      TEXT,
+  order_list    TEXT,
+  effect_price  TEXT,
+  effect_tech   TEXT,
+  date_new_bom  DATE,
+  date_new_pps  DATE
+);
+
 -- =============================================================
 -- SEED: default tags (matches seed.py — idempotent)
 -- =============================================================
@@ -143,11 +231,18 @@ ON CONFLICT (name) DO NOTHING;
 -- =============================================================
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
--- DROP TABLE IF EXISTS activities   CASCADE;
--- DROP TABLE IF EXISTS comments     CASCADE;
--- DROP TABLE IF EXISTS tasks        CASCADE;
--- DROP TABLE IF EXISTS project_tags CASCADE;
--- DROP TABLE IF EXISTS projects     CASCADE;
--- DROP TABLE IF EXISTS tags         CASCADE;
--- DROP TABLE IF EXISTS users        CASCADE;
+-- DROP TABLE IF EXISTS exception_log         CASCADE;
+-- DROP TABLE IF EXISTS internal_verification CASCADE;
+-- DROP TABLE IF EXISTS bom_and_costing       CASCADE;
+-- DROP TABLE IF EXISTS customer_mom          CASCADE;
+-- DROP TABLE IF EXISTS survey_report         CASCADE;
+-- DROP TABLE IF EXISTS ptrack                CASCADE;
+-- DROP TABLE IF EXISTS ptemplate             CASCADE;
+-- DROP TABLE IF EXISTS activities            CASCADE;
+-- DROP TABLE IF EXISTS comments              CASCADE;
+-- DROP TABLE IF EXISTS tasks                 CASCADE;
+-- DROP TABLE IF EXISTS project_tags          CASCADE;
+-- DROP TABLE IF EXISTS projects              CASCADE;
+-- DROP TABLE IF EXISTS tags                  CASCADE;
+-- DROP TABLE IF EXISTS users                 CASCADE;
 -- DROP FUNCTION IF EXISTS set_updated_at();
