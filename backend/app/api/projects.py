@@ -5,7 +5,7 @@ from sqlalchemy import or_
 
 from ..auth import current_user
 from ..extensions import Session
-from ..models import Project, Tag
+from ..models import Project, ProcessTag, PTemplate, PTrack, Tag
 from ..validation import (
     ValidationError,
     date_field,
@@ -139,9 +139,30 @@ def create_project():
     p.tags = _resolve_tags(data.get("tags"))
     Session.add(p)
     Session.flush()
+    _seed_ptrack(p)
     log_activity(p.id, "created", f"Created project “{p.name}”", user)
     Session.commit()
     return p.to_dict(detail=True), 201
+
+
+def _seed_ptrack(project):
+    """Bulk-insert the ptemplate checklist into a new project's ptrack.
+
+    ptemplate only stores the task + processid; the process *name* lives in
+    process_tags, so resolve it by processid to fill ptrack.process.
+    """
+    tag_names = dict(Session.query(ProcessTag.processid, ProcessTag.process).all())
+    templates = Session.query(PTemplate).order_by(PTemplate.id.asc()).all()
+    for t in templates:
+        Session.add(
+            PTrack(
+                project_id=project.id,
+                process=tag_names.get(t.processid),
+                task=t.task,
+                pm=project.pm,
+                checked=False,
+            )
+        )
 
 
 @bp.patch("/<int:pid>")
@@ -207,3 +228,30 @@ def delete_project(pid):
     Session.delete(p)
     Session.commit()
     return "", 204
+
+
+@bp.post("/<int:pid>/ptrack/generate")
+@jwt_required()
+def generate_ptrack(pid):
+    """Backfill a project's process checklist from ptemplate (older projects
+    predate the create-time seed). Idempotent: refuses if rows already exist."""
+    p = Session.get(Project, pid)
+    if not p:
+        return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
+    user = current_user()
+    denied = require_owner_or_admin(user, p.owner_id)
+    if denied:
+        return denied
+    existing = Session.query(PTrack).filter(PTrack.project_id == pid).count()
+    if existing:
+        return {
+            "error": {
+                "type": "http",
+                "code": 409,
+                "message": "Process checklist already exists",
+            }
+        }, 409
+    _seed_ptrack(p)
+    log_activity(pid, "task", "Generated process checklist from template", user)
+    Session.commit()
+    return p.to_dict(detail=True)

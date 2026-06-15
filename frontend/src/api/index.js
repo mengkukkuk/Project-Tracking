@@ -76,6 +76,7 @@ export const api = {
   createProject: (d) => req('/projects', { method: 'POST', body: JSON.stringify(d) }),
   updateProject: (id, d) => req(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
   deleteProject: (id) => req(`/projects/${id}`, { method: 'DELETE' }),
+  generatePtrack: (pid) => req(`/projects/${pid}/ptrack/generate`, { method: 'POST' }),
 
   // tasks
   createTask: (pid, d) => req(`/projects/${pid}/tasks`, { method: 'POST', body: JSON.stringify(d) }),
@@ -85,6 +86,15 @@ export const api = {
   // comments
   createComment: (pid, d) => req(`/projects/${pid}/comments`, { method: 'POST', body: JSON.stringify(d) }),
   deleteComment: (id) => req(`/comments/${id}`, { method: 'DELETE' }),
+
+  // per-project records (ptrack, survey, mom, bom, verification, exceptions)
+  listRecords: (pid, resource) => req(`/projects/${pid}/records/${resource}`),
+  createRecord: (pid, resource, d) =>
+    req(`/projects/${pid}/records/${resource}`, { method: 'POST', body: JSON.stringify(d) }),
+  updateRecord: (resource, id, d) =>
+    req(`/records/${resource}/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteRecord: (resource, id) =>
+    req(`/records/${resource}/${id}`, { method: 'DELETE' }),
 
   // misc
   stats: () => req('/stats'),

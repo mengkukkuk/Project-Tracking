@@ -137,9 +137,14 @@ CREATE INDEX IF NOT EXISTS ix_activities_created_at ON activities (created_at DE
 -- ── ptemplate (process / task template) ───────────────────────
 CREATE TABLE IF NOT EXISTS ptemplate (
   id         SERIAL  PRIMARY KEY,
-  process    TEXT,
   task       TEXT,
   processid  INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS process_tags (
+    id         SERIAL  PRIMARY KEY,
+    processid integer,
+    process   text
 );
 
 -- ── ptrack (per-project process tracking) ─────────────────────

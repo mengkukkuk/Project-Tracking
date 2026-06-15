@@ -7,6 +7,9 @@ import StatusBadge from './StatusBadge.vue'
 import PriorityBadge from './PriorityBadge.vue'
 import ProgressBar from './ProgressBar.vue'
 import AppIcon from './AppIcon.vue'
+import RecordList from './RecordList.vue'
+import ProcessChecklist from './ProcessChecklist.vue'
+import { RECORD_SCHEMAS, RECORD_ORDER } from '@/schemas/records'
 
 const emit = defineEmits(['close', 'edit'])
 const store = useProjectsStore()
@@ -21,9 +24,11 @@ const tab = ref('summary')
 const tabs = [
   ['summary', 'Summary', 'overview'],
   ['tasks', 'Tasks', 'check'],
+  ...RECORD_ORDER.map((r) => [r, RECORD_SCHEMAS[r].label, RECORD_SCHEMAS[r].icon]),
   ['comments', 'Comments', 'comment'],
   ['activity', 'Activity', 'activity'],
 ]
+const recordTabs = new Set(RECORD_ORDER)
 
 async function addTask() {
   const title = newTask.value.trim()
@@ -126,7 +131,7 @@ function dueClass(iso) {
               </select>
             </label>
             <label>
-              <span>Progress (from tasks)</span>
+              <span>Progress (from process)</span>
               <ProgressBar :value="taskProgress(store.current)" :height="8" />
             </label>
             <strong class="progress-value mono">{{ taskProgress(store.current) }}%</strong>
@@ -190,6 +195,9 @@ function dueClass(iso) {
                 <button class="btn sm" :disabled="busy">Add</button>
               </form>
             </section>
+
+            <ProcessChecklist v-if="tab === 'ptrack'" :key="'ptrack'" />
+            <RecordList v-else-if="recordTabs.has(tab)" :key="tab" :resource="tab" />
 
             <section v-if="tab === 'comments'" class="panel">
               <form class="add comment-add" @submit.prevent="addComment">

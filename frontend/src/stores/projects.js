@@ -10,10 +10,13 @@ export const STAGES = [
   'Completed',
 ]
 
-// Progress is derived from task completion: checked tasks / total tasks.
-// Every project (list row or detail) carries taskCount/taskDone, kept fresh by
-// _syncTaskCounts, so this stays live as the checklist is toggled.
+// Progress is derived from the process checklist (ptrack): checked / total.
+// Every project (list row or detail) carries processCount/processDone, kept
+// fresh by _syncProcessCounts, so this stays live as the checklist is toggled.
+// Falls back to the Task-entity counts for projects with no process checklist.
 export function taskProgress(p) {
+  const ptotal = p?.processCount || 0
+  if (ptotal) return Math.round(((p.processDone || 0) / ptotal) * 100)
   const total = p?.taskCount || 0
   return total ? Math.round(((p.taskDone || 0) / total) * 100) : 0
 }
@@ -28,6 +31,9 @@ export const useProjectsStore = defineStore('projects', {
     // detail drawer
     current: null,
     detailLoading: false,
+    // per-project auxiliary records, keyed by resource name
+    records: {},
+    recordsLoading: false,
   }),
 
   getters: {
@@ -179,6 +185,7 @@ export const useProjectsStore = defineStore('projects', {
     async openDetail(id) {
       this.detailLoading = true
       this.current = null
+      this.records = {}
       try {
         this.current = await api.getProject(id)
       } catch (e) {
@@ -190,6 +197,82 @@ export const useProjectsStore = defineStore('projects', {
 
     closeDetail() {
       this.current = null
+      this.records = {}
+    },
+
+    // --- Per-project auxiliary records ---
+    async fetchRecords(resource) {
+      if (!this.current) return
+      this.recordsLoading = true
+      try {
+        const res = await api.listRecords(this.current.id, resource)
+        this.records = { ...this.records, [resource]: res.items }
+      } catch (e) {
+        useUiStore().error(e.message)
+      } finally {
+        this.recordsLoading = false
+      }
+    },
+
+    async addRecord(resource, data) {
+      const created = await api.createRecord(this.current.id, resource, data)
+      const list = this.records[resource] || []
+      this.records = { ...this.records, [resource]: [...list, created] }
+      return created
+    },
+
+    async editRecord(resource, id, data) {
+      const updated = await api.updateRecord(resource, id, data)
+      const list = (this.records[resource] || []).map((r) => (r.id === id ? updated : r))
+      this.records = { ...this.records, [resource]: list }
+      return updated
+    },
+
+    async removeRecord(resource, id) {
+      await api.deleteRecord(resource, id)
+      const list = (this.records[resource] || []).filter((r) => r.id !== id)
+      this.records = { ...this.records, [resource]: list }
+    },
+
+    // --- Process checklist (ptrack) ---
+    // Optimistic toggle of a ptrack row's checked state, mirroring toggleTask:
+    // flip immediately so the checklist + progress bar update on the same frame,
+    // then reconcile with the server. Roll back on failure.
+    async toggleProcess(rec) {
+      const prev = rec.checked
+      rec.checked = !prev
+      this._syncProcessCounts()
+      try {
+        const updated = await api.updateRecord('ptrack', rec.id, { checked: rec.checked })
+        Object.assign(rec, updated)
+        this._syncProcessCounts()
+      } catch (e) {
+        rec.checked = prev
+        this._syncProcessCounts()
+        throw e
+      }
+    },
+
+    _syncProcessCounts() {
+      if (!this.current) return
+      const rows = this.records['ptrack'] || []
+      const counts = {
+        processCount: rows.length,
+        processDone: rows.filter((r) => r.checked).length,
+      }
+      // Keep the open detail object live and upsert the lightweight list row so
+      // the task-derived progress bar (detail, table, cards) updates immediately.
+      Object.assign(this.current, counts)
+      this._upsert({ id: this.current.id, ...counts })
+    },
+
+    // Backfill a project's process checklist from the template (older projects
+    // predate the create-time seed), then load the rows.
+    async generateProcess(pid) {
+      const updated = await api.generatePtrack(pid)
+      if (this.current?.id === pid) this.current = updated
+      this._upsert(updated)
+      await this.fetchRecords('ptrack')
     },
 
     async addTask(pid, data) {
