@@ -6,9 +6,68 @@ recreates the schema, so only run it against a throwaway/dev database.
 """
 from datetime import date, timedelta
 
+from sqlalchemy import text
+
 from . import extensions
 from .extensions import Session
 from .models import Base, Comment, Project, Tag, Task, User
+
+# Tables created by init_db.sql that are not in SQLAlchemy's metadata.
+# They reference projects/users, so they must be dropped before drop_all().
+_EXTRA_TABLES = [
+    "exception_log", "internal_verification", "bom_and_costing",
+    "customer_mom", "survey_report", "ptrack", "ptemplate",
+]
+
+_EXTRA_TABLES_DDL = """
+CREATE TABLE IF NOT EXISTS ptemplate (
+  id SERIAL PRIMARY KEY, process TEXT, task TEXT, processid INTEGER
+);
+CREATE TABLE IF NOT EXISTS ptrack (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  process TEXT, pm TEXT,
+  start_date DATE DEFAULT NOW(), due_date DATE DEFAULT NOW(),
+  task TEXT, status TEXT, "check" BOOLEAN DEFAULT FALSE, reference TEXT
+);
+CREATE TABLE IF NOT EXISTS survey_report (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  date DATE DEFAULT NOW(), department TEXT, requirement TEXT,
+  issue TEXT, limitation TEXT, result TEXT, conclude TEXT
+);
+CREATE TABLE IF NOT EXISTS customer_mom (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  date DATE DEFAULT NOW(), participant TEXT, topic TEXT,
+  concerns TEXT, conclude TEXT, todo TEXT
+);
+CREATE TABLE IF NOT EXISTS bom_and_costing (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  date_approve DATE DEFAULT NOW(), category TEXT, device_name TEXT,
+  version TEXT, spec TEXT, quantity INTEGER, unit TEXT,
+  "position" TEXT, unit_price INTEGER, total_price INTEGER,
+  lead_time INTEGER, supplier TEXT
+);
+CREATE TABLE IF NOT EXISTS internal_verification (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  date DATE DEFAULT NOW(), approver TEXT, test_system TEXT,
+  test_result TEXT, defected TEXT, solution TEXT, status BOOLEAN DEFAULT TRUE
+);
+CREATE TABLE IF NOT EXISTS exception_log (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  date DATE DEFAULT NOW(), informer TEXT, order_list TEXT,
+  effect_price TEXT, effect_tech TEXT, date_new_bom DATE, date_new_pps DATE
+);
+"""
 
 DEMO_USERS = [
     ("Admin", "admin@scada.local", "admin123", "admin"),
@@ -45,8 +104,22 @@ DEMO_TAGS = {
 
 def seed():
     engine = extensions.engine
+
+    # Drop extra non-ORM tables (FK-dependent on projects) before drop_all.
+    with engine.begin() as conn:
+        for tbl in _EXTRA_TABLES:
+            conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+
+    # Recreate extra tables defined in init_db.sql but not in ORM metadata.
+    with engine.begin() as conn:
+        for stmt in _EXTRA_TABLES_DDL.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                conn.execute(text(stmt))
+
     s = Session()
 
     users = {}

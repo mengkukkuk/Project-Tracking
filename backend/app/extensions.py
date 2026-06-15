@@ -25,6 +25,8 @@ def init_engine(database_url: str):
     if database_url.startswith("sqlite"):
         # Allow the in-memory/file DB to be shared across threads (Flask dev server).
         connect_args["check_same_thread"] = False
+    elif database_url.startswith("postgresql"):
+        connect_args["options"] = "-csearch_path=pjtrk"
 
     engine = create_engine(
         database_url,

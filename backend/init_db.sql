@@ -1,12 +1,16 @@
 -- =============================================================
 -- Project Tracking — PostgresSQL initialization script
 -- Usage:
---   psql -U postgres -c "CREATE DATABASE \"ProjectTracking\";"
 --   psql -U postgres -d ProjectTracking -f init_db.sql
+-- (script creates the pjtrk schema and sets search_path automatically)
 --
 -- Idempotent: safe to re-run (IF NOT EXISTS / ON CONFLICT DO NOTHING).
 -- Drop order honors FK dependencies (see bottom of the file).
 -- =============================================================
+
+-- ── Schema ────────────────────────────────────────────────────
+CREATE SCHEMA IF NOT EXISTS pjtrk;
+SET search_path TO pjtrk;
 
 -- ── Extensions ────────────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid(), pgcrypt helpers
@@ -141,7 +145,8 @@ CREATE TABLE IF NOT EXISTS ptemplate (
 -- ── ptrack (per-project process tracking) ─────────────────────
 CREATE TABLE IF NOT EXISTS ptrack (
   id          SERIAL   PRIMARY KEY,
-  project_id  INTEGER,
+  project_id  INTEGER      NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER               REFERENCES users    (id) ON DELETE SET NULL,
   process     TEXT,
   pm          TEXT,
   start_date  DATE     DEFAULT NOW(),
@@ -157,6 +162,8 @@ CREATE INDEX IF NOT EXISTS ix_ptrack_project_id ON ptrack (project_id);
 -- ── survey_report ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS survey_report (
   id           SERIAL  PRIMARY KEY,
+  project_id  INTEGER      NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER               REFERENCES users    (id) ON DELETE SET NULL,
   date         DATE    DEFAULT NOW(),
   department   TEXT,
   requirement  TEXT,
@@ -169,6 +176,8 @@ CREATE TABLE IF NOT EXISTS survey_report (
 -- ── customer_mom (meeting minutes) ────────────────────────────
 CREATE TABLE IF NOT EXISTS customer_mom (
   id           SERIAL  PRIMARY KEY,
+  project_id  INTEGER      NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER               REFERENCES users    (id) ON DELETE SET NULL,
   date         DATE    DEFAULT NOW(),
   participant  TEXT,
   topic        TEXT,
@@ -179,8 +188,9 @@ CREATE TABLE IF NOT EXISTS customer_mom (
 
 -- ── bom_and_costing (bill of materials & costing) ─────────────
 CREATE TABLE IF NOT EXISTS bom_and_costing (
-  id            SERIAL  PRIMARY KEY,
-  date_approve  DATE    DEFAULT NOW(),
+  id            SERIAL      PRIMARY KEY,
+  project_id    INTEGER     NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  date_approve  DATE        DEFAULT NOW(),
   category      TEXT,
   device_name   TEXT,
   version       TEXT,
@@ -197,6 +207,8 @@ CREATE TABLE IF NOT EXISTS bom_and_costing (
 -- ── internal_verification ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS internal_verification (
   id           SERIAL   PRIMARY KEY,
+  project_id  INTEGER      NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER               REFERENCES users    (id) ON DELETE SET NULL,
   date         DATE     DEFAULT NOW(),
   approver     TEXT,
   test_system  TEXT,
@@ -209,6 +221,8 @@ CREATE TABLE IF NOT EXISTS internal_verification (
 -- ── exception_log ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS exception_log (
   id            SERIAL  PRIMARY KEY,
+  project_id  INTEGER      NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER               REFERENCES users    (id) ON DELETE SET NULL,
   date          DATE    DEFAULT NOW(),
   informer      TEXT,
   order_list    TEXT,
