@@ -16,7 +16,6 @@ def log_activity(project_id, action, detail, user):
         )
     )
 
-
 def require_owner_or_admin(user, owner_id):
     """Return a 403 response tuple if user is not the owner or an admin, else None."""
     if user is None or (user.role != "admin" and user.id != owner_id):

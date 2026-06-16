@@ -5,7 +5,7 @@ from sqlalchemy import or_
 
 from ..auth import current_user
 from ..extensions import Session
-from ..models import Project, ProcessTag, PTemplate, PTrack, Tag
+from ..models import Project, ProcessTag, PTemplate, PTrack, Tag, User
 from ..validation import (
     ValidationError,
     date_field,
@@ -53,6 +53,42 @@ def _resolve_tags(names):
             Session.flush()
         tags.append(tag)
     return tags
+
+
+def _resolve_pms(ids):
+    """Map a list of user IDs to User rows (deduped, preserves input order).
+
+    Unknown IDs raise a 422 ValidationError so the client can correct the
+    selection rather than silently dropping it.
+    """
+    if not ids:
+        return []
+    seen = set()
+    cleaned = []
+    for raw in ids:
+        try:
+            uid = int(raw)
+        except (TypeError, ValueError):
+            raise ValidationError({"pmIds": f"invalid user id: {raw!r}"})
+        if uid in seen:
+            continue
+        seen.add(uid)
+        cleaned.append(uid)
+    rows = Session.query(User).filter(User.id.in_(cleaned)).all()
+    found = {u.id: u for u in rows}
+    missing = [uid for uid in cleaned if uid not in found]
+    if missing:
+        raise ValidationError({"pmIds": f"unknown user id(s): {missing}"})
+    return [found[uid] for uid in cleaned]
+
+
+def _sync_pm_text(project):
+    """Mirror the M2M pms list into the legacy ``pm`` text column.
+
+    Older views read ``project.pm`` as a comma-joined display string; keeping
+    it in sync avoids touching every consumer when the multi-PM feature lands.
+    """
+    project.pm = ", ".join(u.name for u in project.pms) or None
 
 
 @bp.get("")
@@ -162,6 +198,11 @@ def create_project():
         owner_id=user.id if user else None,
     )
     p.tags = _resolve_tags(data.get("tags"))
+    # pmIds is the canonical multi-PM source; fall back to legacy single
+    # pm-text when the client doesn't send the new field.
+    if "pmIds" in data:
+        p.pms = _resolve_pms(data.get("pmIds"))
+        _sync_pm_text(p)
     Session.add(p)
     Session.flush()
     _seed_ptrack(p)
@@ -220,7 +261,11 @@ def update_project(pid):
         p.domain = str_field(data, "domain", max_len=64)
     if "customer" in data:
         p.customer = str_field(data, "customer", max_len=255)
-    if "pm" in data:
+    if "pmIds" in data:
+        p.pms = _resolve_pms(data.get("pmIds"))
+        _sync_pm_text(p)
+    elif "pm" in data:
+        # Legacy single-PM patch path — only applied when pmIds isn't sent.
         p.pm = str_field(data, "pm", max_len=128)
     if "status" in data:
         new_status = status_field(data, required=True)

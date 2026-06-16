@@ -50,9 +50,12 @@ DEMO_PTEMPLATE = [
 
 DEMO_USERS = [
     ("Admin", "admin@scada.local", "admin123", "admin"),
-    ("นายเอ", "a@scada.local", "password", "member"),
-    ("นายบี", "b@scada.local", "password", "member"),
-    ("นายซี", "c@scada.local", "password", "member"),
+    ("นายอภิวัฒน์ ศรีเจริญ", "apiwat.s@scada.local", "password", "member"),
+    ("นายพิชัยวุธ โพธิดอกไม้", "pichaiwoot.p@scada.local", "password", "member"),
+    ("นายโอภาส สุ่มเมา", "opast.s@scada.local", "password", "member"),
+    ("นายปัญญา เจริญผล", "panya.c@scada.local", "password", "member"),
+    ("นายอนุสรณ์ ไชยแสง", "anusorn.c@scada.local", "password", "member"),
+    ("นายเกษมสันต์ นาคเกษม", "kasemsan.n@scada.local", "password", "member")
 ]
 
 # name, domain, customer, pm, status, value, progress, fy, priority, days_to_due

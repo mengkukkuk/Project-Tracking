@@ -107,6 +107,13 @@ CREATE TABLE IF NOT EXISTS project_tags (
   PRIMARY KEY (project_id, tag_id)
 );
 
+-- ── project_pms (M2M: project managers per project) ───────────
+CREATE TABLE IF NOT EXISTS project_pms (
+  project_id  INTEGER  NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id     INTEGER  NOT NULL REFERENCES users    (id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, user_id)
+);
+
 -- ── tasks ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tasks (
   id          SERIAL        PRIMARY KEY,

@@ -37,6 +37,14 @@ project_tags = Table(
     Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
+# Many-to-many: projects <-> project managers (users)
+project_pms = Table(
+    "project_pms",
+    Base.metadata,
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 def _iso(value):
     return value.isoformat() if value else None
@@ -102,6 +110,7 @@ class Project(Base):
 
     owner = relationship("User")
     tags = relationship("Tag", secondary=project_tags, lazy="selectin")
+    pms = relationship("User", secondary=project_pms, lazy="selectin", order_by="User.name")
     tasks = relationship(
         "Task", back_populates="project", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -132,6 +141,8 @@ class Project(Base):
             "domain": self.domain,
             "customer": self.customer,
             "pm": self.pm,
+            "pms": [{"id": u.id, "name": u.name} for u in self.pms],
+            "pmIds": [u.id for u in self.pms],
             "status": self.status,
             "priority": self.priority,
             "value": float(self.value or 0),

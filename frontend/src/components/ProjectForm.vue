@@ -1,6 +1,7 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { STAGES } from '@/stores/projects'
+import { api } from '@/api'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -20,13 +21,62 @@ const form = reactive({
   description: p?.description || '',
   domain: p?.domain || 'IoT',
   customer: p?.customer || '',
-  pm: p?.pm || '',
   status: p?.status || 'Pre-Sale',
   priority: p?.priority || 'medium',
   value: p?.value ?? 0,
   fiscalYear: p?.fiscalYear || 'future',
   startDate: p?.startDate || '',
   dueDate: p?.dueDate || '',
+})
+
+// ── Project managers (multi-select sourced from the users directory) ──
+const allUsers = ref([])
+const selectedPms = ref(
+  // Hydrate from the project's persisted pms list when editing, else empty.
+  (p?.pms || []).map((u) => ({ id: u.id, name: u.name })),
+)
+const pmMenuOpen = ref(false)
+const pmFilter = ref('')
+const pmAnchor = ref(null)
+
+const selectedPmIds = computed(() => new Set(selectedPms.value.map((u) => u.id)))
+const pmCandidates = computed(() => {
+  const q = pmFilter.value.trim().toLowerCase()
+  return allUsers.value
+    .filter((u) => !selectedPmIds.value.has(u.id))
+    .filter((u) => !q || u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+})
+
+function addPm(user) {
+  if (selectedPmIds.value.has(user.id)) return
+  selectedPms.value.push({ id: user.id, name: user.name })
+  pmFilter.value = ''
+  // Keep the menu open so the user can chain-add multiple PMs quickly.
+}
+function removePm(user) {
+  selectedPms.value = selectedPms.value.filter((u) => u.id !== user.id)
+}
+function togglePmMenu() {
+  pmMenuOpen.value = !pmMenuOpen.value
+  if (pmMenuOpen.value) pmFilter.value = ''
+}
+function closePmMenuOnClickOutside(e) {
+  if (!pmAnchor.value) return
+  if (!pmAnchor.value.contains(e.target)) pmMenuOpen.value = false
+}
+
+onMounted(async () => {
+  try {
+    const { items } = await api.listUsers()
+    allUsers.value = items || []
+  } catch (e) {
+    // Silently degrade — the chip composer still shows existing selections.
+    allUsers.value = []
+  }
+  document.addEventListener('mousedown', closePmMenuOnClickOutside)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', closePmMenuOnClickOutside)
 })
 
 const tags = ref([...(p?.tags || []).map((t) => t.name)])
@@ -81,6 +131,7 @@ function submit() {
     startDate: form.startDate || null,
     dueDate: form.dueDate || null,
     tags: tags.value,
+    pmIds: selectedPms.value.map((u) => u.id),
   })
 }
 </script>
@@ -162,10 +213,66 @@ function submit() {
             <input v-model="form.customer" class="u-input" maxlength="255" placeholder="Org name" />
           </label>
 
-          <label class="under">
-            <span>Project manager</span>
-            <input v-model="form.pm" class="u-input" maxlength="128" placeholder="Who owns it" />
-          </label>
+          <div class="under" ref="pmAnchor">
+            <span class="u-label">
+              Project managers
+              <em v-if="selectedPms.length" class="u-count">{{ selectedPms.length }}</em>
+            </span>
+
+            <div class="pm-composer" :class="{ open: pmMenuOpen }">
+              <span
+                v-for="u in selectedPms"
+                :key="u.id"
+                class="pm-chip"
+              >
+                {{ u.name }}
+                <button
+                  type="button"
+                  class="pm-chip-x"
+                  :aria-label="`Remove ${u.name}`"
+                  @click="removePm(u)"
+                >×</button>
+              </span>
+
+              <button
+                type="button"
+                class="pm-add"
+                :aria-label="selectedPms.length ? 'Add another PM' : 'Add a PM'"
+                :aria-expanded="pmMenuOpen"
+                @click="togglePmMenu"
+              >
+                <span class="pm-add-plus" aria-hidden="true">+</span>
+                <span class="pm-add-label">
+                  {{ selectedPms.length ? 'Add PM' : 'Choose project managers' }}
+                </span>
+              </button>
+            </div>
+
+            <div v-if="pmMenuOpen" class="pm-menu" role="listbox">
+              <input
+                v-model="pmFilter"
+                class="pm-search"
+                placeholder="Search users…"
+                autofocus
+              />
+              <ul class="pm-options">
+                <li v-if="!pmCandidates.length" class="pm-empty">
+                  {{ allUsers.length ? 'No matching users.' : 'No users available.' }}
+                </li>
+                <li
+                  v-for="u in pmCandidates"
+                  :key="u.id"
+                  class="pm-option"
+                  role="option"
+                  @click="addPm(u)"
+                >
+                  <span class="pm-avatar" aria-hidden="true">{{ u.name?.[0]?.toUpperCase() || '?' }}</span>
+                  <span class="pm-option-name">{{ u.name }}</span>
+                  <span v-if="u.email" class="pm-option-email">{{ u.email }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
 
           <div class="under">
             <span class="u-label">Tags</span>
@@ -500,6 +607,163 @@ select.u-input {
 select.u-input option {
   background-color: var(--surface);
   color: var(--text);
+}
+
+/* ───── PM composer (multi-select dropdown) ───── */
+.u-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: 0;
+}
+
+.pm-composer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0 8px;
+  transition: border-color .15s;
+}
+.pm-composer.open { border-bottom-color: var(--accent); }
+
+.pm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 999px;
+  padding: 3px 6px 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pm-chip-x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.pm-chip-x:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+.pm-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 6px;
+  border: 1px dashed color-mix(in srgb, var(--text-dim) 50%, var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.pm-add:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.pm-add-plus {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pm-menu {
+  position: relative;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 5;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+.pm-search {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  color: var(--text);
+}
+.pm-search:focus { outline: none; }
+.pm-options {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  flex: 1;
+}
+.pm-empty {
+  padding: 10px 14px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-style: italic;
+}
+.pm-option {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.pm-option:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.pm-avatar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+.pm-option-name { font-weight: 600; }
+.pm-option-email {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ───── Tag composer ───── */
