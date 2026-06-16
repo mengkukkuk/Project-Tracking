@@ -28,7 +28,12 @@ from ..validation import (
     require_dict,
     str_field,
 )
-from .helpers import log_activity, recompute_ptrack_dates, require_owner_or_admin
+from .helpers import (
+    log_activity,
+    recompute_ptrack_dates,
+    recompute_ptrack_status,
+    require_owner_or_admin,
+)
 
 bp = Blueprint("records", __name__, url_prefix="/api")
 
@@ -177,10 +182,12 @@ def list_records(pid, resource):
         return _not_found()
     if not Session.get(Project, pid):
         return _not_found()
-    # Keep ptrack dates persisted on the DB rows in sync with the chain
-    # derived from process_tags.day_range and the project's start_date.
+    # Keep ptrack dates + per-process status persisted on the DB rows in sync
+    # with the chain derived from process_tags.day_range and the project's
+    # start_date, and with the latest checkbox state.
     if resource == "ptrack":
         recompute_ptrack_dates(pid)
+        recompute_ptrack_status(pid)
     model = spec["model"]
     rows = (
         Session.query(model)
@@ -258,6 +265,10 @@ def update_record(resource, rid):
     data = require_dict(request.get_json(silent=True))
     _apply(record, spec, data, partial=True)
     Session.commit()
+    # Toggling a ptrack checkbox can flip the whole process group's status;
+    # refresh persisted status for the parent project so the DB stays in sync.
+    if resource == "ptrack":
+        recompute_ptrack_status(record.project_id)
     return record.to_dict()
 
 

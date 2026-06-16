@@ -16,7 +16,12 @@ from ..validation import (
     status_field,
     str_field,
 )
-from .helpers import log_activity, recompute_ptrack_dates, require_owner_or_admin
+from .helpers import (
+    log_activity,
+    recompute_ptrack_dates,
+    recompute_ptrack_status,
+    require_owner_or_admin,
+)
 
 bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
@@ -163,6 +168,7 @@ def create_project():
     log_activity(p.id, "created", f"Created project “{p.name}”", user)
     Session.commit()
     recompute_ptrack_dates(p.id)
+    recompute_ptrack_status(p.id)
     return p.to_dict(detail=True), 201
 
 
@@ -293,4 +299,5 @@ def generate_ptrack(pid):
     log_activity(pid, "task", "Generated process checklist from template", user)
     Session.commit()
     recompute_ptrack_dates(pid)
+    recompute_ptrack_status(pid)
     return p.to_dict(detail=True)

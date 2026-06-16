@@ -58,6 +58,29 @@ const groups = computed(() => {
   return list
 })
 
+const today = computed(() => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+})
+
+// Per-task status — mirrors backend helpers.recompute_ptrack_status logic.
+function taskStatus(row, group) {
+  if (row.checked) return 'Done'
+  const startIso = group?.startDate
+  if (!startIso) return 'Not started'
+  const start = new Date(startIso)
+  start.setHours(0, 0, 0, 0)
+  if (start.getTime() > today.value.getTime()) return 'Not started'
+  return 'In progress'
+}
+
+function statusKey(status) {
+  if (status === 'Done') return 'done'
+  if (status === 'In progress') return 'progress'
+  return 'not-started'
+}
+
 const busy = ref(false)
 
 watch(
@@ -127,6 +150,14 @@ async function generate() {
               <input type="checkbox" :checked="r.checked" @change="toggle(r)" />
               <span :class="{ done: r.checked }">{{ r.task }}</span>
             </label>
+            <span
+              class="task-status"
+              :class="statusKey(taskStatus(r, g))"
+              :aria-label="`Status: ${taskStatus(r, g)}`"
+            >
+              <span class="dot" aria-hidden="true" />
+              <span class="label">{{ taskStatus(r, g) }}</span>
+            </span>
           </li>
         </ul>
       </div>
@@ -194,9 +225,44 @@ async function generate() {
 .proc-due.overdue .due-date { color: var(--danger); }
 .tasks { list-style: none; display: grid; gap: 8px; margin: 0; padding: 0; }
 .tasks li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.tasks label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; }
-.tasks input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); }
+.tasks label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.tasks input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
 .tasks .done { text-decoration: line-through; color: var(--text-dim); }
+
+/* ── Per-task status pill ───────────────────────────────────────────── */
+.task-status {
+  --status-color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 35%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-color) 10%, transparent);
+  color: var(--status-color);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.task-status.done        { --status-color: var(--success); }
+.task-status.progress    { --status-color: var(--warning); }
+.task-status.not-started { --status-color: var(--danger); }
+.task-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 22%, transparent);
+}
+
+@media (max-width: 520px) {
+  .tasks li { flex-wrap: wrap; }
+  .task-status { margin-left: 23px; }
+}
+
 .empty-state { display: grid; gap: 12px; justify-items: start; }
 .empty { color: var(--text-dim); font-size: 12px; font-style: italic; }
 </style>

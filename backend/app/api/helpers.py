@@ -1,5 +1,5 @@
 """Shared helpers for API resources: activity logging and authorization."""
-from datetime import timedelta
+from datetime import date, timedelta
 
 from ..extensions import Session
 from ..models import Activity, ProcessTag, Project, PTrack
@@ -69,6 +69,45 @@ def recompute_ptrack_dates(project_id):
         if r.start_date != start or r.due_date != due:
             r.start_date = start
             r.due_date = due
+            changed += 1
+    if changed:
+        Session.commit()
+    return changed
+
+
+# Stable status labels — frontend pairs these with colors (green/orange/red).
+PTRACK_STATUS_DONE = "Done"
+PTRACK_STATUS_IN_PROGRESS = "In progress"
+PTRACK_STATUS_NOT_STARTED = "Not started"
+
+
+def recompute_ptrack_status(project_id):
+    """Persist a per-task status on every ptrack row of a project.
+
+    Status is derived per row from the checkbox state and the row's start_date:
+        checked                                  -> "Done"
+        not checked and today >= row.start_date  -> "In progress"
+        otherwise (future / no start_date)       -> "Not started"
+
+    Commits only when at least one row changed. Returns the number of rows
+    updated. Callers should run :func:`recompute_ptrack_dates` first so each
+    row has a current start_date to compare against.
+    """
+    rows = Session.query(PTrack).filter(PTrack.project_id == project_id).all()
+    if not rows:
+        return 0
+
+    today = date.today()
+    changed = 0
+    for r in rows:
+        if r.checked:
+            new_status = PTRACK_STATUS_DONE
+        elif r.start_date is not None and today >= r.start_date:
+            new_status = PTRACK_STATUS_IN_PROGRESS
+        else:
+            new_status = PTRACK_STATUS_NOT_STARTED
+        if r.status != new_status:
+            r.status = new_status
             changed += 1
     if changed:
         Session.commit()
