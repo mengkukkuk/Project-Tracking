@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCADA MML — Project Tracking System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #060a14;
+  --bg2:      #0c1220;
+  --bg3:      #111827;
+  --cyan:     #00e5ff;
+  --cyan2:    #00b4cc;
+  --amber:    #ff9500;
+  --green:    #39ff14;
+  --red:      #ff3b5c;
+  --purple:   #a855f7;
+  --border:   rgba(0,229,255,0.15);
+  --border2:  rgba(0,229,255,0.08);
+  --text:     #c8d6e8;
+  --text2:    #7a9ab8;
+  --font-h:   'Rajdhani', sans-serif;
+  --font-b:   'Exo 2', sans-serif;
+  --font-m:   'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-b);
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* ── GRID BG ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 56px;
+  background: rgba(6,10,20,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 2rem;
+  z-index: 100;
+  gap: 0.5rem;
+}
+.nav-logo {
+  font-family: var(--font-h);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-right: auto;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.nav-logo::before {
+  content: '◈';
+  animation: pulse-logo 2s ease-in-out infinite;
+}
+@keyframes pulse-logo {
+  0%,100% { opacity:1; color: var(--cyan); }
+  50% { opacity:0.4; color: var(--amber); }
+}
+nav a {
+  color: var(--text2);
+  text-decoration: none;
+  font-family: var(--font-h);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 0.35rem 0.7rem;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+nav a:hover { color: var(--cyan); background: rgba(0,229,255,0.07); }
+
+/* ── SECTIONS ── */
+section {
+  position: relative; z-index: 1;
+  padding: 5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+section.full-w { max-width: none; padding: 5rem 0; }
+.section-label {
+  font-family: var(--font-m);
+  font-size: 0.7rem;
+  color: var(--cyan);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+.section-title {
+  font-family: var(--font-h);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+.section-sub {
+  color: var(--text2);
+  font-size: 0.95rem;
+  max-width: 620px;
+  margin-bottom: 3rem;
+}
+
+/* ── HERO ── */
+#hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: flex-start;
+  padding-top: 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 2rem; padding-right: 2rem;
+}
+.hero-badge {
+  font-family: var(--font-m);
+  font-size: 0.7rem;
+  color: var(--green);
+  letter-spacing: 3px;
+  border: 1px solid rgba(57,255,20,0.3);
+  padding: 0.3rem 0.9rem;
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+  display: inline-block;
+  animation: blink-badge 3s ease infinite;
+}
+@keyframes blink-badge {
+  0%,90%,100% { border-color: rgba(57,255,20,0.3); color: var(--green); }
+  95% { border-color: rgba(57,255,20,0.8); color: #fff; }
+}
+.hero-title {
+  font-family: var(--font-h);
+  font-size: clamp(2.4rem, 6vw, 5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+.hero-title span { color: var(--cyan); }
+.hero-desc {
+  font-size: 1.05rem;
+  color: var(--text2);
+  max-width: 560px;
+  margin-top: 1rem;
+  margin-bottom: 2.5rem;
+}
+.hero-pills {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  margin-bottom: 3rem;
+}
+.pill {
+  font-family: var(--font-m);
+  font-size: 0.72rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.pill-cyan  { color: var(--cyan);  border-color: rgba(0,229,255,0.35);  background: rgba(0,229,255,0.06); }
+.pill-amber { color: var(--amber); border-color: rgba(255,149,0,0.35);  background: rgba(255,149,0,0.06); }
+.pill-green { color: var(--green); border-color: rgba(57,255,20,0.35);  background: rgba(57,255,20,0.06); }
+.pill-purple{ color: var(--purple);border-color: rgba(168,85,247,0.35); background: rgba(168,85,247,0.06);}
+.hero-scroll {
+  display: flex; align-items: center; gap: 0.75rem;
+  color: var(--text2); font-size: 0.8rem; letter-spacing: 2px;
+  font-family: var(--font-m);
+  animation: float-scroll 2.5s ease-in-out infinite;
+}
+@keyframes float-scroll { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+.hero-scroll::before { content: '↓'; color: var(--cyan); font-size: 1.1rem; }
+
+/* ── ARCH DIAGRAM ── */
+#arch-diagram {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2.5rem 2rem;
+  margin: 0 2rem;
+  position: relative;
+  overflow: hidden;
+}
+#arch-diagram::before {
+  content: 'SYSTEM ARCHITECTURE';
+  position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-m); font-size: 0.65rem; letter-spacing: 4px;
+  color: var(--text2); opacity: 0.5;
+}
+.arch-svg-wrap { width: 100%; overflow-x: auto; }
+svg#arch { display: block; margin: 0 auto; max-width: 1000px; width: 100%; }
+
+/* ── FLOW CARDS ── */
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+.flow-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.3s;
+}
+.flow-card:hover {
+  border-color: rgba(0,229,255,0.4);
+  transform: translateY(-3px);
+}
+.flow-card::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.flow-card:hover::after { opacity: 1; }
+.card-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+.card-title {
+  font-family: var(--font-h);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.35rem;
+}
+.card-meta {
+  font-family: var(--font-m);
+  font-size: 0.7rem;
+  color: var(--cyan);
+  letter-spacing: 1.5px;
+  margin-bottom: 0.75rem;
+}
+.card-body { color: var(--text2); font-size: 0.88rem; }
+
+/* ── AUTH FLOW ANIMATION ── */
+#auth-anim {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  position: relative;
+}
+.auth-steps { display: flex; flex-direction: column; gap: 0; }
+.auth-step {
+  display: grid;
+  grid-template-columns: 160px 1fr 160px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.auth-step.visible { opacity: 1; transform: translateY(0); }
+.auth-step-actor {
+  font-family: var(--font-m);
+  font-size: 0.72rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 3px;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.actor-fe { background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.35); color: var(--purple); }
+.actor-be { background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.3); color: var(--cyan); }
+.actor-db { background: rgba(255,149,0,0.08); border: 1px solid rgba(255,149,0,0.3); color: var(--amber); }
+.auth-step-arrow {
+  display: flex; align-items: center; gap: 0.5rem;
+  position: relative;
+}
+.arrow-line {
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(0,229,255,0.2), rgba(0,229,255,0.6));
+  position: relative;
+  overflow: hidden;
+}
+.arrow-line::after {
+  content: '';
+  position: absolute; top: -2px; left: -100%;
+  width: 60%; height: 5px;
+  background: linear-gradient(90deg, transparent, var(--cyan));
+  animation: flow-arrow 2.5s linear infinite;
+}
+@keyframes flow-arrow { to { left: 150%; } }
+.arrow-line.rev { background: linear-gradient(270deg, rgba(57,255,20,0.2), rgba(57,255,20,0.6)); }
+.arrow-line.rev::after {
+  background: linear-gradient(270deg, transparent, var(--green));
+  animation: flow-arrow-rev 2.5s linear infinite;
+  left: auto; right: -100%;
+}
+@keyframes flow-arrow-rev { to { right: 150%; left: auto; } }
+.arrow-tip { color: var(--cyan); font-size: 0.9rem; }
+.arrow-tip.rev { color: var(--green); transform: scaleX(-1); }
+.arrow-label {
+  font-family: var(--font-m);
+  font-size: 0.68rem;
+  color: #fff;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  white-space: nowrap;
+  text-align: center;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+.arrow-sub {
+  font-family: var(--font-m);
+  font-size: 0.6rem;
+  color: var(--text2);
+  text-align: center;
+  display: block;
+}
+.step-connector {
+  display: flex; justify-content: center;
+  height: 20px;
+}
+.step-connector::before {
+  content: '|';
+  color: rgba(0,229,255,0.2);
+  font-size: 1.1rem;
+}
+
+/* ── API TABLE ── */
+.api-table-wrap { overflow-x: auto; }
+.api-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-m);
+  font-size: 0.78rem;
+}
+.api-table th {
+  background: rgba(0,229,255,0.06);
+  color: var(--cyan);
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.api-table td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border2);
+  color: var(--text);
+  vertical-align: top;
+}
+.api-table tr:hover td { background: rgba(0,229,255,0.03); }
+.method {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 0.68rem;
+}
+.GET    { background: rgba(57,255,20,0.1);   color: var(--green);  border: 1px solid rgba(57,255,20,0.3); }
+.POST   { background: rgba(0,229,255,0.1);   color: var(--cyan);   border: 1px solid rgba(0,229,255,0.3); }
+.PATCH  { background: rgba(255,149,0,0.1);   color: var(--amber);  border: 1px solid rgba(255,149,0,0.3); }
+.DELETE { background: rgba(255,59,92,0.1);   color: var(--red);    border: 1px solid rgba(255,59,92,0.3); }
+.ep { color: var(--text2); }
+.ep em { color: #fff; font-style: normal; }
+.auth-badge {
+  font-size: 0.6rem; padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  background: rgba(168,85,247,0.12);
+  border: 1px solid rgba(168,85,247,0.3);
+  color: var(--purple);
+}
+
+/* ── DB SCHEMA ── */
+.schema-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.schema-table {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.3s;
+}
+.schema-table:hover {
+  border-color: rgba(255,149,0,0.5);
+  transform: translateY(-2px);
+}
+.schema-table-head {
+  background: rgba(255,149,0,0.08);
+  border-bottom: 1px solid rgba(255,149,0,0.2);
+  padding: 0.6rem 0.9rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.schema-table-name {
+  font-family: var(--font-m);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: 1px;
+}
+.schema-table-icon { font-size: 0.9rem; }
+.schema-cols { padding: 0.5rem 0; }
+.schema-col {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.25rem 0.9rem;
+  font-family: var(--font-m);
+  font-size: 0.68rem;
+  transition: background 0.2s;
+}
+.schema-col:hover { background: rgba(255,255,255,0.03); }
+.col-key { color: var(--amber); font-size: 0.6rem; }
+.col-fk  { color: var(--cyan);  font-size: 0.6rem; }
+.col-name { color: var(--text); flex: 1; }
+.col-type { color: var(--text2); font-size: 0.62rem; }
+
+/* ── INSTALL TABS ── */
+.tab-bar {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.tab-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-h);
+  font-size: 0.9rem; font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text2);
+  padding: 0.6rem 1.25rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+}
+.tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── CODE BLOCKS ── */
+.code-block {
+  background: #05080f;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  font-family: var(--font-m);
+  font-size: 0.8rem;
+  line-height: 1.9;
+  overflow-x: auto;
+  margin: 1rem 0;
+  position: relative;
+}
+.code-block::before {
+  content: attr(data-label);
+  position: absolute; top: 0.5rem; right: 0.75rem;
+  font-size: 0.6rem; letter-spacing: 2px;
+  color: var(--text2); opacity: 0.5;
+}
+.cb-comment { color: #4a5e7a; }
+.cb-cmd     { color: var(--cyan); }
+.cb-str     { color: var(--green); }
+.cb-key     { color: var(--amber); }
+.cb-val     { color: #c8a0f5; }
+.cb-ok      { color: var(--green); }
+.cb-warn    { color: var(--amber); }
+
+/* ── STEP LIST ── */
+.step-list { list-style: none; display: flex; flex-direction: column; gap: 1.5rem; }
+.step-item {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.step-num {
+  width: 2.5rem; height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-m);
+  font-size: 0.8rem;
+  color: var(--cyan);
+  flex-shrink: 0;
+  background: rgba(0,229,255,0.04);
+}
+.step-content-title {
+  font-family: var(--font-h);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.25rem;
+}
+.step-content-body { color: var(--text2); font-size: 0.88rem; }
+
+/* ── ENV TABLE ── */
+.env-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 640px) { .env-grid { grid-template-columns: 1fr; } }
+.env-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem;
+}
+.env-card-title {
+  font-family: var(--font-m);
+  font-size: 0.72rem;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  margin-bottom: 0.75rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.env-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border2);
+  gap: 1rem;
+}
+.env-row:last-child { border-bottom: none; }
+.env-key { font-family: var(--font-m); font-size: 0.7rem; color: var(--amber); }
+.env-val { font-family: var(--font-m); font-size: 0.68rem; color: var(--text2); text-align: right; }
+
+/* ── DEPLOY GRID ── */
+.deploy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.5rem;
+}
+.deploy-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.deploy-card-head {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0.75rem;
+}
+.deploy-card-icon { font-size: 1.3rem; }
+.deploy-card-title {
+  font-family: var(--font-h);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+.deploy-card-body { padding: 1.25rem; }
+
+/* ── LIVE PACKET ANIMATION ── */
+#packet-demo {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  position: relative;
+  min-height: 220px;
+}
+.packet-scene {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: relative;
+}
+.packet-box {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  min-width: 150px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+.packet-box-title {
+  font-family: var(--font-h);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.packet-box-detail {
+  font-family: var(--font-m);
+  font-size: 0.65rem;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.packet-lane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+}
+.lane-track {
+  height: 28px;
+  background: rgba(0,229,255,0.03);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.lane-label {
+  font-family: var(--font-m);
+  font-size: 0.6rem;
+  color: var(--text2);
+  margin-bottom: 0.2rem;
+  letter-spacing: 1px;
+}
+.packet {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  height: 20px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-m);
+  font-size: 0.6rem;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 0 0.6rem;
+}
+.packet-req {
+  background: linear-gradient(90deg, rgba(168,85,247,0.8), rgba(0,229,255,0.8));
+  color: #fff;
+  left: -120px;
+  animation: slide-req 3s ease-in-out infinite;
+}
+.packet-res {
+  background: linear-gradient(90deg, rgba(0,229,255,0.8), rgba(57,255,20,0.8));
+  color: #fff;
+  right: -120px;
+  animation: slide-res 3s ease-in-out infinite;
+  animation-delay: 1.5s;
+}
+@keyframes slide-req {
+  0%   { left: -120px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: calc(100% + 10px); opacity: 0; }
+}
+@keyframes slide-res {
+  0%   { right: -120px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { right: calc(100% + 10px); opacity: 0; }
+}
+.jwt-badge {
+  display: inline-block;
+  background: rgba(168,85,247,0.15);
+  border: 1px solid rgba(168,85,247,0.4);
+  color: var(--purple);
+  font-family: var(--font-m);
+  font-size: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  margin-top: 0.3rem;
+}
+
+/* ── FOOTNOTE ── */
+footer {
+  border-top: 1px solid var(--border);
+  text-align: center;
+  padding: 2rem;
+  color: var(--text2);
+  font-size: 0.8rem;
+  font-family: var(--font-m);
+  position: relative; z-index: 1;
+}
+footer span { color: var(--cyan); }
+
+/* ── UTILITIES ── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0 2rem;
+}
+.highlight { color: var(--cyan); }
+.highlight-amber { color: var(--amber); }
+.highlight-green { color: var(--green); }
+.mt-2 { margin-top: 2rem; }
+.mb-1 { margin-bottom: 1rem; }
+.warn-box {
+  background: rgba(255,149,0,0.06);
+  border: 1px solid rgba(255,149,0,0.25);
+  border-left: 3px solid var(--amber);
+  border-radius: 3px;
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  margin: 1rem 0;
+}
+.warn-box strong { color: var(--amber); font-family: var(--font-m); }
+.info-box {
+  background: rgba(0,229,255,0.04);
+  border: 1px solid rgba(0,229,255,0.18);
+  border-left: 3px solid var(--cyan);
+  border-radius: 3px;
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  color: var(--text);
+  margin: 1rem 0;
+}
+.info-box strong { color: var(--cyan); font-family: var(--font-m); }
+
+/* ── FADE-IN OBSERVE ── */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* responsive */
+@media (max-width: 768px) {
+  nav a { display: none; }
+  .auth-step { grid-template-columns: 80px 1fr 80px; }
+  .packet-scene { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">SCADA MML</div>
+  <a href="#hero">Overview</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#flow">Auth Flow</a>
+  <a href="#api">API Map</a>
+  <a href="#database">Database</a>
+  <a href="#install">Install</a>
+  <a href="#deploy">Deploy</a>
+  <a href="#develop">Dev Guide</a>
+</nav>
+
+<!-- ═══════════════════════════════════ HERO ═══════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-badge">● SYSTEM LIVE — PROJECT TRACKING v2.0</div>
+  <h1 class="hero-title">Project Tracking<br><span>Architecture Guide</span></h1>
+  <p class="hero-desc">
+    A full-stack SCADA MML project management SPA — Vue 3 frontend communicating
+    with a Flask REST backend over JWT-authenticated HTTP APIs, backed by PostgreSQL / SQLite.
+  </p>
+  <div class="hero-pills">
+    <span class="pill pill-purple">Vue 3 + Pinia</span>
+    <span class="pill pill-purple">Vue Router</span>
+    <span class="pill pill-purple">ECharts</span>
+    <span class="pill pill-cyan">Flask 3</span>
+    <span class="pill pill-cyan">Flask-JWT-Extended</span>
+    <span class="pill pill-cyan">SQLAlchemy 2</span>
+    <span class="pill pill-amber">PostgreSQL</span>
+    <span class="pill pill-amber">SQLite</span>
+    <span class="pill pill-amber">MSSQL</span>
+    <span class="pill pill-green">Vite 8</span>
+    <span class="pill pill-green">Waitress WSGI</span>
+  </div>
+  <div class="hero-scroll">SCROLL TO EXPLORE</div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ ARCHITECTURE ═══════════════════════════════════ -->
+<section id="architecture" class="full-w">
+  <div style="max-width:1200px; margin:0 auto; padding:0 2rem;">
+    <p class="section-label">01 — System Overview</p>
+    <h2 class="section-title">Architecture Diagram</h2>
+    <p class="section-sub">
+      The SPA runs entirely in the browser. Every operation hits a Flask REST API at
+      <code style="color:var(--cyan);font-family:var(--font-m)">/api/*</code> over HTTP.
+      There is no server-side rendering — the backend is pure JSON.
+    </p>
+  </div>
+
+  <div id="arch-diagram" class="fade-in">
+    <div class="arch-svg-wrap">
+      <svg id="arch" viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L7,3 z" fill="#00e5ff" opacity="0.7"/>
+          </marker>
+          <marker id="arr-g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L7,3 z" fill="#39ff14" opacity="0.7"/>
+          </marker>
+          <marker id="arr-a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L7,3 z" fill="#ff9500" opacity="0.7"/>
+          </marker>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+          <linearGradient id="fe-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/>
+            <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.05"/>
+          </linearGradient>
+          <linearGradient id="be-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.1"/>
+            <stop offset="100%" stop-color="#006b88" stop-opacity="0.04"/>
+          </linearGradient>
+          <linearGradient id="db-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#ff9500" stop-opacity="0.1"/>
+            <stop offset="100%" stop-color="#7a4a00" stop-opacity="0.04"/>
+          </linearGradient>
+        </defs>
+
+        <!-- BROWSER BOX -->
+        <rect x="20" y="60" width="260" height="360" rx="4" fill="url(#fe-grad)" stroke="#a855f7" stroke-opacity="0.4" stroke-width="1"/>
+        <text x="150" y="46" text-anchor="middle" fill="#a855f7" font-family="JetBrains Mono" font-size="9" letter-spacing="2" opacity="0.7">BROWSER / SPA</text>
+
+        <!-- FE layers -->
+        <rect x="38" y="80"  width="224" height="36" rx="3" fill="rgba(168,85,247,0.1)" stroke="rgba(168,85,247,0.3)" stroke-width="1"/>
+        <text x="150" y="103" text-anchor="middle" fill="#c084fc" font-family="JetBrains Mono" font-size="10" font-weight="700">Vue Router</text>
+
+        <rect x="38" y="126" width="224" height="56" rx="3" fill="rgba(168,85,247,0.08)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+        <text x="150" y="147" text-anchor="middle" fill="#a855f7" font-family="JetBrains Mono" font-size="10" font-weight="700">Pinia Stores</text>
+        <text x="100" y="165" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="8">auth  projects  ui</text>
+        <text x="210" y="165" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="8">state mgmt</text>
+
+        <rect x="38" y="192" width="224" height="80" rx="3" fill="rgba(168,85,247,0.06)" stroke="rgba(168,85,247,0.18)" stroke-width="1"/>
+        <text x="150" y="212" text-anchor="middle" fill="#a855f7" font-family="JetBrains Mono" font-size="10" font-weight="700">Vue Components</text>
+        <text x="88"  y="232" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">OverviewView</text>
+        <text x="212" y="232" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">KanbanView</text>
+        <text x="88"  y="248" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">TableView</text>
+        <text x="212" y="248" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">ProjectDetail</text>
+        <text x="150" y="264" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">+ 15 components</text>
+
+        <rect x="38" y="282" width="224" height="40" rx="3" fill="rgba(168,85,247,0.08)" stroke="rgba(168,85,247,0.25)" stroke-width="1"/>
+        <text x="150" y="300" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="10" font-weight="700">api/index.js</text>
+        <text x="150" y="316" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">fetch() + JWT injection</text>
+
+        <rect x="38" y="332" width="224" height="36" rx="3" fill="rgba(57,255,20,0.05)" stroke="rgba(57,255,20,0.2)" stroke-width="1"/>
+        <text x="150" y="355" text-anchor="middle" fill="#39ff14" font-family="JetBrains Mono" font-size="9">localStorage → mml.token</text>
+
+        <!-- ARROWS: FE → BE -->
+        <!-- Request arrow -->
+        <line x1="262" y1="200" x2="370" y2="200" stroke="#00e5ff" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="316" y="192" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="8.5" opacity="0.9">HTTP Request</text>
+        <text x="316" y="205" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7">Bearer JWT</text>
+
+        <!-- Response arrow -->
+        <line x1="370" y1="230" x2="262" y2="230" stroke="#39ff14" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-g)"/>
+        <text x="316" y="250" text-anchor="middle" fill="#39ff14" font-family="JetBrains Mono" font-size="8.5" opacity="0.9">JSON Response</text>
+
+        <!-- Animated packet -->
+        <circle r="5" fill="#00e5ff" opacity="0.9" filter="url(#glow)">
+          <animateMotion dur="2.2s" repeatCount="indefinite" begin="0s">
+            <mpath href="#req-path"/>
+          </animateMotion>
+        </circle>
+        <path id="req-path" d="M262,200 L370,200" fill="none"/>
+
+        <circle r="5" fill="#39ff14" opacity="0.9" filter="url(#glow)">
+          <animateMotion dur="2.2s" repeatCount="indefinite" begin="1.1s">
+            <mpath href="#res-path"/>
+          </animateMotion>
+        </circle>
+        <path id="res-path" d="M370,230 L262,230" fill="none"/>
+
+        <!-- FLASK BOX -->
+        <rect x="370" y="60" width="240" height="360" rx="4" fill="url(#be-grad)" stroke="#00e5ff" stroke-opacity="0.35" stroke-width="1"/>
+        <text x="490" y="46" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="9" letter-spacing="2" opacity="0.7">FLASK BACKEND (Python)</text>
+
+        <rect x="386" y="78"  width="208" height="30" rx="3" fill="rgba(0,229,255,0.07)" stroke="rgba(0,229,255,0.2)" stroke-width="1"/>
+        <text x="490" y="98" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="10" font-weight="700">Waitress WSGI :5000</text>
+
+        <rect x="386" y="116" width="208" height="36" rx="3" fill="rgba(0,229,255,0.05)" stroke="rgba(0,229,255,0.15)" stroke-width="1"/>
+        <text x="490" y="133" text-anchor="middle" fill="#7ac8d8" font-family="JetBrains Mono" font-size="9.5" font-weight="700">Flask App Factory</text>
+        <text x="490" y="147" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">JWT · CORS · Limiter</text>
+
+        <!-- Blueprints -->
+        <rect x="386" y="162" width="208" height="120" rx="3" fill="rgba(0,229,255,0.03)" stroke="rgba(0,229,255,0.12)" stroke-width="1"/>
+        <text x="490" y="180" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="9.5" font-weight="700">Blueprint Routes</text>
+        <text x="435" y="198" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/auth/*</text>
+        <text x="545" y="198" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/projects/*</text>
+        <text x="435" y="214" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/tasks/*</text>
+        <text x="545" y="214" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/comments/*</text>
+        <text x="435" y="230" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/records/*</text>
+        <text x="545" y="230" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/stats</text>
+        <text x="435" y="246" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/sheets/*</text>
+        <text x="545" y="246" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/users</text>
+        <text x="490" y="274" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">/health</text>
+
+        <rect x="386" y="292" width="208" height="36" rx="3" fill="rgba(0,229,255,0.05)" stroke="rgba(0,229,255,0.15)" stroke-width="1"/>
+        <text x="490" y="312" text-anchor="middle" fill="#7ac8d8" font-family="JetBrains Mono" font-size="9.5" font-weight="700">SQLAlchemy ORM</text>
+        <text x="490" y="324" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">Session · engine · models</text>
+
+        <rect x="386" y="336" width="208" height="36" rx="3" fill="rgba(0,229,255,0.04)" stroke="rgba(0,229,255,0.12)" stroke-width="1"/>
+        <text x="490" y="356" text-anchor="middle" fill="#7ac8d8" font-family="JetBrains Mono" font-size="9.5" font-weight="700">Error Handlers</text>
+        <text x="490" y="368" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">→ {"error":{type,message}}</text>
+
+        <!-- ARROWS: BE → DB -->
+        <line x1="610" y1="250" x2="700" y2="250" stroke="#ff9500" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-a)"/>
+        <text x="655" y="243" text-anchor="middle" fill="#ff9500" font-family="JetBrains Mono" font-size="8.5" opacity="0.9">SQL Query</text>
+
+        <line x1="700" y1="270" x2="610" y2="270" stroke="#ff9500" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-a)"/>
+        <text x="655" y="290" text-anchor="middle" fill="#ff9500" font-family="JetBrains Mono" font-size="8.5" opacity="0.9">Rows</text>
+
+        <!-- Animated DB packet -->
+        <circle r="4" fill="#ff9500" opacity="0.9" filter="url(#glow)">
+          <animateMotion dur="1.8s" repeatCount="indefinite" begin="0.4s">
+            <mpath href="#db-path"/>
+          </animateMotion>
+        </circle>
+        <path id="db-path" d="M610,250 L700,250" fill="none"/>
+        <circle r="4" fill="#ff9500" opacity="0.8" filter="url(#glow)">
+          <animateMotion dur="1.8s" repeatCount="indefinite" begin="1.3s">
+            <mpath href="#db-ret-path"/>
+          </animateMotion>
+        </circle>
+        <path id="db-ret-path" d="M700,270 L610,270" fill="none"/>
+
+        <!-- DB BOX -->
+        <rect x="700" y="140" width="230" height="280" rx="4" fill="url(#db-grad)" stroke="#ff9500" stroke-opacity="0.35" stroke-width="1"/>
+        <text x="815" y="126" text-anchor="middle" fill="#ff9500" font-family="JetBrains Mono" font-size="9" letter-spacing="2" opacity="0.7">DATABASE</text>
+
+        <!-- DB options -->
+        <rect x="718" y="158" width="194" height="28" rx="3" fill="rgba(255,149,0,0.1)" stroke="rgba(255,149,0,0.3)" stroke-width="1"/>
+        <text x="815" y="177" text-anchor="middle" fill="#ff9500" font-family="JetBrains Mono" font-size="10" font-weight="700">PostgreSQL  (dev)</text>
+
+        <rect x="718" y="194" width="194" height="28" rx="3" fill="rgba(255,149,0,0.05)" stroke="rgba(255,149,0,0.18)" stroke-width="1"/>
+        <text x="815" y="213" text-anchor="middle" fill="#c87000" font-family="JetBrains Mono" font-size="10">SQLite  (zero-config)</text>
+
+        <rect x="718" y="230" width="194" height="28" rx="3" fill="rgba(255,149,0,0.05)" stroke="rgba(255,149,0,0.18)" stroke-width="1"/>
+        <text x="815" y="249" text-anchor="middle" fill="#c87000" font-family="JetBrains Mono" font-size="10">MSSQL  (enterprise)</text>
+
+        <!-- Tables list -->
+        <text x="815" y="280" text-anchor="middle" fill="#ff9500" font-family="JetBrains Mono" font-size="8.5" opacity="0.6" letter-spacing="1">TABLES</text>
+        <text x="760" y="298" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">users</text>
+        <text x="870" y="298" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">projects</text>
+        <text x="760" y="314" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">tasks</text>
+        <text x="870" y="314" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">comments</text>
+        <text x="760" y="330" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">ptrack</text>
+        <text x="870" y="330" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">activities</text>
+        <text x="760" y="346" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">bom_and_costing</text>
+        <text x="870" y="362" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">survey_report</text>
+        <text x="760" y="362" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">customer_mom</text>
+        <text x="815" y="394" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">exception_log · internal_verification</text>
+        <text x="815" y="410" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">tags · ptemplate · process_tags</text>
+
+        <!-- Google Sheets -->
+        <rect x="386" y="386" width="208" height="28" rx="3" fill="rgba(57,255,20,0.05)" stroke="rgba(57,255,20,0.2)" stroke-width="1"/>
+        <text x="490" y="405" text-anchor="middle" fill="#39ff14" font-family="JetBrains Mono" font-size="9">Google Sheets API (optional)</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ FLOW CARDS ═══════════════════════════════════ -->
+<section>
+  <p class="section-label">02 — Layer Breakdown</p>
+  <h2 class="section-title">System Layers</h2>
+  <p class="section-sub">Each layer has a single responsibility. The SPA never touches the database directly.</p>
+  <div class="flow-grid">
+    <div class="flow-card fade-in">
+      <span class="card-icon">🖥️</span>
+      <div class="card-title">Vue 3 SPA</div>
+      <div class="card-meta">FRONTEND — PORT 5173 (dev)</div>
+      <div class="card-body">Built with Vite 8. Vue Router guards redirect unauthenticated users to <code>/login</code>. Pinia stores hold all app state. ECharts renders dashboard charts. TanStack Table powers the sortable project table.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🔌</span>
+      <div class="card-title">api/index.js</div>
+      <div class="card-meta">HTTP CLIENT — fetch() WRAPPER</div>
+      <div class="card-body">Single module that wraps all <code>fetch()</code> calls. Reads JWT from <code>localStorage</code>, injects it as <code>Authorization: Bearer ...</code> on every request, normalises error envelopes, and auto-redirects to <code>/login</code> on 401.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">⚗️</span>
+      <div class="card-title">Flask REST API</div>
+      <div class="card-meta">BACKEND — PORT 5000</div>
+      <div class="card-body">App factory wires JWT, CORS, rate limiter, and all blueprints. Every response is a JSON envelope. All errors follow <code>{error:{type,message}}</code>. Blueprints: auth, projects, tasks, comments, records, stats, sheets, users.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🔐</span>
+      <div class="card-title">JWT Auth</div>
+      <div class="card-meta">FLASK-JWT-EXTENDED — 12h EXPIRY</div>
+      <div class="card-body">Login returns a signed JWT. The identity is the stringified <code>user.id</code>; role + name travel as additional claims. No refresh tokens — 12 h expiry is the trade-off. Rate-limited: 10 logins / min / IP.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🗄️</span>
+      <div class="card-title">SQLAlchemy ORM</div>
+      <div class="card-meta">DB-PORTABLE — SQLite / PG / MSSQL</div>
+      <div class="card-body">All models use only portable column types (no DB-specific syntax). Schema auto-creates on startup via <code>Base.metadata.create_all()</code>. The session is scoped and released at teardown via <code>Session.remove()</code>.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">📊</span>
+      <div class="card-title">Stats Engine</div>
+      <div class="card-meta">SQL GROUP BY — NO PYTHON LOOPS</div>
+      <div class="card-body">All dashboard aggregations (funnel counts, fiscal bars, domain donut, upcoming) use SQL <code>GROUP BY + func.count/sum</code>. Zero full-table Python loops — single round-trip to DB for all KPIs.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ AUTH FLOW ═══════════════════════════════════ -->
+<section id="flow">
+  <p class="section-label">03 — Authentication</p>
+  <h2 class="section-title">Auth Flow Walkthrough</h2>
+  <p class="section-sub">From the first page load to an authenticated API call — step by step.</p>
+
+  <div id="auth-anim" class="fade-in">
+    <!-- Lane headers -->
+    <div style="display:grid; grid-template-columns:160px 1fr 160px; gap:1rem; margin-bottom:1rem;">
+      <div class="actor-fe auth-step-actor">BROWSER / SPA</div>
+      <div></div>
+      <div class="actor-be auth-step-actor">FLASK BACKEND</div>
+    </div>
+
+    <div class="auth-steps" id="auth-steps-list">
+
+      <div class="auth-step" data-delay="0">
+        <div class="actor-fe auth-step-actor">App Boots</div>
+        <div class="auth-step-arrow">
+          <div class="arrow-line">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label">GET /api/auth/me</span>
+              <span class="arrow-sub">reads token from localStorage</span>
+            </div>
+          </div>
+          <span class="arrow-tip">→</span>
+        </div>
+        <div class="actor-be auth-step-actor">Validate JWT</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="300">
+        <div class="actor-fe auth-step-actor">Restore Session</div>
+        <div class="auth-step-arrow">
+          <span class="arrow-tip rev">→</span>
+          <div class="arrow-line rev">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label" style="color:var(--green); border-color:rgba(57,255,20,0.3)">200 {user, role}</span>
+              <span class="arrow-sub">auth.user populated, router unlocks</span>
+            </div>
+          </div>
+        </div>
+        <div class="actor-be auth-step-actor">User from DB</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="600">
+        <div class="actor-fe auth-step-actor">Login Form</div>
+        <div class="auth-step-arrow">
+          <div class="arrow-line">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label">POST /api/auth/login</span>
+              <span class="arrow-sub">{email, password} · rate 10/min/IP</span>
+            </div>
+          </div>
+          <span class="arrow-tip">→</span>
+        </div>
+        <div class="actor-be auth-step-actor">PBKDF2 Check</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="900">
+        <div class="actor-fe auth-step-actor">setToken(jwt)<br>router.push('/')</div>
+        <div class="auth-step-arrow">
+          <span class="arrow-tip rev">→</span>
+          <div class="arrow-line rev">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label" style="color:var(--green); border-color:rgba(57,255,20,0.3)">200 {token, user}</span>
+              <span class="arrow-sub">JWT signed with role + name claims</span>
+            </div>
+          </div>
+        </div>
+        <div class="actor-be auth-step-actor">Issue JWT</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="1200">
+        <div class="actor-fe auth-step-actor">Any API Call</div>
+        <div class="auth-step-arrow">
+          <div class="arrow-line">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label">GET /api/projects</span>
+              <span class="arrow-sub">Authorization: Bearer &lt;jwt&gt;</span>
+            </div>
+          </div>
+          <span class="arrow-tip">→</span>
+        </div>
+        <div class="actor-be auth-step-actor">@jwt_required()</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="1500">
+        <div class="actor-fe auth-step-actor">Update Store<br>Render UI</div>
+        <div class="auth-step-arrow">
+          <span class="arrow-tip rev">→</span>
+          <div class="arrow-line rev">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label" style="color:var(--green); border-color:rgba(57,255,20,0.3)">200 {projects:[...]}</span>
+              <span class="arrow-sub">JSON envelope — no HTML</span>
+            </div>
+          </div>
+        </div>
+        <div class="actor-be auth-step-actor">DB → JSON</div>
+      </div>
+
+      <div class="step-connector"></div>
+
+      <div class="auth-step" data-delay="1800">
+        <div class="actor-fe auth-step-actor">401 Received</div>
+        <div class="auth-step-arrow">
+          <span class="arrow-tip rev">→</span>
+          <div class="arrow-line rev">
+            <div style="text-align:center; padding:4px 0; position:relative; z-index:2;">
+              <span class="arrow-label" style="color:var(--red); border-color:rgba(255,59,92,0.3)">401 Token expired</span>
+              <span class="arrow-sub">setToken(null) → redirect /login</span>
+            </div>
+          </div>
+        </div>
+        <div class="actor-be auth-step-actor">JWT Expired</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Live packet demo -->
+  <div id="packet-demo" class="fade-in">
+    <p style="font-family:var(--font-m); font-size:0.72rem; color:var(--text2); letter-spacing:2px; margin-bottom:1.25rem;">LIVE REQUEST / RESPONSE SIMULATION</p>
+    <div class="packet-scene">
+      <div class="packet-box">
+        <div class="packet-box-title" style="color:var(--purple)">SPA Frontend</div>
+        <div class="packet-box-detail">
+          Vue 3 Component<br>
+          ↓ calls api.listProjects()<br>
+          ↓ injects JWT header
+        </div>
+        <div class="jwt-badge">Bearer eyJ0eX...</div>
+      </div>
+      <div class="packet-lane">
+        <div class="lane-label">→ REQUEST</div>
+        <div class="lane-track">
+          <div class="packet packet-req">GET /api/projects?status=Award</div>
+        </div>
+        <div class="lane-label" style="text-align:right">RESPONSE ←</div>
+        <div class="lane-track">
+          <div class="packet packet-res">200 [{id:1, name:"SCADA MML"...}]</div>
+        </div>
+      </div>
+      <div class="packet-box">
+        <div class="packet-box-title" style="color:var(--cyan)">Flask Backend</div>
+        <div class="packet-box-detail">
+          @jwt_required()<br>
+          ↓ query DB<br>
+          ↓ .to_dict() → JSON
+        </div>
+        <div class="jwt-badge" style="background:rgba(0,229,255,0.1); border-color:rgba(0,229,255,0.3); color:var(--cyan)">200 OK + CORS</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ API MAP ═══════════════════════════════════ -->
+<section id="api">
+  <p class="section-label">04 — REST Endpoints</p>
+  <h2 class="section-title">API Endpoint Map</h2>
+  <p class="section-sub">All routes are under <code style="color:var(--cyan);font-family:var(--font-m)">/api/</code>. Protected routes require <code style="color:var(--purple);font-family:var(--font-m)">Authorization: Bearer &lt;token&gt;</code>.</p>
+
+  <div class="api-table-wrap fade-in">
+    <table class="api-table">
+      <thead>
+        <tr>
+          <th>METHOD</th>
+          <th>ENDPOINT</th>
+          <th>AUTH</th>
+          <th>DESCRIPTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/auth/register</td><td>—</td><td>Create user, returns JWT. First user → admin. Rate: 5/min/IP</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/auth/login</td><td>—</td><td>Exchange email/password for JWT. Rate: 10/min/IP</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/auth/me</td><td><span class="auth-badge">JWT</span></td><td>Validate token, return current user + role</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/projects</td><td><span class="auth-badge">JWT</span></td><td>List projects. Supports ?status, ?priority, ?domain, ?q, ?tag filters</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/projects</td><td><span class="auth-badge">JWT</span></td><td>Create project with tags, pms, dates, fiscal year</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/projects/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Project detail with tasks, comments, activities, ptrack</td></tr>
+        <tr><td><span class="method PATCH">PATCH</span></td><td class="ep">/projects/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Update any project field. Owner or admin only.</td></tr>
+        <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/projects/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete project + cascades (tasks, comments, ptrack, records)</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/projects/<em>:id</em>/ptrack/generate</td><td><span class="auth-badge">JWT</span></td><td>Backfill process checklist from template. Idempotent.</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/projects/<em>:id</em>/tasks</td><td><span class="auth-badge">JWT</span></td><td>Add task to project</td></tr>
+        <tr><td><span class="method PATCH">PATCH</span></td><td class="ep">/tasks/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Toggle done / update task. Owner or admin.</td></tr>
+        <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/tasks/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete task. Owner or admin.</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/projects/<em>:id</em>/comments</td><td><span class="auth-badge">JWT</span></td><td>Post comment on project</td></tr>
+        <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/comments/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete own comment or admin</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/projects/<em>:id</em>/records/<em>:resource</em></td><td><span class="auth-badge">JWT</span></td><td>List ptrack / survey / mom / bom / verification / exceptions</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/projects/<em>:id</em>/records/<em>:resource</em></td><td><span class="auth-badge">JWT</span></td><td>Create auxiliary record</td></tr>
+        <tr><td><span class="method PATCH">PATCH</span></td><td class="ep">/records/<em>:resource</em>/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Update record (toggle ptrack checkbox, etc.)</td></tr>
+        <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/records/<em>:resource</em>/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete record</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/stats</td><td><span class="auth-badge">JWT</span></td><td>Dashboard KPIs: funnel, fiscal, domain, upcoming — all SQL GROUP BY</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/users</td><td><span class="auth-badge">JWT</span></td><td>List all users (for PM assignment dropdown)</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/sheets/status</td><td><span class="auth-badge">JWT</span></td><td>Check Google Sheets connection</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/sheets/export</td><td><span class="auth-badge">JWT</span></td><td>Export all projects to Google Sheet</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/sheets/import</td><td><span class="auth-badge">JWT</span></td><td>Import from Google Sheet (add ?preview=1 for dry-run)</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/health</td><td>—</td><td>Health check: {ok:true, db:"postgresql"}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ DATABASE ═══════════════════════════════════ -->
+<section id="database">
+  <p class="section-label">05 — Data Models</p>
+  <h2 class="section-title">Database Schema</h2>
+  <p class="section-sub">SQLAlchemy ORM — portable across SQLite, PostgreSQL, MSSQL. Auto-created on startup.</p>
+
+  <div class="schema-grid fade-in">
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">users</span>
+        <span class="schema-table-icon">👤</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-key">🔑</span><span class="col-name">id</span><span class="col-type">Integer PK</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">name</span><span class="col-type">String(128)</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">email</span><span class="col-type">String unique</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">password_hash</span><span class="col-type">String</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">role</span><span class="col-type">admin|member</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">created_at</span><span class="col-type">DateTime</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">projects</span>
+        <span class="schema-table-icon">📁</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-key">🔑</span><span class="col-name">id</span><span class="col-type">Integer PK</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">name, description</span><span class="col-type">String/Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">domain, customer</span><span class="col-type">String</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">status</span><span class="col-type">pipeline stage</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">priority</span><span class="col-type">low→critical</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">value</span><span class="col-type">Numeric(14,2)</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">fiscal_year</span><span class="col-type">String(8)</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">owner_id</span><span class="col-type">FK users</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">start_date, due_date</span><span class="col-type">Date</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">tasks</span>
+        <span class="schema-table-icon">✅</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-key">🔑</span><span class="col-name">id</span><span class="col-type">Integer PK</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">project_id</span><span class="col-type">FK CASCADE</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">title</span><span class="col-type">String(255)</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">done</span><span class="col-type">Boolean</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">assignee</span><span class="col-type">String</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">due_date</span><span class="col-type">Date</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">ptrack</span>
+        <span class="schema-table-icon">📋</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-key">🔑</span><span class="col-name">id</span><span class="col-type">Integer PK</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">project_id</span><span class="col-type">FK CASCADE</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">process, task</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">checked (col:"check")</span><span class="col-type">Boolean</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">status, pm</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">reference</span><span class="col-type">Text</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">bom_and_costing</span>
+        <span class="schema-table-icon">🔧</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">project_id</span><span class="col-type">FK CASCADE</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">device_name, spec</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">quantity, unit</span><span class="col-type">Integer/Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">unit_price, total_price</span><span class="col-type">Integer</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">supplier, lead_time</span><span class="col-type">Text/Int</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">survey_report / customer_mom</span>
+        <span class="schema-table-icon">📝</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">project_id</span><span class="col-type">FK CASCADE</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">date</span><span class="col-type">Date</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">department, requirement</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">issue, limitation</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">result, conclude</span><span class="col-type">Text</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="info-box mt-2">
+    <strong>ℹ Process Progress Logic:</strong> Every project's progress % = <code>processDone / processCount</code> (from ptrack rows). Falls back to task counts for projects without a process checklist. Shipped on every <code>Project.to_dict()</code> call so all views stay consistent.
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ INSTALL ═══════════════════════════════════ -->
+<section id="install">
+  <p class="section-label">06 — Getting Started</p>
+  <h2 class="section-title">Installation Guide</h2>
+  <p class="section-sub">Choose your platform. The app runs on Windows (Waitress) and Linux (Gunicorn).</p>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab(this,'win')">🪟 Windows</button>
+    <button class="tab-btn" onclick="switchTab(this,'linux')">🐧 Linux / macOS</button>
+    <button class="tab-btn" onclick="switchTab(this,'docker')">🐳 Docker</button>
+  </div>
+
+  <!-- WINDOWS -->
+  <div class="tab-panel active" id="tab-win">
+    <ul class="step-list">
+      <li class="step-item fade-in">
+        <div class="step-num">01</div>
+        <div>
+          <div class="step-content-title">Clone the repository</div>
+          <div class="step-content-body">Get the source code onto your machine.</div>
+          <div class="code-block" data-label="CMD">
+<span class="cb-cmd">git clone</span> <span class="cb-str">https://github.com/your-org/project-tracking.git</span>
+<span class="cb-cmd">cd</span> project-tracking
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">02</div>
+        <div>
+          <div class="step-content-title">Create Python virtual environment (Backend)</div>
+          <div class="step-content-body">Python 3.11 recommended. Always use <code>.venv</code> — the global env has conflicting packages.</div>
+          <div class="code-block" data-label="CMD">
+<span class="cb-cmd">cd</span> backend
+<span class="cb-cmd">py -3.11 -m venv</span> .venv
+<span class="cb-cmd">.venv\Scripts\pip install</span> -r requirements-dev.txt
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">03</div>
+        <div>
+          <div class="step-content-title">Configure environment variables</div>
+          <div class="step-content-body">Copy <code>.env.example</code> to <code>.env</code> and set your secrets and DB URL.</div>
+          <div class="code-block" data-label=".env">
+<span class="cb-comment"># Database — default falls back to SQLite if not set</span>
+<span class="cb-key">DATABASE_URL</span>=<span class="cb-str">postgresql+psycopg2://postgres:P%40ssw0rd@localhost:5432/ProjectTracking</span>
+
+<span class="cb-comment"># Secrets — CHANGE IN PRODUCTION!</span>
+<span class="cb-key">SECRET_KEY</span>=<span class="cb-str">your-super-secret-key-here</span>
+<span class="cb-key">JWT_SECRET_KEY</span>=<span class="cb-str">your-jwt-secret-here</span>
+<span class="cb-key">JWT_HOURS</span>=<span class="cb-str">12</span>
+
+<span class="cb-comment"># CORS: * for dev, restrict in production</span>
+<span class="cb-key">CORS_ORIGINS</span>=<span class="cb-str">*</span>
+
+<span class="cb-comment"># Seed demo data on first start (optional)</span>
+<span class="cb-key">SEED_ON_START</span>=<span class="cb-str">true</span>
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">04</div>
+        <div>
+          <div class="step-content-title">Start the Flask backend</div>
+          <div class="step-content-body">Schema auto-creates on startup. Visit <code>http://localhost:5000/api/health</code> to verify.</div>
+          <div class="code-block" data-label="CMD — backend/">
+<span class="cb-comment"># Development mode</span>
+<span class="cb-cmd">.venv\Scripts\python -m flask run</span> --port 5000
+
+<span class="cb-comment"># OR seed demo data first</span>
+<span class="cb-cmd">.venv\Scripts\python seed.py</span>
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">05</div>
+        <div>
+          <div class="step-content-title">Install and start the frontend</div>
+          <div class="step-content-body">Vite dev server proxies API calls to Flask. Hot-reloads on save.</div>
+          <div class="code-block" data-label="CMD — frontend/">
+<span class="cb-cmd">npm install</span>
+<span class="cb-cmd">npm run dev</span>
+<span class="cb-comment"># → http://localhost:5173</span>
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">06</div>
+        <div>
+          <div class="step-content-title">Run tests</div>
+          <div class="step-content-body">25 tests across auth, projects, tasks, comments, stats, and records. Always run inside <code>.venv</code>.</div>
+          <div class="code-block" data-label="CMD — backend/">
+<span class="cb-cmd">.venv\Scripts\python -m pytest</span> tests/ -v
+<span class="cb-comment"># 25 tests — uses in-memory SQLite (TestConfig)</span>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- LINUX -->
+  <div class="tab-panel" id="tab-linux">
+    <ul class="step-list">
+      <li class="step-item fade-in">
+        <div class="step-num">01</div>
+        <div>
+          <div class="step-content-title">Clone and set up backend</div>
+          <div class="code-block" data-label="BASH">
+<span class="cb-cmd">git clone</span> https://github.com/your-org/project-tracking.git <span class="cb-str">&amp;&amp;</span> <span class="cb-cmd">cd</span> project-tracking/backend
+<span class="cb-cmd">python3.11 -m venv</span> .venv
+<span class="cb-cmd">source .venv/bin/activate</span>
+<span class="cb-cmd">pip install</span> -r requirements-dev.txt
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">02</div>
+        <div>
+          <div class="step-content-title">Configure and seed</div>
+          <div class="code-block" data-label="BASH">
+<span class="cb-cmd">cp</span> .env.example .env
+<span class="cb-comment"># Edit .env with your DB URL and secrets</span>
+<span class="cb-cmd">python seed.py</span>   <span class="cb-comment"># loads demo data</span>
+          </div>
+        </div>
+      </li>
+      <li class="step-item fade-in">
+        <div class="step-num">03</div>
+        <div>
+          <div class="step-content-title">Run backend + frontend</div>
+          <div class="code-block" data-label="BASH">
+<span class="cb-comment"># Terminal 1 — backend</span>
+<span class="cb-cmd">flask run</span> --port 5000
+
+<span class="cb-comment"># Terminal 2 — frontend</span>
+<span class="cb-cmd">cd</span> ../frontend <span class="cb-str">&amp;&amp;</span> <span class="cb-cmd">npm install &amp;&amp; npm run dev</span>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- DOCKER -->
+  <div class="tab-panel" id="tab-docker">
+    <div class="warn-box">
+      <strong>⚠ NOTE:</strong> No official Dockerfile is included in the repo. The setup below is a recommended pattern based on the existing requirements.txt and Vite config.
+    </div>
+    <div class="code-block" data-label="Dockerfile (backend)">
+<span class="cb-key">FROM</span> <span class="cb-str">python:3.11-slim</span>
+<span class="cb-key">WORKDIR</span> /app
+<span class="cb-key">COPY</span> requirements.txt .
+<span class="cb-cmd">RUN pip install</span> -r requirements.txt
+<span class="cb-key">COPY</span> . .
+<span class="cb-key">ENV</span> <span class="cb-key">DATABASE_URL</span>=<span class="cb-str">postgresql+psycopg2://user:pass@db:5432/projecttracking</span>
+<span class="cb-key">EXPOSE</span> 5000
+<span class="cb-key">CMD</span> ["python", "-m", "waitress", "--port=5000", "wsgi:app"]
+    </div>
+    <div class="code-block" data-label="docker-compose.yml">
+<span class="cb-key">services</span>:
+  <span class="cb-key">db</span>:
+    <span class="cb-key">image</span>: postgres:16
+    <span class="cb-key">environment</span>:
+      <span class="cb-key">POSTGRES_DB</span>: <span class="cb-str">projecttracking</span>
+      <span class="cb-key">POSTGRES_PASSWORD</span>: <span class="cb-str">secret</span>
+  <span class="cb-key">backend</span>:
+    <span class="cb-key">build</span>: ./backend
+    <span class="cb-key">ports</span>: [<span class="cb-str">"5000:5000"</span>]
+    <span class="cb-key">depends_on</span>: [db]
+  <span class="cb-key">frontend</span>:
+    <span class="cb-key">image</span>: nginx:alpine
+    <span class="cb-key">volumes</span>: [<span class="cb-str">"./frontend/dist:/usr/share/nginx/html"</span>]
+    <span class="cb-key">ports</span>: [<span class="cb-str">"80:80"</span>]
+    </div>
+  </div>
+
+  <!-- ENV reference -->
+  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Environment Variable Reference</h3>
+  <div class="env-grid fade-in">
+    <div class="env-card">
+      <div class="env-card-title">🗄️ DATABASE</div>
+      <div class="env-row"><span class="env-key">DATABASE_URL</span><span class="env-val">Full SQLAlchemy URL (overrides all DB_* vars)</span></div>
+      <div class="env-row"><span class="env-key">DB_HOST</span><span class="env-val">localhost</span></div>
+      <div class="env-row"><span class="env-key">DB_PORT</span><span class="env-val">5432</span></div>
+      <div class="env-row"><span class="env-key">DB_NAME</span><span class="env-val">ProjectTracking</span></div>
+      <div class="env-row"><span class="env-key">DB_USER</span><span class="env-val">postgres</span></div>
+      <div class="env-row"><span class="env-key">DB_PASSWORD</span><span class="env-val">P@ssw0rd</span></div>
+    </div>
+    <div class="env-card">
+      <div class="env-card-title">🔐 AUTH &amp; APP</div>
+      <div class="env-row"><span class="env-key">SECRET_KEY</span><span class="env-val">Flask secret (change in prod!)</span></div>
+      <div class="env-row"><span class="env-key">JWT_SECRET_KEY</span><span class="env-val">Signs JWT tokens (change in prod!)</span></div>
+      <div class="env-row"><span class="env-key">JWT_HOURS</span><span class="env-val">12 (token lifetime)</span></div>
+      <div class="env-row"><span class="env-key">CORS_ORIGINS</span><span class="env-val">* (dev) | https://yourapp.com (prod)</span></div>
+      <div class="env-row"><span class="env-key">FLASK_DEBUG</span><span class="env-val">false</span></div>
+      <div class="env-row"><span class="env-key">SEED_ON_START</span><span class="env-val">false (true = drops &amp; re-seeds!)</span></div>
+    </div>
+    <div class="env-card">
+      <div class="env-card-title">📊 GOOGLE SHEETS (Optional)</div>
+      <div class="env-row"><span class="env-key">GOOGLE_SHEET_ID</span><span class="env-val">Spreadsheet ID from URL</span></div>
+      <div class="env-row"><span class="env-key">GOOGLE_CREDENTIALS_FILE</span><span class="env-val">credentials.json path</span></div>
+      <div class="env-row"><span class="env-key">GOOGLE_CREDENTIALS_JSON</span><span class="env-val">Inline JSON (for containers)</span></div>
+      <div class="env-row"><span class="env-key">GOOGLE_SHEET_TAB</span><span class="env-val">Projects</span></div>
+    </div>
+    <div class="env-card">
+      <div class="env-card-title">👥 DEMO CREDENTIALS (after seed)</div>
+      <div class="env-row"><span class="env-key">admin@scada.local</span><span class="env-val">admin123 — admin role</span></div>
+      <div class="env-row"><span class="env-key">a@scada.local</span><span class="env-val">password — member</span></div>
+      <div class="env-row"><span class="env-key">b@scada.local</span><span class="env-val">password — member</span></div>
+      <div class="env-row"><span class="env-key">c@scada.local</span><span class="env-val">password — member</span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ DEPLOY ═══════════════════════════════════ -->
+<section id="deploy">
+  <p class="section-label">07 — Production</p>
+  <h2 class="section-title">Deployment Guide</h2>
+  <p class="section-sub">Two deployment targets: Windows Service (Waitress) for on-prem, and Linux server (Gunicorn + Nginx).</p>
+
+  <div class="deploy-grid">
+
+    <div class="deploy-card fade-in">
+      <div class="deploy-card-head">
+        <span class="deploy-card-icon">🪟</span>
+        <span class="deploy-card-title">Windows — Waitress WSGI Service</span>
+      </div>
+      <div class="deploy-card-body">
+        <div class="code-block" data-label="wsgi.py (already exists)">
+<span class="cb-comment"># backend/wsgi.py</span>
+<span class="cb-key">from</span> app <span class="cb-key">import</span> create_app
+app = create_app()
+        </div>
+        <div class="code-block" data-label="CMD — run Waitress">
+<span class="cb-comment"># Install as Windows service via NSSM or run directly:</span>
+<span class="cb-cmd">.venv\Scripts\waitress-serve</span> <span class="cb-str">\</span>
+  --port=5000 <span class="cb-str">\</span>
+  --call wsgi:app
+
+<span class="cb-comment"># Or use the included batch file:</span>
+<span class="cb-cmd">start_service.bat</span>
+        </div>
+        <ul style="color:var(--text2); font-size:0.84rem; padding-left:1.2rem; margin-top:0.75rem; line-height:2;">
+          <li>Set <code>FLASK_DEBUG=false</code> in <code>.env</code></li>
+          <li>Set strong <code>SECRET_KEY</code> &amp; <code>JWT_SECRET_KEY</code></li>
+          <li>Set <code>CORS_ORIGINS=https://yourapp.com</code></li>
+          <li>Use PostgreSQL — not SQLite for production</li>
+          <li>Run <code>npm run build</code> → serve <code>frontend/dist/</code> via IIS or Nginx</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="deploy-card fade-in">
+      <div class="deploy-card-head">
+        <span class="deploy-card-icon">🐧</span>
+        <span class="deploy-card-title">Linux — Gunicorn + Nginx</span>
+      </div>
+      <div class="deploy-card-body">
+        <div class="code-block" data-label="BASH — gunicorn">
+<span class="cb-comment"># Add to requirements.txt: gunicorn>=22.0</span>
+<span class="cb-cmd">gunicorn</span> --workers 4 --bind 0.0.0.0:5000 wsgi:app
+        </div>
+        <div class="code-block" data-label="nginx.conf (snippet)">
+<span class="cb-key">server</span> {
+  <span class="cb-key">listen</span> 80;
+  <span class="cb-key">root</span> /var/www/dist;      <span class="cb-comment"># frontend/dist</span>
+  <span class="cb-key">index</span> index.html;
+
+  <span class="cb-comment"># SPA fallback</span>
+  <span class="cb-key">location</span> / {
+    <span class="cb-key">try_files</span> $uri $uri/ /index.html;
+  }
+
+  <span class="cb-comment"># Proxy API to Gunicorn</span>
+  <span class="cb-key">location</span> /api/ {
+    <span class="cb-key">proxy_pass</span> http://127.0.0.1:5000;
+    <span class="cb-key">proxy_set_header</span> Host $host;
+  }
+}
+        </div>
+        <div class="info-box">
+          <strong>💡 Tip:</strong> With Nginx reverse-proxying, set <code>CORS_ORIGINS=""</code> (same-origin). No need for CORS headers when frontend and backend share the same domain.
+        </div>
+      </div>
+    </div>
+
+    <div class="deploy-card fade-in">
+      <div class="deploy-card-head">
+        <span class="deploy-card-icon">🔒</span>
+        <span class="deploy-card-title">Production Security Checklist</span>
+      </div>
+      <div class="deploy-card-body">
+        <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6rem; font-size:0.85rem;">
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Change <code>SECRET_KEY</code> and <code>JWT_SECRET_KEY</code> — never use defaults</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Set <code>FLASK_DEBUG=false</code> — never expose debug mode</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Set <code>CORS_ORIGINS</code> to exact domain(s) only</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Use PostgreSQL — SQLite not suitable for concurrent writes</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Set <code>SEED_ON_START=false</code> — it DROPS all tables first</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Rate-limit via Nginx/WAF in addition to Flask-Limiter</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Configure Redis for rate-limit storage (<code>RATELIMIT_STORAGE_URI</code>)</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Enable HTTPS — JWT in localStorage is XSS-accessible</li>
+          <li style="display:flex;gap:0.6rem;align-items:center;"><span style="color:var(--red)">☐</span> Restrict DB user to only the app database</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="deploy-card fade-in">
+      <div class="deploy-card-head">
+        <span class="deploy-card-icon">📦</span>
+        <span class="deploy-card-title">Build the Frontend</span>
+      </div>
+      <div class="deploy-card-body">
+        <div class="code-block" data-label="frontend/">
+<span class="cb-comment"># Create production bundle</span>
+<span class="cb-cmd">npm run build</span>
+<span class="cb-comment"># Output: frontend/dist/ (static files)</span>
+<span class="cb-ok">✓</span> index.html  (SPA shell)
+<span class="cb-ok">✓</span> assets/     (hashed JS + CSS chunks)
+
+<span class="cb-comment"># Serve dist/ with any static server:</span>
+<span class="cb-comment">#  - Nginx root directive</span>
+<span class="cb-comment">#  - IIS static content</span>
+<span class="cb-comment">#  - Apache DocumentRoot</span>
+<span class="cb-comment">#  - GitHub Pages (no /api/ proxy needed externally)</span>
+        </div>
+        <div class="warn-box">
+          <strong>⚠ SPA Routing:</strong> The Vite build outputs a single <code>index.html</code>. All routes (<code>/kanban</code>, <code>/table</code>, etc.) are client-side. Your web server must return <code>index.html</code> for all non-<code>/api/</code> paths — configure a fallback rule.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ═══════════════════════════════════ DEVELOP ═══════════════════════════════════ -->
+<section id="develop">
+  <p class="section-label">08 — Developer Guide</p>
+  <h2 class="section-title">Development Workflows</h2>
+  <p class="section-sub">Key patterns, pitfalls, and conventions every contributor should know.</p>
+
+  <div class="flow-grid mb-1">
+    <div class="flow-card fade-in">
+      <span class="card-icon">⚡</span>
+      <div class="card-title">Hot Reload Dev Loop</div>
+      <div class="card-meta">VITE + FLASK</div>
+      <div class="card-body">Run Flask on <code>:5000</code> and Vite on <code>:5173</code> simultaneously. The Vite dev server proxies <code>/api/*</code> requests to Flask (configure <code>vite.config.js</code> proxy if needed) or use <code>CORS_ORIGINS=*</code> in <code>.env</code> for cross-origin requests.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🏗️</span>
+      <div class="card-title">Adding a New API Route</div>
+      <div class="card-meta">BLUEPRINT PATTERN</div>
+      <div class="card-body">Create a new blueprint in <code>app/api/yourmodule.py</code>, register it in <code>app/api/__init__.py</code>, add tests in <code>tests/test_yourmodule.py</code>. Use <code>@jwt_required()</code> for protected routes and <code>require_owner_or_admin()</code> for authz.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🧪</span>
+      <div class="card-title">Running Tests</div>
+      <div class="card-meta">PYTEST — 25 TESTS</div>
+      <div class="card-body">Always use <code>.venv\Scripts\python -m pytest</code> — the global Python env has a <code>hydra</code> package that breaks pytest plugin loading. Tests use <code>TestConfig</code> with in-memory SQLite. Auth fixture password: <code>secret123</code>.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">🎨</span>
+      <div class="card-title">Frontend Conventions</div>
+      <div class="card-meta">VUE 3 + PINIA</div>
+      <div class="card-body">Single typeface: <strong>IBM Plex Sans Thai</strong> via <code>var(--font)</code>. Never add new font families. Monospace labels use <code>.mono</code> class with <code>font-variant-numeric: tabular-nums</code>. All API calls go through <code>api/index.js</code> — never use <code>fetch()</code> directly in components.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">📌</span>
+      <div class="card-title">Authorization Model</div>
+      <div class="card-meta">OWNER OR ADMIN</div>
+      <div class="card-body"><strong>Admin</strong>: full access to all resources. <strong>Member</strong>: can only edit/delete own projects, tasks, and comments. Enforced by <code>require_owner_or_admin(user, owner_id)</code> in <code>app/api/helpers.py</code>. First registered user auto-promoted to admin.</div>
+    </div>
+    <div class="flow-card fade-in">
+      <span class="card-icon">⚠️</span>
+      <div class="card-title">Common Pitfalls</div>
+      <div class="card-meta">READ BEFORE DEBUGGING</div>
+      <div class="card-body">• <code>ptrack.checked</code> maps to DB column named <code>"check"</code> — never raw SQL.<br>• <code>ptemplate</code> has no <code>process</code> column — resolved at read via <code>process_tags</code> join.<br>• Rate limit 429 on login — 10/min/IP, wait or restart Flask.<br>• Tag names &gt;48 chars raise 422 before DB.<br>• Owner check uses <code>pm</code> field <em>owner_id</em>, not always admin.</div>
+    </div>
+  </div>
+
+  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Optimistic UI Pattern (Kanban &amp; Process Checklist)</h3>
+  <div class="code-block fade-in" data-label="stores/projects.js — pattern">
+<span class="cb-comment">// 1. Immediately update local state (optimistic)</span>
+<span class="cb-key">const</span> backup = { ...project }
+project.processDone += checked ? 1 : -1
+
+<span class="cb-comment">// 2. Fire API call in background</span>
+<span class="cb-key">try</span> {
+  <span class="cb-key">await</span> api.updateRecord(<span class="cb-str">'ptrack'</span>, id, { checked })
+  _syncProcessCounts()   <span class="cb-comment">// swap array ref → force table re-render</span>
+} <span class="cb-key">catch</span> {
+  <span class="cb-comment">// 3. Rollback on failure</span>
+  Object.assign(project, backup)
+  ui.toast(<span class="cb-str">'Update failed'</span>, <span class="cb-str">'error'</span>)
+}
+  </div>
+
+  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Seeding Demo Data</h3>
+  <div class="code-block fade-in" data-label="CMD — backend/">
+<span class="cb-comment"># Option A: run seed.py directly (drops + recreates all tables)</span>
+<span class="cb-cmd">.venv\Scripts\python seed.py</span>
+
+<span class="cb-comment"># Option B: auto-seed on every restart (dev only)</span>
+<span class="cb-key">SEED_ON_START</span>=<span class="cb-str">true</span>   <span class="cb-comment"># in .env</span>
+
+<span class="cb-warn">⚠  SEED_ON_START drops all data first — never use in production!</span>
+  </div>
+
+  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Database URL Quick Reference</h3>
+  <div class="code-block fade-in" data-label=".env">
+<span class="cb-comment"># SQLite — zero config, auto-created</span>
+<span class="cb-key">DATABASE_URL</span>=<span class="cb-val">sqlite:///project_tracking.db</span>
+
+<span class="cb-comment"># PostgreSQL (current dev setup)</span>
+<span class="cb-key">DATABASE_URL</span>=<span class="cb-val">postgresql+psycopg2://postgres:P%40ssw0rd@localhost:5432/ProjectTracking</span>
+
+<span class="cb-comment"># MSSQL (needs ODBC Driver 17/18 installed)</span>
+<span class="cb-key">DATABASE_URL</span>=<span class="cb-val">mssql+pyodbc://user:pass@host/ProjectTracking?driver=ODBC+Driver+18+for+SQL+Server</span>
+  </div>
+
+</section>
+
+<hr class="divider">
+
+<!-- FOOTER -->
+<footer>
+  <span>SCADA MML</span> — Project Tracking System · Architecture Explainer
+  <br>
+  <span style="opacity:0.4; font-size:0.65rem; margin-top:0.5rem; display:block;">
+    Vue 3 · Flask 3 · SQLAlchemy 2 · JWT · PostgreSQL — Generated 2026-06-17
+  </span>
+</footer>
+
+<script>
+// ── TAB SWITCHING ──
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+
+// ── AUTH STEP REVEAL ──
+function revealAuthSteps() {
+  const steps = document.querySelectorAll('.auth-step[data-delay]');
+  steps.forEach(step => {
+    const delay = parseInt(step.getAttribute('data-delay'), 10);
+    setTimeout(() => step.classList.add('visible'), delay + 400);
+  });
+}
+
+// ── INTERSECTION OBSERVER ──
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      if (entry.target.id === 'auth-anim') revealAuthSteps();
+      io.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.fade-in, #auth-anim').forEach(el => io.observe(el));
+
+// ── ACTIVE NAV ──
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav a');
+const navObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.style.color = '');
+      const link = document.querySelector(`nav a[href="#${e.target.id}"]`);
+      if (link) link.style.color = 'var(--cyan)';
+    }
+  });
+}, { threshold: 0.4 });
+sections.forEach(s => navObs.observe(s));
+</script>
+</body>
+</html>
