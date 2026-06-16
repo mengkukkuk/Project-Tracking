@@ -113,6 +113,45 @@ gunicorn -w 4 -b 0.0.0.0:5000 wsgi:app
 
 Set a strong `SECRET_KEY`, configure `CORS_ORIGINS` to your frontend origin, and use PostgreSQL instead of SQLite.
 
+### Deploy on a new Windows device (Tailscale single-origin)
+
+`backend/start_service.bat` installs both services as NSSM Windows services and
+wires a portless HTTPS origin via Tailscale Serve. It is **device-agnostic** — it
+derives its own paths from the script location and auto-detects the Tailscale IP,
+so no edits are needed per machine.
+
+Prerequisites on the target device: Python 3.11, Node.js, [NSSM](https://nssm.cc),
+and [Tailscale](https://tailscale.com) (logged in to your tailnet).
+
+```bat
+:: 1. Clone, then create the backend venv + install deps
+cd Project-Tracking\backend
+py -3.11 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+
+:: 2. Configure environment
+copy .env.example .env        & rem  edit DATABASE_URL, SECRET_KEY, JWT_SECRET_KEY
+
+:: 3. Initialize the database (PostgreSQL), or rely on SQLite default
+::    psql -U postgres -d ProjectTracking -f init_db.sql
+
+:: 4. Install frontend deps
+cd ..\frontend & npm install & cd ..\backend
+
+:: 5. Install + start services (run as Administrator)
+start_service.bat
+```
+
+The script builds the SPA with a **relative `/api` base** and serves everything
+under one HTTPS origin, so there is no hardcoded IP and no CORS/mixed-content
+config. Final access URL (printed by the script):
+
+```
+https://<device-name>.<your-tailnet>.ts.net
+```
+
+Manage afterwards: `nssm status ProjTracking`, `tailscale serve status`.
+
 ## Architecture Notes
 
 - **Authorization** — admin can do anything; members can only modify their own projects/tasks. Enforced via `require_owner_or_admin()` in [`app/api/helpers.py`](backend/app/api/helpers.py).
