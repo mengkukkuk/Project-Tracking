@@ -19,6 +19,7 @@ const ui = useUiStore()
 const nav = [
   { to: '/', label: 'Overview', icon: 'overview' },
   { to: '/pipeline', label: 'Pipeline', icon: 'pipeline' },
+  { to: '/pm-cards', label: 'PM cards', icon: 'users' },
   { to: '/table', label: 'Table', icon: 'table' },
 ]
 
@@ -255,7 +256,7 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 
   .tabbar {
     display: grid;
-    grid-template-columns: repeat(3, 1fr) auto;
+    grid-template-columns: repeat(4, 1fr) auto;
     align-items: center;
     gap: 4px;
     position: fixed;

@@ -43,6 +43,33 @@ export const useProjectsStore = defineStore('projects', {
       return map
     },
 
+    // Group projects by project manager. Primary source is the multi-PM
+    // relation (`pms` from the users table); falls back to the legacy free-text
+    // `pm` field for projects that predate multi-PM, and an "Unassigned" bucket
+    // for projects with neither. A project with several PMs appears in each of
+    // their groups. Returns an array of { key, id, name, projects }.
+    byPm: (s) => {
+      const map = new Map()
+      const ensure = (key, id, name) => {
+        if (!map.has(key)) map.set(key, { key, id, name, projects: [] })
+        return map.get(key)
+      }
+      for (const p of s.projects) {
+        if (p.pms && p.pms.length) {
+          for (const u of p.pms) ensure(`u:${u.id}`, u.id, u.name).projects.push(p)
+        } else if (p.pm && p.pm.trim()) {
+          ensure(`t:${p.pm.trim()}`, null, p.pm.trim()).projects.push(p)
+        } else {
+          ensure('__none__', null, 'Unassigned').projects.push(p)
+        }
+      }
+      return [...map.values()].sort((a, b) => {
+        if (a.key === '__none__') return 1
+        if (b.key === '__none__') return -1
+        return a.name.localeCompare(b.name)
+      })
+    },
+
     kpis: (s) => {
       const total = s.projects.reduce((a, p) => a + (p.value || 0), 0)
       const pipeline = s.projects

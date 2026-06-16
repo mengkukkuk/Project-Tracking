@@ -51,6 +51,7 @@ function colRisk(stage) {
     <ProjectFilters compact />
 
     <div class="board">
+      <div class="board-inner">
       <div v-for="stage in STAGES" :key="stage" class="column">
         <div class="col-head" :style="{ borderTopColor: STAGE_COLORS[stage] }">
           <div class="col-title">
@@ -86,12 +87,17 @@ function colRisk(stage) {
           </template>
         </draggable>
       </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.board { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
+/* Scrollbar-on-top: flip the scroll container, flip the inner wrapper back so
+   content stays upright while the native horizontal scrollbar renders above
+   the cards. Reset on mobile (vertical stack + sticky headers). */
+.board { overflow-x: auto; transform: rotateX(180deg); }
+.board-inner { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); gap: 14px; padding-bottom: 12px; align-items: start; transform: rotateX(180deg); }
 .column { display: flex; flex-direction: column; min-width: 0; }
 .col-head { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid; border-radius: 8px 8px 0 0; padding: 11px 13px; }
 .col-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); }
@@ -112,14 +118,16 @@ function colRisk(stage) {
 .ghost { opacity: .4; }
 .col-empty { text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px 0; border: 1px dashed var(--border); border-radius: 8px; }
 @media (max-width: 960px) {
-  .board { grid-template-columns: repeat(5, minmax(230px, 270px)); }
+  .board-inner { grid-template-columns: repeat(5, minmax(230px, 270px)); }
 }
 @media (max-width: 760px) {
-  .board {
+  .board { overflow-x: visible; transform: none; }
+  .board-inner {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    overflow-x: visible;
+    padding-bottom: 0;
+    transform: none;
   }
   .column { width: 100%; }
   .col-head {

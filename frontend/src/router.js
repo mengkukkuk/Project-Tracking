@@ -5,6 +5,7 @@ const routes = [
   { path: '/login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
   { path: '/', component: () => import('@/views/OverviewView.vue') },
   { path: '/pipeline', component: () => import('@/views/PipelineView.vue') },
+  { path: '/pm-cards', component: () => import('@/views/PmCardsView.vue') },
   { path: '/table', component: () => import('@/views/TableView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
