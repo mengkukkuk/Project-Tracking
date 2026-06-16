@@ -29,8 +29,11 @@ def _admin_only(user):
 @bp.get("/ptemplate")
 @jwt_required()
 def list_ptemplate():
-    # The process *name* lives in process_tags; join it in by processid so the
-    # client gets a human-readable label alongside each template task.
+    """GET /api/ptemplate — list the default checklist template rows.
+
+    Each row gets ``process`` resolved from ``process_tags.process`` by
+    processid, so the client sees a human-readable label per template task.
+    """
     tag_names = dict(Session.query(ProcessTag.processid, ProcessTag.process).all())
     rows = Session.query(PTemplate).order_by(PTemplate.id.asc()).all()
     return {
@@ -43,6 +46,12 @@ def list_ptemplate():
 @bp.post("/ptemplate")
 @jwt_required()
 def create_ptemplate():
+    """POST /api/ptemplate — admin-only: add a row to the default checklist.
+
+    Body: {task, processId}. Does NOT retroactively seed existing projects;
+    only future ``create_project`` calls (and explicit ptrack/generate calls)
+    pick up the new row.
+    """
     denied = _admin_only(current_user())
     if denied:
         return denied
@@ -59,6 +68,7 @@ def create_ptemplate():
 @bp.delete("/ptemplate/<int:tid>")
 @jwt_required()
 def delete_ptemplate(tid):
+    """DELETE /api/ptemplate/<tid> — admin-only: remove a default checklist row."""
     denied = _admin_only(current_user())
     if denied:
         return denied
@@ -73,5 +83,10 @@ def delete_ptemplate(tid):
 @bp.get("/process-tags")
 @jwt_required()
 def list_process_tags():
+    """GET /api/process-tags — list process name lookup rows (process + day_range).
+
+    Used by the client to derive the canonical process order and per-group day
+    budgets when computing ptrack start/due dates.
+    """
     rows = Session.query(ProcessTag).order_by(ProcessTag.id.asc()).all()
     return {"items": [r.to_dict() for r in rows]}

@@ -11,5 +11,9 @@ bp = Blueprint("users", __name__, url_prefix="/api/users")
 @bp.get("")
 @jwt_required()
 def list_users():
+    """GET /api/users — list all users (name, email, role).
+
+    Read-only directory used by the SPA's owner/assignee picker dropdowns.
+    """
     rows = Session.query(User).order_by(User.name.asc()).all()
     return {"items": [u.to_dict() for u in rows]}

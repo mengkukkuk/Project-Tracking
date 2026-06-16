@@ -53,6 +53,15 @@ def _resolve_tags(names):
 @bp.get("")
 @jwt_required()
 def list_projects():
+    """GET /api/projects — paginated, sortable, filterable project list.
+
+    Query params:
+      status, domain, priority, fiscalYear — equality filters
+      q            — case-insensitive search across name/customer/pm/description
+      sort, dir    — sort by a column in :data:`SORTABLE` (default updatedAt desc)
+      page, perPage — opt-in pagination (default: return all rows for the SPA)
+    Returns ``{items, total, page, perPage}``.
+    """
     q = Session.query(Project)
 
     # --- Filtering ---
@@ -110,6 +119,11 @@ def list_projects():
 @bp.get("/<int:pid>")
 @jwt_required()
 def get_project(pid):
+    """GET /api/projects/<pid> — single project with nested detail.
+
+    Returns the full ``to_dict(detail=True)`` payload (tasks, comments,
+    activity, process counts). 404 if no row.
+    """
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
@@ -119,6 +133,12 @@ def get_project(pid):
 @bp.post("")
 @jwt_required()
 def create_project():
+    """POST /api/projects — create a project; seeds the process checklist.
+
+    Owner is set to the authenticated user. After insert, ``_seed_ptrack``
+    bulk-inserts the default ``ptemplate`` rows into ``ptrack`` so the project
+    starts with a process checklist and a derived progress %.
+    """
     data = require_dict(request.get_json(silent=True))
     user = current_user()
     p = Project(
@@ -169,6 +189,13 @@ def _seed_ptrack(project):
 @bp.patch("/<int:pid>")
 @jwt_required()
 def update_project(pid):
+    """PATCH /api/projects/<pid> — partial update; owner or admin only.
+
+    Only fields present in the JSON body are touched. Status transitions log
+    a ``moved`` activity, other field changes log a single ``updated`` entry.
+    A startDate change triggers ``recompute_ptrack_dates`` to re-derive the
+    process checklist's date chain.
+    """
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
@@ -225,6 +252,10 @@ def update_project(pid):
 @bp.delete("/<int:pid>")
 @jwt_required()
 def delete_project(pid):
+    """DELETE /api/projects/<pid> — owner or admin only.
+
+    Cascades to tasks/comments/activity/ptrack/records via the ORM relationships.
+    """
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404

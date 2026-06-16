@@ -164,6 +164,14 @@ def _apply(record, spec, data, *, partial):
 @bp.get("/projects/<int:pid>/records/<resource>")
 @jwt_required()
 def list_records(pid, resource):
+    """GET /api/projects/<pid>/records/<resource> — list rows for one record type.
+
+    ``<resource>`` is one of :data:`RECORD_TYPES` (ptrack, survey, mom, bom,
+    verification, exceptions). For ``ptrack`` only: refreshes the persisted
+    date chain via ``recompute_ptrack_dates`` and enriches each row with
+    ``dayRange`` + ``cumulativeDays`` from ``process_tags`` so the client can
+    derive per-group start/due dates relative to the project's startDate.
+    """
     spec = _spec(resource)
     if not spec:
         return _not_found()
@@ -209,6 +217,12 @@ def list_records(pid, resource):
 @bp.post("/projects/<int:pid>/records/<resource>")
 @jwt_required()
 def create_record(pid, resource):
+    """POST /api/projects/<pid>/records/<resource> — insert one record.
+
+    Body keys are validated by the resource's field spec in :data:`RECORD_TYPES`.
+    For specs flagged ``owns_user``, the row also captures ``user_id`` from the
+    JWT for later attribution. Logs a ``task`` activity on the parent project.
+    """
     spec = _spec(resource)
     if not spec:
         return _not_found()
@@ -229,6 +243,12 @@ def create_record(pid, resource):
 @bp.patch("/records/<resource>/<int:rid>")
 @jwt_required()
 def update_record(resource, rid):
+    """PATCH /api/records/<resource>/<rid> — partial update of one record.
+
+    Any authenticated user may edit; only fields present in the body change
+    (``partial=True``). Used by the process checklist for the optimistic
+    toggle on ptrack.checked.
+    """
     spec = _spec(resource)
     if not spec:
         return _not_found()
@@ -244,6 +264,7 @@ def update_record(resource, rid):
 @bp.delete("/records/<resource>/<int:rid>")
 @jwt_required()
 def delete_record(resource, rid):
+    """DELETE /api/records/<resource>/<rid> — parent project's owner or admin only."""
     spec = _spec(resource)
     if not spec:
         return _not_found()

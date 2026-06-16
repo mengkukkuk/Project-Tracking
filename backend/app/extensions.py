@@ -19,7 +19,7 @@ Session = scoped_session(sessionmaker(future=True))
 
 
 def init_engine(database_url: str):
-    """(Re)bind the global engine and session factory to ``database_url``."""
+    """(Re)bind the global engine and session factory to "database_url"."""
     global engine
     connect_args = {}
     if database_url.startswith("sqlite"):

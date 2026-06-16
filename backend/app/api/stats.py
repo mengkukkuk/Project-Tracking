@@ -21,6 +21,13 @@ bp = Blueprint("stats", __name__, url_prefix="/api/stats")
 @bp.get("")
 @jwt_required()
 def stats():
+    """GET /api/stats — dashboard aggregations.
+
+    Returns scalar totals, funnel counts/value per status, fiscal-year x status
+    matrix, by-domain and by-priority counts, overdue count, and an upcoming
+    list (LIMIT 8 in SQL). All numbers computed via ``GROUP BY`` to avoid
+    pulling all project rows into Python.
+    """
     today = date.today()
     soon = today + timedelta(days=14)
 

@@ -19,6 +19,11 @@ bp = Blueprint("tasks", __name__, url_prefix="/api")
 @bp.post("/projects/<int:pid>/tasks")
 @jwt_required()
 def create_task(pid):
+    """POST /api/projects/<pid>/tasks — add a task to a project.
+
+    Body: {title (required), assignee?, dueDate?, done?}. Logs a ``task``
+    activity. 404 if the project doesn't exist.
+    """
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
@@ -39,6 +44,11 @@ def create_task(pid):
 @bp.patch("/tasks/<int:tid>")
 @jwt_required()
 def update_task(tid):
+    """PATCH /api/tasks/<tid> — partial task update.
+
+    No owner check here — any authenticated user may toggle ``done`` or edit
+    fields. (Delete is owner-or-admin gated below.)
+    """
     task = Session.get(Task, tid)
     if not task:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
@@ -58,6 +68,7 @@ def update_task(tid):
 @bp.delete("/tasks/<int:tid>")
 @jwt_required()
 def delete_task(tid):
+    """DELETE /api/tasks/<tid> — task removal; project owner or admin only."""
     task = Session.get(Task, tid)
     if not task:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404

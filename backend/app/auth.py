@@ -36,6 +36,11 @@ def _token_for(user: User) -> str:
 @bp.post("/register")
 @limiter.limit("5 per minute")
 def register():
+    """POST /api/auth/register — create a new user and return a JWT.
+
+    Body: {name, email, password (>=8 chars)}. Rate-limited 5/min/IP. The very
+    first registered user is promoted to ``admin``; everyone else is a member.
+    """
     data = require_dict(request.get_json(silent=True))
     name = str_field(data, "name", required=True, max_len=128)
     email = str_field(data, "email", required=True, max_len=255).lower()
@@ -62,6 +67,10 @@ def register():
 @bp.post("/login")
 @limiter.limit("10 per minute")
 def login():
+    """POST /api/auth/login — exchange email/password for a JWT.
+
+    Body: {email, password}. Rate-limited 10/min/IP. Returns 401 on bad creds.
+    """
     data = require_dict(request.get_json(silent=True))
     email = str_field(data, "email", required=True).lower()
     password = str_field(data, "password", required=True)
@@ -75,6 +84,10 @@ def login():
 @bp.get("/me")
 @jwt_required()
 def me():
+    """GET /api/auth/me — return the authenticated user + role claim.
+
+    Used by the SPA to restore session state on page reload.
+    """
     user = current_user()
     if not user:
         return {"error": {"type": "auth", "message": "User not found"}}, 401

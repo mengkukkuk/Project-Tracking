@@ -13,6 +13,10 @@ bp = Blueprint("comments", __name__, url_prefix="/api")
 @bp.post("/projects/<int:pid>/comments")
 @jwt_required()
 def create_comment(pid):
+    """POST /api/projects/<pid>/comments — add a comment to a project.
+
+    Body: {body (required)}. Author is taken from the JWT. 404 if no project.
+    """
     p = Session.get(Project, pid)
     if not p:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
@@ -31,6 +35,11 @@ def create_comment(pid):
 @bp.delete("/comments/<int:cid>")
 @jwt_required()
 def delete_comment(cid):
+    """DELETE /api/comments/<cid> — author or admin only.
+
+    Note: deviates from the standard owner/admin helper because the relevant
+    "owner" here is the comment's author, not the parent project's owner.
+    """
     comment = Session.get(Comment, cid)
     if not comment:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
