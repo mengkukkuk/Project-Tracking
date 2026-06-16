@@ -255,12 +255,14 @@ class ProcessTag(Base):
     id = Column(Integer, primary_key=True)
     processid = Column(Integer)
     process = Column(Text)
+    day_range = Column(Integer)
 
     def to_dict(self):
         return {
             "id": self.id,
             "processId": self.processid,
             "process": self.process,
+            "dayRange": self.day_range,
         }
 
 

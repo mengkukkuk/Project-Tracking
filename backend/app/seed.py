@@ -40,12 +40,12 @@ def _ensure_schema(engine):
 
 # Default process/task checklist — bulk-copied into every project's ptrack.
 DEMO_PTEMPLATE = [
-    (1, "Pre-Sale", "สำรวจความต้องการลูกค้า"),
-    (2, "Project Initiation", "จัดทำขอบเขตงาน (SOW)"),
-    (3, "Award", "ยืนยันงบประมาณและสัญญา"),
-    (4, "Project Delivery", "ออกแบบและพัฒนาระบบ"),
-    (5, "Project Delivery", "ติดตั้งและทดสอบหน้างาน"),
-    (6, "Completed", "ส่งมอบและปิดโครงการ"),
+    (1, "Site Survey & Draft"   , 13),
+    (2, "Verify Solution"       , 6),
+    (3, "Presentation"          , 6),
+    (4, "BOM List & Costing"    , 6),
+    (5, "Executive Review"      , 6),
+    (6, "Post-Submission"       , 13),
 ]
 
 DEMO_USERS = [

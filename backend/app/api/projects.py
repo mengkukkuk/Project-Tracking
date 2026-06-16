@@ -16,7 +16,7 @@ from ..validation import (
     status_field,
     str_field,
 )
-from .helpers import log_activity, require_owner_or_admin
+from .helpers import log_activity, recompute_ptrack_dates, require_owner_or_admin
 
 bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
@@ -142,6 +142,7 @@ def create_project():
     _seed_ptrack(p)
     log_activity(p.id, "created", f"Created project “{p.name}”", user)
     Session.commit()
+    recompute_ptrack_dates(p.id)
     return p.to_dict(detail=True), 201
 
 
@@ -202,8 +203,12 @@ def update_project(pid):
         p.progress = int_field(data, "progress", default=0, minimum=0, maximum=100)
     if "fiscalYear" in data:
         p.fiscal_year = str_field(data, "fiscalYear", max_len=8)
+    start_date_changed = False
     if "startDate" in data:
-        p.start_date = date_field(data, "startDate")
+        new_start = date_field(data, "startDate")
+        if new_start != p.start_date:
+            start_date_changed = True
+        p.start_date = new_start
     if "dueDate" in data:
         p.due_date = date_field(data, "dueDate")
     if "tags" in data:
@@ -212,6 +217,8 @@ def update_project(pid):
     if changes:
         log_activity(p.id, "updated", "; ".join(changes), user)
     Session.commit()
+    if start_date_changed:
+        recompute_ptrack_dates(p.id)
     return p.to_dict(detail=True)
 
 
@@ -254,4 +261,5 @@ def generate_ptrack(pid):
     _seed_ptrack(p)
     log_activity(pid, "task", "Generated process checklist from template", user)
     Session.commit()
+    recompute_ptrack_dates(pid)
     return p.to_dict(detail=True)

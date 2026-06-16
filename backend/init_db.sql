@@ -155,7 +155,8 @@ CREATE TABLE IF NOT EXISTS ptemplate (
 CREATE TABLE IF NOT EXISTS process_tags (
     id         SERIAL  PRIMARY KEY,
     processid integer,
-    process   text
+    process   text,
+    day_range  INTEGER
 );
 
 -- ── ptrack (per-project process tracking) ─────────────────────

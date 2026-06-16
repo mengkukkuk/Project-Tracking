@@ -16,6 +16,7 @@ from ..models import (
     CustomerMom,
     ExceptionLog,
     InternalVerification,
+    ProcessTag,
     Project,
     PTrack,
     SurveyReport,
@@ -27,7 +28,7 @@ from ..validation import (
     require_dict,
     str_field,
 )
-from .helpers import log_activity, require_owner_or_admin
+from .helpers import log_activity, recompute_ptrack_dates, require_owner_or_admin
 
 bp = Blueprint("records", __name__, url_prefix="/api")
 
@@ -168,6 +169,10 @@ def list_records(pid, resource):
         return _not_found()
     if not Session.get(Project, pid):
         return _not_found()
+    # Keep ptrack dates persisted on the DB rows in sync with the chain
+    # derived from process_tags.day_range and the project's start_date.
+    if resource == "ptrack":
+        recompute_ptrack_dates(pid)
     model = spec["model"]
     rows = (
         Session.query(model)
@@ -175,7 +180,30 @@ def list_records(pid, resource):
         .order_by(model.id.asc())
         .all()
     )
-    return {"items": [r.to_dict() for r in rows]}
+    items = [r.to_dict() for r in rows]
+
+    # For ptrack: enrich each row with the day_range from process_tags
+    # plus a running cumulative offset across the canonical process order
+    # (process_tags.processid asc). The client derives per-group due dates as
+    #   due_date  = project.start_date + cumulativeDays
+    #   start_date = previous group's due_date + 1 (first group: project.start_date)
+    if resource == "ptrack" and items:
+        tag_rows = (
+            Session.query(ProcessTag.process, ProcessTag.day_range)
+            .order_by(ProcessTag.processid.asc())
+            .all()
+        )
+        cumulative_by_name = {}
+        running = 0
+        for name, dr in tag_rows:
+            running += int(dr or 0)
+            cumulative_by_name[name] = (int(dr or 0), running)
+        for it in items:
+            dr, cum = cumulative_by_name.get(it.get("process"), (None, None))
+            it["dayRange"] = dr
+            it["cumulativeDays"] = cum
+
+    return {"items": items}
 
 
 @bp.post("/projects/<int:pid>/records/<resource>")
