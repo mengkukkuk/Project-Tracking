@@ -168,7 +168,7 @@ th {
   background: var(--bg-sunken);
 }
 tbody tr:last-child td { border-bottom: 0; }
-td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num { text-align: center; font-variant-numeric: tabular-nums; }
 .actions-col { width: 1%; text-align: right; }
 td.actions-col { display: flex; gap: 4px; justify-content: flex-end; }
 .del { display: grid; place-items: center; background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 3px; opacity: .6; }
