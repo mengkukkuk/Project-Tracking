@@ -8,7 +8,7 @@ import {
 } from '@tanstack/vue-table'
 import { useProjectsStore, taskProgress } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
-import StatusSelect from '@/components/StatusSelect.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import PriorityBadge from '@/components/PriorityBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import ProjectFilters from '@/components/ProjectFilters.vue'
@@ -45,7 +45,7 @@ const columns = [
   { accessorKey: 'customer', header: 'Customer' },
   { accessorKey: 'value', header: 'Value', cell: (i) => baht(i.getValue()) },
   { accessorKey: 'priority', header: 'Priority', cell: (i) => h(PriorityBadge, { priority: i.getValue() }) },
-  { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusSelect, { id: i.row.original.id, status: i.getValue() }) },
+  { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusBadge, { status: i.getValue() }) },
   {
     id: 'progress',
     accessorFn: (row) => taskProgress(row),

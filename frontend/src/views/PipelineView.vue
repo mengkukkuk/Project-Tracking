@@ -1,6 +1,5 @@
 <script setup>
 import { reactive, watch } from 'vue'
-import draggable from 'vuedraggable'
 import { useProjectsStore, STAGES } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
 import { STAGE_COLORS } from '@/composables/useChartTheme'
@@ -18,9 +17,9 @@ function rebuild() {
 }
 watch(() => store.projects, rebuild, { immediate: true, deep: false })
 
-function onChange(stage, evt) {
-  if (evt.added) store.moveProject(evt.added.element.id, stage)
-}
+// Drag-to-change-status is disabled: project status is now derived from the
+// process-checklist progress %, so users can't move it directly. The board
+// remains grouped-by-stage for read-only inspection.
 
 function colTotal(stage) {
   return cols[stage].reduce((a, p) => a + (p.value || 0), 0)
@@ -68,24 +67,12 @@ function colRisk(stage) {
           </div>
         </div>
 
-        <draggable
-          v-model="cols[stage]"
-          group="projects"
-          item-key="id"
-          class="col-body"
-          ghost-class="ghost"
-          :animation="160"
-          @change="(e) => onChange(stage, e)"
-        >
-          <template #item="{ element }">
-            <div class="card-wrap">
-              <ProjectCard :project="element" @open="store.openDetail" />
-            </div>
-          </template>
-          <template #footer>
-            <div v-if="!cols[stage].length" class="col-empty">Drop cards here</div>
-          </template>
-        </draggable>
+        <div class="col-body">
+          <div v-for="element in cols[stage]" :key="element.id" class="card-wrap">
+            <ProjectCard :project="element" @open="store.openDetail" />
+          </div>
+          <div v-if="!cols[stage].length" class="col-empty">No projects in this stage</div>
+        </div>
       </div>
       </div>
     </div>

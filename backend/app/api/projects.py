@@ -13,11 +13,11 @@ from ..validation import (
     number_field,
     priority_field,
     require_dict,
-    status_field,
     str_field,
 )
 from .helpers import (
     log_activity,
+    recompute_project_status,
     recompute_ptrack_dates,
     recompute_ptrack_status,
     require_owner_or_admin,
@@ -188,7 +188,9 @@ def create_project():
         domain=str_field(data, "domain", max_len=64),
         customer=str_field(data, "customer", max_len=255),
         pm=str_field(data, "pm", max_len=128),
-        status=status_field(data, default="Pre-Sale"),
+        # status is derived from progress (see models.derived_status); the
+        # client cannot set it directly. New projects start at 0% -> "Pre-Sale".
+        status="Pre-Sale",
         priority=priority_field(data, default="medium"),
         value=number_field(data, "value", default=0, minimum=0),
         progress=int_field(data, "progress", default=0, minimum=0, maximum=100),
@@ -210,6 +212,9 @@ def create_project():
     Session.commit()
     recompute_ptrack_dates(p.id)
     recompute_ptrack_status(p.id)
+    # Derive the initial status from progress (no ptracks are checked yet, so
+    # the helper falls back to the progress column the client just supplied).
+    recompute_project_status(p.id)
     return p.to_dict(detail=True), 201
 
 
@@ -267,12 +272,10 @@ def update_project(pid):
     elif "pm" in data:
         # Legacy single-PM patch path — only applied when pmIds isn't sent.
         p.pm = str_field(data, "pm", max_len=128)
-    if "status" in data:
-        new_status = status_field(data, required=True)
-        if new_status != p.status:
-            changes.append(f"status → {new_status}")
-            log_activity(p.id, "moved", f"{p.status} → {new_status}", user)
-        p.status = new_status
+    # Note: "status" is no longer accepted from clients — it's derived from
+    # the project's progress % (process checklist) by recompute_project_status.
+    # We silently ignore any status key in the payload to keep older clients
+    # from getting hard 422s.
     if "priority" in data:
         p.priority = priority_field(data, required=True)
     if "value" in data:
@@ -297,6 +300,9 @@ def update_project(pid):
     Session.commit()
     if start_date_changed:
         recompute_ptrack_dates(p.id)
+    # Progress (or its task/process fallbacks) may have moved the project to a
+    # new status bucket; keep the persisted column in sync.
+    recompute_project_status(p.id)
     return p.to_dict(detail=True)
 
 
@@ -345,4 +351,5 @@ def generate_ptrack(pid):
     Session.commit()
     recompute_ptrack_dates(pid)
     recompute_ptrack_status(pid)
+    recompute_project_status(pid)
     return p.to_dict(detail=True)

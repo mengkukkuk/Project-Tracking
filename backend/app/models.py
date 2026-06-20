@@ -29,6 +29,29 @@ STAGES = ["Pre-Sale", "Project Initiation", "Award", "Project Delivery", "Comple
 PRIORITIES = ["low", "medium", "high", "critical"]
 ROLES = ["admin", "member"]
 
+
+def derived_status(progress: int) -> str:
+    """Map a project's progress % to its pipeline stage.
+
+    Status is no longer user-editable — it's a 5-bucket projection of the
+    progress bar (which itself is driven by the process checklist):
+        0-19   -> Pre-Sale
+        20-39  -> Project Initiation
+        40-59  -> Award
+        60-79  -> Project Delivery
+        80-100 -> Completed
+    """
+    p = max(0, min(100, int(progress or 0)))
+    if p < 20:
+        return STAGES[0]
+    if p < 40:
+        return STAGES[1]
+    if p < 60:
+        return STAGES[2]
+    if p < 80:
+        return STAGES[3]
+    return STAGES[4]
+
 # Many-to-many: projects <-> tags
 project_tags = Table(
     "project_tags",
@@ -134,6 +157,18 @@ class Project(Base):
         tasks = list(self.tasks)
         done = sum(1 for t in tasks if t.done)
         ptracks = list(self.ptracks)
+        # Derive the live progress % the same way the frontend does (process
+        # checklist preferred, task counts as fallback, then the persisted
+        # progress column), then bucket it into a stage for the badge.
+        ptotal = len(ptracks)
+        pdone = sum(1 for r in ptracks if r.checked)
+        if ptotal:
+            live_progress = round((pdone / ptotal) * 100)
+        elif tasks:
+            live_progress = round((done / len(tasks)) * 100)
+        else:
+            live_progress = int(self.progress or 0)
+        status = derived_status(live_progress)
         data = {
             "id": self.id,
             "name": self.name,
@@ -143,7 +178,7 @@ class Project(Base):
             "pm": self.pm,
             "pms": [{"id": u.id, "name": u.name} for u in self.pms],
             "pmIds": [u.id for u in self.pms],
-            "status": self.status,
+            "status": status,
             "priority": self.priority,
             "value": float(self.value or 0),
             "progress": self.progress or 0,
@@ -155,8 +190,8 @@ class Project(Base):
             "tags": [t.to_dict() for t in self.tags],
             "taskCount": len(tasks),
             "taskDone": done,
-            "processCount": len(ptracks),
-            "processDone": sum(1 for r in ptracks if r.checked),
+            "processCount": ptotal,
+            "processDone": pdone,
             "createdAt": _iso(self.created_at),
             "updatedAt": _iso(self.updated_at),
         }

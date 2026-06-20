@@ -11,7 +11,7 @@ from ..validation import (
     require_dict,
     str_field,
 )
-from .helpers import log_activity, require_owner_or_admin
+from .helpers import log_activity, recompute_project_status, require_owner_or_admin
 
 bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -38,6 +38,7 @@ def create_task(pid):
     Session.add(task)
     log_activity(pid, "task", f"Added task “{task.title}”", current_user())
     Session.commit()
+    recompute_project_status(pid)
     return task.to_dict(), 201
 
 
@@ -62,6 +63,7 @@ def update_task(tid):
     if "done" in data:
         task.done = bool_field(data, "done", default=False)
     Session.commit()
+    recompute_project_status(task.project_id)
     return task.to_dict()
 
 
@@ -77,6 +79,8 @@ def delete_task(tid):
     denied = require_owner_or_admin(user, project.owner_id if project else None)
     if denied:
         return denied
+    pid = task.project_id
     Session.delete(task)
     Session.commit()
+    recompute_project_status(pid)
     return "", 204

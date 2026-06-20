@@ -1,6 +1,5 @@
 <script setup>
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { STAGES } from '@/stores/projects'
 import { api } from '@/api'
 
 const props = defineProps({
@@ -21,7 +20,7 @@ const form = reactive({
   description: p?.description || '',
   domain: p?.domain || 'IoT',
   customer: p?.customer || '',
-  status: p?.status || 'Pre-Sale',
+  // status is derived from progress on the server — not user-settable.
   priority: p?.priority || 'medium',
   value: p?.value ?? 0,
   fiscalYear: p?.fiscalYear || 'future',
@@ -309,13 +308,6 @@ function submit() {
 
         <div class="grid">
           <label class="under">
-            <span>Status</span>
-            <select v-model="form.status" class="u-input">
-              <option v-for="s in STAGES" :key="s" :value="s">{{ s }}</option>
-            </select>
-          </label>
-
-          <label class="under">
             <span>Priority</span>
             <select v-model="form.priority" class="u-input">
               <option v-for="[v, l] in PRIORITIES" :key="v" :value="v">{{ l }}</option>
@@ -384,8 +376,6 @@ function submit() {
     <footer class="pform-foot">
       <div class="foot-meta">
         <span class="foot-eyebrow">Will save as</span>
-        <span class="foot-pill">{{ form.status }}</span>
-        <span class="foot-sep">/</span>
         <span class="foot-pill ghost">{{ priorityLabel }}</span>
         <span class="foot-sep">/</span>
         <span class="foot-pill ghost mono">{{ fyLabel }}</span>

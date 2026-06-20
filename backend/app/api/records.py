@@ -30,6 +30,7 @@ from ..validation import (
 )
 from .helpers import (
     log_activity,
+    recompute_project_status,
     recompute_ptrack_dates,
     recompute_ptrack_status,
     require_owner_or_admin,
@@ -245,6 +246,8 @@ def create_record(pid, resource):
     Session.add(record)
     log_activity(pid, "task", f"Added {spec['label']}", user)
     Session.commit()
+    if resource == "ptrack":
+        recompute_project_status(pid)
     return record.to_dict(), 201
 
 
@@ -268,8 +271,10 @@ def update_record(resource, rid):
     Session.commit()
     # Toggling a ptrack checkbox can flip the whole process group's status;
     # refresh persisted status for the parent project so the DB stays in sync.
+    # Also re-derive the project's pipeline stage from the new completion %.
     if resource == "ptrack":
         recompute_ptrack_status(record.project_id)
+        recompute_project_status(record.project_id)
     return record.to_dict()
 
 
@@ -288,6 +293,9 @@ def delete_record(resource, rid):
     denied = require_owner_or_admin(user, project.owner_id if project else None)
     if denied:
         return denied
+    project_id = record.project_id
     Session.delete(record)
     Session.commit()
+    if resource == "ptrack":
+        recompute_project_status(project_id)
     return "", 204

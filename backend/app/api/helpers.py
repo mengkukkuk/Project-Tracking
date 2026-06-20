@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from ..extensions import Session
-from ..models import Activity, ProcessTag, Project, PTrack
+from ..models import Activity, ProcessTag, Project, PTrack, Task, derived_status
 
 
 def log_activity(project_id, action, detail, user):
@@ -72,6 +72,38 @@ def recompute_ptrack_dates(project_id):
     if changed:
         Session.commit()
     return changed
+
+
+def recompute_project_status(project_id):
+    """Persist Project.status derived from the live progress %.
+
+    Status is no longer a free-form column the user can set — it's a 5-bucket
+    projection of the process-checklist progress (with task counts as a
+    fallback). Keeping it persisted means the list view, stats SQL GROUP BY,
+    and kanban groupings stay correct without recomputing per-row.
+
+    Commits only when the status changes. No-op if the project is missing.
+    """
+    project = Session.get(Project, project_id)
+    if not project:
+        return False
+    ptracks = Session.query(PTrack).filter(PTrack.project_id == project_id).all()
+    ptotal = len(ptracks)
+    pdone = sum(1 for r in ptracks if r.checked)
+    if ptotal:
+        live = round((pdone / ptotal) * 100)
+    else:
+        tasks = Session.query(Task).filter(Task.project_id == project_id).all()
+        if tasks:
+            live = round((sum(1 for t in tasks if t.done) / len(tasks)) * 100)
+        else:
+            live = int(project.progress or 0)
+    new_status = derived_status(live)
+    if project.status != new_status:
+        project.status = new_status
+        Session.commit()
+        return True
+    return False
 
 
 # Stable status labels — frontend pairs these with colors (green/orange/red).

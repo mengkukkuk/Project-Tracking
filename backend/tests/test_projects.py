@@ -3,7 +3,6 @@ def _create(client, auth, **over):
         "name": "Test Project",
         "domain": "IoT",
         "customer": "ACME",
-        "status": "Pre-Sale",
         "priority": "high",
         "value": 1_000_000,
         "progress": 20,
@@ -31,8 +30,10 @@ def test_create_validation_errors(client, auth):
     fields = res.get_json()["error"]["fields"]
     assert "name" in fields  # required
 
+    # status is no longer user-settable — bogus values are silently ignored
+    # rather than 422'd, since the server derives status from progress.
     res = _create(client, auth, status="Nonsense")
-    assert res.status_code == 422
+    assert res.status_code == 201
 
     res = _create(client, auth, progress=999)
     # progress is clamped at the validator boundary -> rejected as > maximum
@@ -40,9 +41,11 @@ def test_create_validation_errors(client, auth):
 
 
 def test_list_filter_search_sort(client, auth):
-    _create(client, auth, name="Alpha", status="Pre-Sale", value=100)
-    _create(client, auth, name="Bravo", status="Completed", value=300)
-    _create(client, auth, name="Charlie", status="Completed", value=200)
+    # Status is derived from progress now (0-19 Pre-Sale, ..., 80-100 Completed),
+    # so seed projects with the right progress % to land them in each stage.
+    _create(client, auth, name="Alpha", progress=10, value=100)    # -> Pre-Sale
+    _create(client, auth, name="Bravo", progress=90, value=300)    # -> Completed
+    _create(client, auth, name="Charlie", progress=95, value=200)  # -> Completed
 
     res = client.get("/api/projects?status=Completed", headers=auth)
     assert res.status_code == 200
@@ -64,6 +67,9 @@ def test_get_update_delete(client, auth):
     res = client.get(f"/api/projects/{pid}", headers=auth)
     assert res.status_code == 200
 
+    # status is no longer accepted in PATCH bodies — it derives from progress.
+    # progress=50 -> "Award" bucket (40-59). No "moved" activity is logged
+    # because status is computed, not assigned.
     res = client.patch(
         f"/api/projects/{pid}", json={"status": "Award", "progress": 50}, headers=auth
     )
@@ -71,8 +77,6 @@ def test_get_update_delete(client, auth):
     data = res.get_json()
     assert data["status"] == "Award"
     assert data["progress"] == 50
-    # a status change logs a "moved" activity
-    assert any(a["action"] == "moved" for a in data["activities"])
 
     assert client.delete(f"/api/projects/{pid}", headers=auth).status_code == 204
     assert client.get(f"/api/projects/{pid}", headers=auth).status_code == 404

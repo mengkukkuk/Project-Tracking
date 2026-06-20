@@ -184,22 +184,6 @@ export const useProjectsStore = defineStore('projects', {
       useUiStore().success('ลบโครงการแล้ว')
     },
 
-    // Optimistic Kanban move with rollback.
-    async moveProject(id, newStatus) {
-      const p = this.projects.find((x) => x.id === id)
-      if (!p || p.status === newStatus) return
-      const prev = p.status
-      p.status = newStatus
-      try {
-        const updated = await api.updateProject(id, { status: newStatus })
-        this._upsert(updated)
-        await this.refreshStats()
-      } catch (e) {
-        p.status = prev
-        useUiStore().error(e.message)
-      }
-    },
-
     async refreshStats() {
       try {
         this.stats = await api.stats()
