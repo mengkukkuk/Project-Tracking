@@ -5,6 +5,15 @@ import { useFormat } from '@/composables/useFormat'
 import { useProcessChain } from '@/composables/useProcessChain'
 import { useUiStore } from '@/stores/ui'
 import { api } from '@/api'
+import {
+  exportProjectSummary, exportProjectSummaryPdf,
+  exportRecordsExcel, exportRecordsPdf,
+  exportMultiResourceExcel, exportMultiResourcePdf,
+  exportProjectPack,
+  parseRecordsExcel, parseRecordsExcelMulti,
+} from '@/utils/recordExport'
+import ExportImportMenu from '@/components/ExportImportMenu.vue'
+import ImportResultModal from '@/components/ImportResultModal.vue'
 
 // Local state on purpose: calling store.openDetail/fetchRecords would mutate
 // store.current and pop the global ProjectDetail drawer (App.vue).
@@ -149,6 +158,152 @@ const latestMom = computed(() => latest(momRows.value))
 const latestVerification = computed(() => latest(verificationRows.value))
 const latestException = computed(() => latest(exceptionRows.value))
 
+// ── Export / Import wiring (per section + page-level pack) ────────────
+// Dashboard calls `api` directly (not the store) to avoid leaking imported
+// rows into the project drawer's `store.records` — same isolation rationale
+// as the rest of this view.
+const importResultBom = ref(null)
+const importingBom = ref(false)
+const importResultDocs = ref(null)
+const importingDocs = ref(false)
+const importResultPtrack = ref(null)
+const importingPtrack = ref(false)
+
+async function refreshResource(resource) {
+  if (!project.value) return
+  const r = await api.listRecords(project.value.id, resource)
+  records.value = { ...records.value, [resource]: r.items }
+}
+
+async function importRows(resource, rows) {
+  for (const rec of rows) {
+    await api.createRecord(project.value.id, resource, rec)
+  }
+}
+
+// Section 1 — Executive Summary (export-only cover sheet)
+async function exportSec1(format) {
+  if (!project.value) return
+  try {
+    if (format === 'excel') await exportProjectSummary(project.value)
+    else exportProjectSummaryPdf(project.value)
+    ui.success(`Exported Executive Summary to ${format === 'excel' ? 'Excel' : 'PDF'}`)
+  } catch (e) { ui.error(e.message) }
+}
+
+// Section 2 — BOM
+async function exportSec2(format) {
+  if (!bomRows.value.length) return
+  try {
+    const name = project.value?.name || ''
+    if (format === 'excel') await exportRecordsExcel('bom', bomRows.value, name)
+    else exportRecordsPdf('bom', bomRows.value, name)
+    ui.success(`Exported ${bomRows.value.length} BOM record(s) to ${format === 'excel' ? 'Excel' : 'PDF'}`)
+  } catch (e) { ui.error(e.message) }
+}
+async function parseSec2(file) {
+  try { importResultBom.value = await parseRecordsExcel('bom', file) }
+  catch (e) { ui.error(e.message) }
+}
+async function confirmSec2() {
+  const valid = importResultBom.value?.valid || []
+  if (!valid.length) return
+  importingBom.value = true
+  try {
+    await importRows('bom', valid)
+    await refreshResource('bom')
+    ui.success(`Imported ${valid.length} BOM record(s)`)
+    importResultBom.value = null
+  } catch (e) { ui.error(e.message) }
+  finally { importingBom.value = false }
+}
+
+// Section 3 — Document Intelligence (multi-sheet: survey / mom / verification / exceptions)
+const DOC_RESOURCES = ['survey', 'mom', 'verification', 'exceptions']
+const docsHasRows = computed(() =>
+  DOC_RESOURCES.some((r) => (records.value[r] || []).length > 0),
+)
+async function exportSec3(format) {
+  if (!docsHasRows.value) return
+  const specs = DOC_RESOURCES.map((r) => ({ resource: r, rows: records.value[r] || [] }))
+  const base = ['documents', slugForFile(project.value?.name), stampForFile()].filter(Boolean).join('-')
+  try {
+    if (format === 'excel') {
+      await exportMultiResourceExcel(specs, `${base}.xlsx`)
+    } else {
+      const title = `Document Intelligence — ${project.value?.name || ''}`.trim()
+      exportMultiResourcePdf(specs, `${base}.pdf`, title)
+    }
+    ui.success(`Exported Document Intelligence to ${format === 'excel' ? 'Excel' : 'PDF'}`)
+  } catch (e) { ui.error(e.message) }
+}
+async function parseSec3(file) {
+  try { importResultDocs.value = await parseRecordsExcelMulti(DOC_RESOURCES, file) }
+  catch (e) { ui.error(e.message) }
+}
+async function confirmSec3() {
+  const per = importResultDocs.value?.perResource || {}
+  const total = Object.values(per).reduce((a, x) => a + (x.valid?.length || 0), 0)
+  if (!total) return
+  importingDocs.value = true
+  try {
+    for (const r of DOC_RESOURCES) {
+      const valid = per[r]?.valid || []
+      if (!valid.length) continue
+      await importRows(r, valid)
+      await refreshResource(r)
+    }
+    ui.success(`Imported ${total} document record(s)`)
+    importResultDocs.value = null
+  } catch (e) { ui.error(e.message) }
+  finally { importingDocs.value = false }
+}
+
+// Section 4 — Process Checklist (ptrack)
+async function exportSec4(format) {
+  if (!ptrackRows.value.length) return
+  try {
+    const name = project.value?.name || ''
+    if (format === 'excel') await exportRecordsExcel('ptrack', ptrackRows.value, name)
+    else exportRecordsPdf('ptrack', ptrackRows.value, name)
+    ui.success(`Exported ${ptrackRows.value.length} process record(s) to ${format === 'excel' ? 'Excel' : 'PDF'}`)
+  } catch (e) { ui.error(e.message) }
+}
+async function parseSec4(file) {
+  try { importResultPtrack.value = await parseRecordsExcel('ptrack', file) }
+  catch (e) { ui.error(e.message) }
+}
+async function confirmSec4() {
+  const valid = importResultPtrack.value?.valid || []
+  if (!valid.length) return
+  importingPtrack.value = true
+  try {
+    await importRows('ptrack', valid)
+    // Reload the whole project so week-grouping + health recompute cleanly.
+    await loadProject(selectedId.value)
+    ui.success(`Imported ${valid.length} process record(s)`)
+    importResultPtrack.value = null
+  } catch (e) { ui.error(e.message) }
+  finally { importingPtrack.value = false }
+}
+
+// Page-level — Full project pack
+async function exportPack() {
+  if (!project.value) return
+  try {
+    await exportProjectPack(project.value, records.value)
+    ui.success('Exported full project pack')
+  } catch (e) { ui.error(e.message) }
+}
+
+// Local helpers mirroring recordExport.js's slug/stamp so filenames line up.
+function slugForFile(s) {
+  return String(s || '').trim().replace(/[^\w\u0E00-\u0E7F-]+/g, '_').replace(/^_+|_+$/g, '')
+}
+function stampForFile() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 const docSummaries = computed(() => [
   {
     key: 'survey',
@@ -227,6 +382,9 @@ const docSummaries = computed(() => [
           <option v-for="p in store.projects" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
       </label>
+      <button class="btn pack-btn" :disabled="!project" @click="exportPack">
+        Full project pack (.xlsx)
+      </button>
     </div>
 
     <div v-if="loading" class="empty">Loading…</div>
@@ -239,6 +397,11 @@ const docSummaries = computed(() => [
             <div class="section-kicker">📌 1. Executive Summary &amp; Project Health</div>
             <h2>สรุปภาพรวมและสุขภาพโครงการ</h2>
           </div>
+          <ExportImportMenu
+            :formats="['excel', 'pdf']"
+            :rows="project ? -1 : 0"
+            @export="exportSec1"
+          />
         </div>
         <div class="sec1-grid">
           <div class="field">
@@ -283,6 +446,13 @@ const docSummaries = computed(() => [
             <div class="section-kicker">💰 2. Cost &amp; Procurement Insights</div>
             <h2>ข้อมูลต้นทุนและความเสี่ยงจัดซื้อ</h2>
           </div>
+          <ExportImportMenu
+            :formats="['excel', 'pdf']"
+            :rows="bomRows.length"
+            import-enabled
+            @export="exportSec2"
+            @import-file="parseSec2"
+          />
         </div>
         <div class="sec1-grid">
           <div class="field">
@@ -327,6 +497,13 @@ const docSummaries = computed(() => [
             <div class="section-kicker">📑 3. Document Intelligence</div>
             <h2>ข้อมูลเชิงลึกจากเอกสารย่อยหน้างาน</h2>
           </div>
+          <ExportImportMenu
+            :formats="['excel', 'pdf']"
+            :rows="docsHasRows ? -1 : 0"
+            import-enabled
+            @export="exportSec3"
+            @import-file="parseSec3"
+          />
         </div>
         <ul class="doc-list">
           <li v-for="d in docSummaries" :key="d.key">
@@ -347,15 +524,24 @@ const docSummaries = computed(() => [
         </ul>
       </section>
 
-      <!-- ── Section 4 — The 20-Step Tracking Matrix ──────────────────────── -->
+      <!-- ── Section 4 — Solution Process──────────────────────── -->
       <section class="card section">
         <div class="section-head">
           <div>
-            <div class="section-kicker">📋 4. The 20-Step Tracking Matrix</div>
-            <h2>ตารางติดตาม 20 ขั้นตอนการดำเนินงาน</h2>
+            <div class="section-kicker">📋 4. Solution Process</div>
+            <h2>กระบวนการทำงาน Solution</h2>
           </div>
-          <div v-if="groups.length" class="matrix-meta mono">
-            {{ ptrackRows.length }} steps · {{ progressFraction }} done
+          <div class="head-right">
+            <div v-if="groups.length" class="matrix-meta mono">
+              {{ ptrackRows.length }} steps · {{ progressFraction }} done
+            </div>
+            <ExportImportMenu
+              :formats="['excel', 'pdf']"
+              :rows="ptrackRows.length"
+              import-enabled
+              @export="exportSec4"
+              @import-file="parseSec4"
+            />
           </div>
         </div>
 
@@ -404,13 +590,42 @@ const docSummaries = computed(() => [
     </template>
 
     <div v-else class="empty">เลือกโครงการเพื่อดูข้อมูล · Select a project to view details</div>
+
+    <ImportResultModal
+      v-if="importResultBom"
+      title="Import BOM"
+      :result="importResultBom"
+      :importing="importingBom"
+      @close="importResultBom = null"
+      @confirm="confirmSec2"
+    />
+    <ImportResultModal
+      v-if="importResultDocs"
+      title="Import Documents"
+      :result="importResultDocs"
+      :importing="importingDocs"
+      @close="importResultDocs = null"
+      @confirm="confirmSec3"
+    />
+    <ImportResultModal
+      v-if="importResultPtrack"
+      title="Import Process Checklist"
+      :result="importResultPtrack"
+      :importing="importingPtrack"
+      @close="importResultPtrack = null"
+      @confirm="confirmSec4"
+    />
   </div>
 </template>
 
 <style scoped>
 .view { font-family: var(--font); }
-.selector { padding: 14px 18px; margin-bottom: 16px; }
-.selector label { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.selector {
+  padding: 14px 18px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.selector label { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1; min-width: 280px; }
+.pack-btn { white-space: nowrap; }
 .selector .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); font-weight: 700; }
 .selector select {
   flex: 1; min-width: 280px; padding: 8px 12px;
@@ -418,7 +633,11 @@ const docSummaries = computed(() => [
   color: var(--text); font-family: var(--font); font-size: 13px;
 }
 .section { padding: 18px; margin-bottom: 16px; }
-.section-head { margin-bottom: 4px; }
+.section-head {
+  margin-bottom: 4px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.head-right { display: inline-flex; align-items: center; gap: 12px; }
 .section-kicker { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .05em; text-transform: uppercase; }
 .section h2 { font-size: 16px; margin: 4px 0 0; }
 .sec1-grid {

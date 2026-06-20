@@ -4,9 +4,12 @@ import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
 import { RECORD_SCHEMAS } from '@/schemas/records'
+import { exportRecordsExcel, exportRecordsPdf, parseRecordsExcel } from '@/utils/recordExport'
 import AppIcon from './AppIcon.vue'
 import Modal from './Modal.vue'
 import RecordForm from './RecordForm.vue'
+import ExportImportMenu from './ExportImportMenu.vue'
+import ImportResultModal from './ImportResultModal.vue'
 
 const props = defineProps({
   resource: { type: String, required: true },
@@ -24,6 +27,49 @@ const fieldMap = computed(() =>
 
 const editing = ref(null) // record being edited, or {} for a new one
 const submitting = ref(false)
+
+// --- Export / Import ---
+const importResult = ref(null) // { valid, errors, unmatched } from a parsed file
+const importing = ref(false)
+
+async function doExport(format) {
+  if (!rows.value.length) return
+  try {
+    const name = store.current?.name || ''
+    if (format === 'excel') await exportRecordsExcel(props.resource, rows.value, name)
+    else exportRecordsPdf(props.resource, rows.value, name)
+    ui.success(
+      `Exported ${rows.value.length} ${schema.value.label} record(s) to ${format === 'excel' ? 'Excel' : 'PDF'}`,
+    )
+  } catch (e) {
+    ui.error(e.message)
+  }
+}
+
+async function onImportFile(file) {
+  try {
+    importResult.value = await parseRecordsExcel(props.resource, file)
+  } catch (err) {
+    ui.error(err.message)
+  }
+}
+
+async function confirmImport() {
+  const valid = importResult.value?.valid || []
+  if (!valid.length) return
+  importing.value = true
+  try {
+    for (const rec of valid) {
+      await store.addRecord(props.resource, rec)
+    }
+    ui.success(`Imported ${valid.length} ${schema.value.label} record(s)`)
+    importResult.value = null
+  } catch (e) {
+    ui.error(e.message)
+  } finally {
+    importing.value = false
+  }
+}
 
 // Load whenever the active resource tab changes (and on first mount).
 watch(
@@ -85,10 +131,19 @@ function display(row, key) {
   <section class="rlist panel">
     <header class="rl-head">
       <h3 class="sec-title">{{ schema.label }} <span>{{ rows.length }}</span></h3>
-      <button class="btn sm" @click="openCreate">
-        <AppIcon name="plus" :size="14" />
-        Add
-      </button>
+      <div class="rl-actions">
+        <ExportImportMenu
+          :formats="['excel', 'pdf']"
+          :rows="rows.length"
+          import-enabled
+          @export="doExport"
+          @import-file="onImportFile"
+        />
+        <button class="btn sm" @click="openCreate">
+          <AppIcon name="plus" :size="14" />
+          Add
+        </button>
+      </div>
     </header>
 
     <div v-if="store.recordsLoading && !rows.length" class="empty">Loading...</div>
@@ -135,12 +190,22 @@ function display(row, key) {
         @cancel="closeForm"
       />
     </Modal>
+
+    <ImportResultModal
+      v-if="importResult"
+      :title="`Import ${schema.label}`"
+      :result="importResult"
+      :importing="importing"
+      @close="importResult = null"
+      @confirm="confirmImport"
+    />
   </section>
 </template>
 
 <style scoped>
 .rlist { display: grid; gap: 12px; }
-.rl-head { display: flex; align-items: center; justify-content: space-between; }
+.rl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rl-actions { display: flex; align-items: center; gap: 6px; }
 .sec-title {
   font-size: 12px;
   font-weight: 800;

@@ -36,6 +36,7 @@ export const RECORD_SCHEMAS = {
       { key: 'limitation', label: 'Limitation', type: 'textarea' },
       { key: 'result', label: 'Result', type: 'textarea' },
       { key: 'conclude', label: 'Conclusion', type: 'textarea' },
+      { key: 'surveyor', label: 'Surveyor', type: 'textarea' },
     ],
     columns: ['date', 'department', 'requirement', 'result'],
   },

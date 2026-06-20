@@ -12,9 +12,16 @@ import StatusSelect from '@/components/StatusSelect.vue'
 import PriorityBadge from '@/components/PriorityBadge.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import ProjectFilters from '@/components/ProjectFilters.vue'
-import AppIcon from '@/components/AppIcon.vue'
+import ExportImportMenu from '@/components/ExportImportMenu.vue'
+import { useUiStore } from '@/stores/ui'
+import {
+  exportProjectsExcel,
+  exportProjectsPdf,
+  exportProjectsCsv,
+} from '@/utils/recordExport'
 
 const store = useProjectsStore()
+const ui = useUiStore()
 const { baht, date } = useFormat()
 
 const sorting = ref([{ id: 'dueDate', desc: false }])
@@ -61,22 +68,19 @@ const table = useVueTable({
 
 const shownCount = computed(() => table.getSortedRowModel().rows.length)
 
-function exportCsv() {
-  const rows = table.getSortedRowModel().rows
-  const headers = ['Domain', 'Name', 'PM', 'Customer', 'Value', 'Priority', 'Status', 'Progress', 'FiscalYear', 'DueDate']
-  const lines = rows.map((r) => {
-    const p = r.original
-    return [p.domain, p.name, p.pm, p.customer, p.value, p.priority, p.status, taskProgress(p), p.fiscalYear, p.dueDate]
-      .map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`)
-      .join(',')
-  })
-  const blob = new Blob(['\uFEFF' + headers.join(',') + '\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+async function doExport(format) {
+  const rows = table.getSortedRowModel().rows.map((r) => r.original)
+  if (!rows.length) return
+  try {
+    if (format === 'excel') await exportProjectsExcel(rows)
+    else if (format === 'pdf') exportProjectsPdf(rows)
+    else exportProjectsCsv(rows)
+    ui.success(
+      `Exported ${rows.length} project(s) to ${format === 'excel' ? 'Excel' : format.toUpperCase()}`,
+    )
+  } catch (e) {
+    ui.error(e.message)
+  }
 }
 </script>
 
@@ -100,10 +104,11 @@ function exportCsv() {
             <button type="button" :class="{ active: density === 'comfortable' }" @click="density = 'comfortable'">Comfort</button>
             <button type="button" :class="{ active: density === 'compact' }" @click="density = 'compact'">Compact</button>
           </div>
-          <button class="btn ghost" @click="exportCsv">
-            <AppIcon name="download" :size="16" />
-            Export CSV
-          </button>
+          <ExportImportMenu
+            :formats="['excel', 'pdf', 'csv']"
+            :rows="shownCount"
+            @export="doExport"
+          />
         </div>
       </div>
 
