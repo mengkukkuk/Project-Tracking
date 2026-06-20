@@ -84,6 +84,7 @@ RECORD_TYPES = {
             ("limitation", "limitation", _text),
             ("result", "result", _text),
             ("conclude", "conclude", _text),
+            ("surveyor", "surveyor", _text),
         ],
         "owns_user": True,
     },

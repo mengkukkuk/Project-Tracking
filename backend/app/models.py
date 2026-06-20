@@ -326,6 +326,7 @@ class SurveyReport(Base):
     limitation = Column(Text)
     result = Column(Text)
     conclude = Column(Text)
+    surveyor = Column(Text)
 
     def to_dict(self):
         return {
@@ -339,6 +340,7 @@ class SurveyReport(Base):
             "limitation": self.limitation,
             "result": self.result,
             "conclude": self.conclude,
+            "surveyor": self.surveyor,
         }
 
 
