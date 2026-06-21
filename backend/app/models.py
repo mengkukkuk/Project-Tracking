@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models.
 
-The schema is intentionally portable across SQLite (dev), PostgreSQL and MSSQL:
+The schema is intentionally portable across SQLite (dev), PostgreSQL, and MSSQL:
 no DB-specific column types are used. Money is stored as ``Numeric`` and exposed
 as ``float`` in the API.
 """
