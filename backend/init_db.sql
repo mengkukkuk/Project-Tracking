@@ -164,7 +164,9 @@ CREATE TABLE IF NOT EXISTS process_tags (
     id          SERIAL  PRIMARY KEY,
     processid   integer,
     process     text unique NOT NULL,
-    day_range   INTEGER
+    day_range   INTEGER,
+    results     TEXT,
+    undertaker  TEXT
 );
 
 -- ── ptrack (per-project process tracking) ─────────────────────
@@ -188,14 +190,15 @@ CREATE INDEX IF NOT EXISTS ix_ptrack_project_id ON ptrack (project_id);
 CREATE TABLE IF NOT EXISTS survey_report (
   id           SERIAL       PRIMARY KEY,
   project_id  INTEGER       NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-user_id     INTEGER                  REFERENCES users    (id) ON DELETE SET NULL,
+  user_id     INTEGER                REFERENCES users    (id) ON DELETE SET NULL,
   date         DATE         DEFAULT NOW(),
   department   TEXT,
   requirement  TEXT,
   issue        TEXT,
   limitation   TEXT,
   result       TEXT,
-  conclude     TEXT
+  conclude     TEXT,
+  surveyor     TEXT
 );
 
 -- ── customer_mom (meeting minutes) ────────────────────────────

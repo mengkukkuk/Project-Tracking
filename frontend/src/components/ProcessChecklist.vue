@@ -67,6 +67,12 @@ const today = computed(() => {
 // Per-task status — mirrors backend helpers.recompute_ptrack_status logic.
 function taskStatus(row, group) {
   if (row.checked) return 'Done'
+  const dueIso = group?.dueDate
+  if (dueIso) {
+    const due = new Date(dueIso)
+    due.setHours(0, 0, 0, 0)
+    if (due.getTime() < today.value.getTime()) return 'Overdue'
+  }
   const startIso = group?.startDate
   if (!startIso) return 'Not started'
   const start = new Date(startIso)
@@ -78,6 +84,7 @@ function taskStatus(row, group) {
 function statusKey(status) {
   if (status === 'Done') return 'done'
   if (status === 'In progress') return 'progress'
+  if (status === 'Overdue') return 'overdue'
   return 'not-started'
 }
 
@@ -249,7 +256,8 @@ async function generate() {
 }
 .task-status.done        { --status-color: var(--success); }
 .task-status.progress    { --status-color: var(--warning); }
-.task-status.not-started { --status-color: var(--danger); }
+.task-status.overdue     { --status-color: var(--danger); }
+.task-status.not-started { --status-color: var(--text-dim); }
 .task-status .dot {
   width: 7px;
   height: 7px;
