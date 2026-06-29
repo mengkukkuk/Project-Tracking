@@ -514,6 +514,97 @@ export function exportProjectsCsv(projects, filename) {
 }
 
 // ---------------------------------------------------------------------------
+// Global BOM inventory exports (BomGlobalView.vue)
+// Like the project-list exports, this is a column-driven path: the generic
+// exportRecords*('bom', …) omits the cross-project context, so we prepend a
+// "Project" column to the BOM schema fields. Rows carry `projectName` from the
+// /bom/all endpoint plus the standard bom record keys.
+// ---------------------------------------------------------------------------
+const BOM_INVENTORY_COLUMNS = [
+  { key: 'projectName', label: 'Project', type: 'text' },
+  ...RECORD_SCHEMAS.bom.fields.map((f) => ({ key: f.key, label: f.label, type: f.type })),
+]
+
+export async function exportBomInventoryExcel(rows, filename) {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('BOM')
+  ws.columns = BOM_INVENTORY_COLUMNS.map((c) => ({ header: c.label, key: c.key, width: 16 }))
+
+  for (const row of rows) {
+    const cells = {}
+    for (const c of BOM_INVENTORY_COLUMNS) {
+      const v = row[c.key]
+      if (c.type === 'date') cells[c.key] = isoToExcelDate(v)
+      else if (c.type === 'number') cells[c.key] = v == null || v === '' ? null : Number(v)
+      else cells[c.key] = v ?? ''
+    }
+    ws.addRow(cells)
+  }
+
+  BOM_INVENTORY_COLUMNS.forEach((c, i) => {
+    const col = ws.getColumn(i + 1)
+    if (c.type === 'date') col.numFmt = 'dd/mm/yyyy'
+    else if (c.type === 'number') col.numFmt = '#,##0'
+  })
+
+  const header = ws.getRow(1)
+  header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }
+  header.alignment = { vertical: 'middle' }
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: BOM_INVENTORY_COLUMNS.length } }
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
+
+  ws.columns.forEach((column) => {
+    let max = 0
+    column.eachCell({ includeEmpty: true }, (cell) => {
+      const len = cell.value == null ? 0 : String(cell.value).length
+      if (len > max) max = len
+    })
+    column.width = Math.min(Math.max(max + 4, 12), 60)
+  })
+
+  await writeAndDownload(wb, filename || `bom-inventory-${stamp()}.xlsx`)
+}
+
+export function exportBomInventoryPdf(rows, filename) {
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' })
+  const font = registerThaiFont(doc)
+  const title = 'BOM Inventory'
+  const printed = new Date().toLocaleString('en-GB')
+  const head = [BOM_INVENTORY_COLUMNS.map((c) => c.label)]
+  const body = rows.map((row) =>
+    BOM_INVENTORY_COLUMNS.map((c) => displayValue(c, row[c.key])),
+  )
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 56,
+    margin: { top: 56, bottom: 28, left: 20, right: 20 },
+    styles: { font, fontStyle: 'normal', fontSize: 8, overflow: 'linebreak', cellPadding: 3 },
+    headStyles: { font, fillColor: [79, 129, 189], textColor: 255, fontSize: 8 },
+    didDrawPage: () => {
+      doc.setFont(font)
+      doc.setFontSize(13)
+      doc.text(title, 20, 34)
+      doc.setFontSize(8)
+      doc.text(`Generated ${printed}`, 20, 46)
+    },
+  })
+
+  const total = doc.internal.getNumberOfPages()
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i)
+    doc.setFont(font)
+    doc.setFontSize(8)
+    doc.text(`Page ${i} of ${total}`, w - 20, h - 14, { align: 'right' })
+  }
+  doc.save(filename || `bom-inventory-${stamp()}.pdf`)
+}
+
+// ---------------------------------------------------------------------------
 // Excel import
 // ---------------------------------------------------------------------------
 

@@ -21,6 +21,7 @@ const nav = [
   { to: '/pipeline', label: 'Pipeline', icon: 'pipeline' },
   { to: '/pm-cards', label: 'PM cards', icon: 'users' },
   { to: '/table', label: 'Table', icon: 'table' },
+  { to: '/bom', label: 'BOM', icon: 'money' },
   { to: '/dashboard', label: 'Dashboard', icon: 'target' },
 ]
 

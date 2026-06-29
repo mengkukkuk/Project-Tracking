@@ -36,30 +36,55 @@ export function useProcessChain(rowsRef, startDateRef) {
     const projectStart = startDateRef.value || null
     const list = [...map.entries()].map(([process, items]) => {
       const sample = items.find((i) => i.cumulativeDays != null) || items[0] || {}
+      // Backend now persists start_date / due_date per ptrack row
+      // (recompute_ptrack_dates). Prefer those over the cumulativeDays chain so
+      // a project whose process_tags table is missing/empty still gets the
+      // correct dates — and so Overdue detection works.
+      const rowStart = items.find((i) => i.startDate)?.startDate || null
+      const rowDue = items.find((i) => i.dueDate)?.dueDate || null
       return {
         process,
         items,
         done: items.filter((i) => i.checked).length,
         dayRange: sample.dayRange ?? null,
         cumulativeDays: sample.cumulativeDays ?? null,
+        _rowStart: rowStart,
+        _rowDue: rowDue,
       }
     })
     list.sort((a, b) => {
-      if (a.cumulativeDays == null) return 1
-      if (b.cumulativeDays == null) return -1
-      return a.cumulativeDays - b.cumulativeDays
+      // Prefer cumulativeDays; fall back to the persisted row start date so the
+      // pipeline order is still correct when process_tags has no offsets.
+      if (a.cumulativeDays != null && b.cumulativeDays != null) {
+        return a.cumulativeDays - b.cumulativeDays
+      }
+      if (a.cumulativeDays != null) return -1
+      if (b.cumulativeDays != null) return 1
+      const sa = a._rowStart || ''
+      const sb = b._rowStart || ''
+      return sa.localeCompare(sb)
     })
     let prevDue = null
     for (const g of list) {
-      g.startDate = prevDue ? addDays(prevDue, 1) : projectStart
-      g.dueDate = addDays(g.startDate, g.dayRange)
+      const chainStart = prevDue ? addDays(prevDue, 1) : projectStart
+      const chainDue = addDays(chainStart, g.dayRange)
+      // Persisted row dates win when present; chain math is the fallback.
+      g.startDate = g._rowStart || chainStart
+      g.dueDate = g._rowDue || chainDue
       g.remaining = daysUntilLocal(g.dueDate)
       if (g.dueDate) prevDue = g.dueDate
     }
+    // Mirrors components/ProcessChecklist.vue::taskStatus (kept after commit
+    // f8780c5 added Overdue): unchecked + due date past = Overdue (red);
+    // start date in the future = Not started (dim); otherwise In progress.
     const today = new Date(); today.setHours(0, 0, 0, 0)
     for (const g of list) {
       for (const r of g.items) {
         if (r.checked) { r._status = 'Done'; continue }
+        if (g.dueDate) {
+          const due = new Date(g.dueDate); due.setHours(0, 0, 0, 0)
+          if (due.getTime() < today.getTime()) { r._status = 'Overdue'; continue }
+        }
         if (!g.startDate) { r._status = 'Not started'; continue }
         const s = new Date(g.startDate); s.setHours(0, 0, 0, 0)
         r._status = s.getTime() > today.getTime() ? 'Not started' : 'In progress'

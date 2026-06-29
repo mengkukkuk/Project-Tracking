@@ -79,6 +79,35 @@ def test_record_crud_bom(client, auth):
     assert client.delete(f"/api/records/bom/{rid}", headers=auth).status_code == 204
 
 
+def test_list_all_bom_across_projects(client, auth):
+    # Two projects, each with one BOM row.
+    p1 = _project(client, auth, name="Alpha")
+    p2 = _project(client, auth, name="Beta")
+    client.post(
+        f"/api/projects/{p1}/records/bom",
+        json={"deviceName": "Camera X", "quantity": 1},
+        headers=auth,
+    )
+    client.post(
+        f"/api/projects/{p2}/records/bom",
+        json={"deviceName": "PLC Y", "quantity": 2},
+        headers=auth,
+    )
+
+    items = client.get("/api/bom/all", headers=auth).get_json()["items"]
+    assert len(items) == 2
+    # Rows from both projects, each enriched with its project name.
+    by_device = {it["deviceName"]: it for it in items}
+    assert by_device["Camera X"]["projectName"] == "Alpha"
+    assert by_device["Camera X"]["projectId"] == p1
+    assert by_device["PLC Y"]["projectName"] == "Beta"
+    assert by_device["PLC Y"]["projectId"] == p2
+
+
+def test_list_all_bom_requires_auth(client):
+    assert client.get("/api/bom/all").status_code == 401
+
+
 def test_record_crud_mom(client, auth):
     pid = _project(client, auth)
     res = client.post(

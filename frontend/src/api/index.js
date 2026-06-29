@@ -89,6 +89,8 @@ export const api = {
 
   // per-project records (ptrack, survey, mom, bom, verification, exceptions)
   listRecords: (pid, resource) => req(`/projects/${pid}/records/${resource}`),
+  // global BOM list across all projects (each row enriched with projectName)
+  listBomAll: () => req('/bom/all'),
   createRecord: (pid, resource, d) =>
     req(`/projects/${pid}/records/${resource}`, { method: 'POST', body: JSON.stringify(d) }),
   updateRecord: (resource, id, d) =>

@@ -79,9 +79,15 @@ function weekLabel(g) {
 }
 
 const statusEmoji = (s) =>
-  s === 'Done' ? '🟢' : s === 'In progress' ? '🟡' : '🔴'
+  s === 'Done' ? '🟢'
+    : s === 'In progress' ? '🟡'
+    : s === 'Overdue' ? '🔴'
+    : '⚪'
 const statusKey = (s) =>
-  s === 'Done' ? 'done' : s === 'In progress' ? 'progress' : 'not-started'
+  s === 'Done' ? 'done'
+    : s === 'In progress' ? 'progress'
+    : s === 'Overdue' ? 'overdue'
+    : 'not-started'
 
 const pmNames = computed(() => {
   const p = project.value
@@ -728,7 +734,8 @@ const docSummaries = computed(() => [
 }
 .status-pill.done        { --c: var(--success); }
 .status-pill.progress    { --c: var(--warning); }
-.status-pill.not-started { --c: var(--danger); }
+.status-pill.overdue     { --c: var(--danger); }
+.status-pill.not-started { --c: var(--text-dim); }
 .status-pill .dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--c);
   box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--c) 20%, transparent);

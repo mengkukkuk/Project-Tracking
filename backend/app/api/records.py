@@ -168,6 +168,26 @@ def _apply(record, spec, data, *, partial):
         setattr(record, attr, parser(data, json_key))
 
 
+@bp.get("/bom/all")
+@jwt_required()
+def list_all_bom():
+    """GET /api/bom/all — every BOM/costing row across all projects.
+
+    Powers the global BOM page. Each item is the row's ``to_dict()`` (which
+    already carries ``projectId``) enriched with ``projectName`` from a join to
+    ``projects`` so the client can show which project a record belongs to.
+    Available to any authenticated user, mirroring the per-project BOM tab.
+    """
+    rows = (
+        Session.query(BomAndCosting, Project.name)
+        .join(Project, BomAndCosting.project_id == Project.id)
+        .order_by(Project.name.asc(), BomAndCosting.id.asc())
+        .all()
+    )
+    items = [{**rec.to_dict(), "projectName": project_name} for rec, project_name in rows]
+    return {"items": items}
+
+
 @bp.get("/projects/<int:pid>/records/<resource>")
 @jwt_required()
 def list_records(pid, resource):

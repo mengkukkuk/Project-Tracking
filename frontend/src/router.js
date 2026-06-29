@@ -7,6 +7,7 @@ const routes = [
   { path: '/pipeline', component: () => import('@/views/PipelineView.vue') },
   { path: '/pm-cards', component: () => import('@/views/PmCardsView.vue') },
   { path: '/table', component: () => import('@/views/TableView.vue') },
+  { path: '/bom', component: () => import('@/views/BomGlobalView.vue') },
   { path: '/dashboard', component: () => import('@/views/DashboardView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
