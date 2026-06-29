@@ -770,6 +770,137 @@ export async function parseRecordsExcel(resource, file) {
 }
 
 /**
+ * Parse an uploaded Excel file as a global BOM inventory sheet. The header row
+ * is expected to include a "Project" (or "Project name" / "Project id") column
+ * in addition to the standard `bom` field columns. Project values are matched
+ * case-insensitively against the provided projects list by name, or as an
+ * integer against project IDs. Rows whose project can't be resolved are
+ * reported as errors and excluded from `valid`.
+ *
+ * @param {File} file
+ * @param {{id:number, name:string}[]} projects
+ * @returns {Promise<{ valid: object[], errors: {row:number,column:string,message:string}[], unmatched: string[] }>}
+ */
+export async function parseBomInventoryExcel(file, projects) {
+  validateFileBasics(file)
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer())
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('The workbook has no sheets.')
+
+  const fields = fieldsFor('bom')
+  const fieldByKey = Object.fromEntries(fields.map((f) => [f.key, f]))
+
+  const PROJECT_ALIASES = new Set([
+    'project', 'projectname', 'project name', 'projectid', 'project id',
+  ])
+
+  const byHeader = new Map()
+  for (const f of fields) {
+    byHeader.set(f.label.trim().toLowerCase(), { kind: 'field', key: f.key })
+    byHeader.set(f.key.trim().toLowerCase(), { kind: 'field', key: f.key })
+  }
+
+  const nameToId = new Map()
+  const idSet = new Set()
+  for (const p of projects || []) {
+    if (p.name) nameToId.set(String(p.name).trim().toLowerCase(), p.id)
+    idSet.add(p.id)
+  }
+
+  const colMap = {}
+  const unmatched = []
+  ws.getRow(1).eachCell((cell, col) => {
+    const raw = cellToString(cell.value).trim()
+    if (!raw) return
+    const lc = raw.toLowerCase()
+    if (PROJECT_ALIASES.has(lc)) { colMap[col] = { kind: 'project' }; return }
+    const m = byHeader.get(lc)
+    if (m) colMap[col] = m
+    else unmatched.push(raw)
+  })
+
+  const hasFieldCol = Object.values(colMap).some((m) => m.kind === 'field')
+  if (!hasFieldCol) {
+    throw new Error('No recognizable columns found. Check that the header row matches the field names.')
+  }
+
+  const valid = []
+  const errors = []
+
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const xlRow = ws.getRow(r)
+    const record = {}
+    let projectId = null
+    let projectRaw = ''
+    let hasValue = false
+    let rowHadError = false
+
+    for (const [colStr, m] of Object.entries(colMap)) {
+      const col = Number(colStr)
+      const raw = xlRow.getCell(col).value
+      const str = cellToString(raw).trim()
+
+      if (m.kind === 'project') {
+        projectRaw = str
+        if (!str) continue
+        const n = Number(str)
+        if (Number.isInteger(n) && idSet.has(n)) projectId = n
+        else if (nameToId.has(str.toLowerCase())) projectId = nameToId.get(str.toLowerCase())
+        continue
+      }
+
+      const field = fieldByKey[m.key]
+      if (field.type === 'number') {
+        if (str === '') {
+          record[field.key] = null
+        } else {
+          const n = Number(str.replace(/,/g, ''))
+          if (Number.isNaN(n)) {
+            errors.push({ row: r, column: field.label, message: `"${str}" is not a number` })
+            rowHadError = true
+          } else {
+            record[field.key] = n
+            hasValue = true
+          }
+        }
+      } else if (field.type === 'date') {
+        if (str === '') {
+          record[field.key] = ''
+        } else {
+          const norm = normalizeDate(raw)
+          if (norm === null) {
+            errors.push({ row: r, column: field.label, message: `"${str}" is not a valid date` })
+            rowHadError = true
+          } else {
+            record[field.key] = norm
+            hasValue = true
+          }
+        }
+      } else if (field.type === 'checkbox') {
+        record[field.key] = TRUTHY.has(str.toLowerCase())
+      } else {
+        record[field.key] = sanitizeText(str)
+        if (str) hasValue = true
+      }
+    }
+
+    if (!hasValue && !projectId && !projectRaw) continue
+    if (!projectId) {
+      errors.push({
+        row: r,
+        column: 'Project',
+        message: projectRaw ? `Unknown project "${projectRaw}"` : 'Project is required',
+      })
+      rowHadError = true
+    }
+    if (!rowHadError) valid.push({ ...record, projectId })
+  }
+
+  return { valid, errors, unmatched }
+}
+
+/**
  * Parse an uploaded Excel file as a multi-resource workbook. Each worksheet is
  * matched (case-insensitive) against the supplied resource list by either the
  * schema label or the resource key. Unmatched sheets are reported separately.

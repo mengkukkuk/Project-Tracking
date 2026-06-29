@@ -11,9 +11,15 @@ import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
 import ExportImportMenu from '@/components/ExportImportMenu.vue'
+import ImportResultModal from '@/components/ImportResultModal.vue'
 import Modal from '@/components/Modal.vue'
 import BomGlobalForm from '@/components/BomGlobalForm.vue'
-import { exportBomInventoryExcel, exportBomInventoryPdf } from '@/utils/recordExport'
+import {
+  exportBomInventoryExcel,
+  exportBomInventoryPdf,
+  parseBomInventoryExcel,
+} from '@/utils/recordExport'
+import { api } from '@/api'
 
 const store = useBomStore()
 const projectsStore = useProjectsStore()
@@ -133,6 +139,37 @@ async function remove(row) {
   }
 }
 
+// --- Import (Excel) ---------------------------------------------------------
+const importResult = ref(null)
+const importing = ref(false)
+
+async function onImportFile(file) {
+  try {
+    importResult.value = await parseBomInventoryExcel(file, projectsStore.projects)
+  } catch (e) {
+    ui.error(e.message)
+  }
+}
+
+async function confirmImport() {
+  const rows = importResult.value?.valid || []
+  if (!rows.length) return
+  importing.value = true
+  try {
+    for (const r of rows) {
+      const { projectId, ...body } = r
+      await api.createRecord(projectId, 'bom', body)
+    }
+    await store.fetchAll()
+    ui.success(`Imported ${rows.length} BOM record(s)`)
+    importResult.value = null
+  } catch (e) {
+    ui.error(e.message)
+  } finally {
+    importing.value = false
+  }
+}
+
 // --- Export (filtered + sorted set) -----------------------------------------
 async function doExport(format) {
   const rows = table.getSortedRowModel().rows.map((r) => r.original)
@@ -173,7 +210,13 @@ onMounted(() => {
           <button type="button" class="btn sm add-btn" @click="openAdd">
             <span class="plus">+</span> Add New
           </button>
-          <ExportImportMenu :formats="['excel', 'pdf']" :rows="shownCount" @export="doExport" />
+          <ExportImportMenu
+            :formats="['excel', 'pdf']"
+            :rows="shownCount"
+            import-enabled
+            @export="doExport"
+            @import-file="onImportFile"
+          />
         </div>
       </div>
 
@@ -255,6 +298,15 @@ onMounted(() => {
         @cancel="panel = null"
       />
     </Modal>
+
+    <ImportResultModal
+      v-if="importResult"
+      title="Import BOM"
+      :result="importResult"
+      :importing="importing"
+      @close="importResult = null"
+      @confirm="confirmImport"
+    />
   </div>
 </template>
 
