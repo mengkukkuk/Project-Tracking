@@ -91,6 +91,14 @@ export const api = {
   listRecords: (pid, resource) => req(`/projects/${pid}/records/${resource}`),
   // global BOM list across all projects (each row enriched with projectName)
   listBomAll: () => req('/bom/all'),
+
+  // saved BOM lists (named curated subsets for a target project)
+  listBomLists: () => req('/bom-lists'),
+  getBomList: (id) => req(`/bom-lists/${id}`),
+  createBomList: (d) => req('/bom-lists', { method: 'POST', body: JSON.stringify(d) }),
+  updateBomList: (id, d) =>
+    req(`/bom-lists/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteBomList: (id) => req(`/bom-lists/${id}`, { method: 'DELETE' }),
   createRecord: (pid, resource, d) =>
     req(`/projects/${pid}/records/${resource}`, { method: 'POST', body: JSON.stringify(d) }),
   updateRecord: (resource, id, d) =>

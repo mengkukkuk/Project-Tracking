@@ -507,3 +507,63 @@ class ExceptionLog(Base):
             "dateNewBom": _iso(self.date_new_bom),
             "dateNewPps": _iso(self.date_new_pps),
         }
+
+
+class BomList(Base):
+    """Saved, named selection of bom_and_costing rows for a target project.
+
+    Items are FK references — edits to a source row flow through on next read,
+    and deleting a source row cascades the corresponding list-item away.
+    """
+
+    __tablename__ = "bom_lists"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    items = relationship(
+        "BomListItem",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def to_dict(self):
+        """Bare serialization. The API layer enriches with projectName / items[]
+        (it has the Session) so the model stays free of DB lookups.
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "projectId": self.project_id,
+            "ownerId": self.owner_id,
+            "itemCount": len(self.items),
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class BomListItem(Base):
+    """Join row: bom_list <-> bom_and_costing (FK reference, composite PK)."""
+
+    __tablename__ = "bom_list_items"
+
+    list_id = Column(
+        Integer,
+        ForeignKey("bom_lists.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    bom_id = Column(
+        Integer,
+        ForeignKey("bom_and_costing.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    parent = relationship("BomList", back_populates="items")
+    bom = relationship("BomAndCosting", lazy="joined")

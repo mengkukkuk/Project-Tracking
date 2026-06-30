@@ -14,6 +14,8 @@ import ExportImportMenu from '@/components/ExportImportMenu.vue'
 import ImportResultModal from '@/components/ImportResultModal.vue'
 import Modal from '@/components/Modal.vue'
 import BomGlobalForm from '@/components/BomGlobalForm.vue'
+import BomListPicker from '@/components/BomListPicker.vue'
+import BomListsManager from '@/components/BomListsManager.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
@@ -151,6 +153,15 @@ async function onImportFile(file) {
   }
 }
 
+// Total price is a derived field: quantity × unitPrice. Apply the same formula
+// the edit form's watcher uses, so imported rows display the computed total
+// immediately — without needing an Edit → Save round-trip to materialize it.
+function computedTotal(qty, unitPrice) {
+  const q = qty === '' || qty == null ? null : Number(qty)
+  const u = unitPrice === '' || unitPrice == null ? null : Number(unitPrice)
+  return q != null && u != null && !isNaN(q) && !isNaN(u) ? q * u : null
+}
+
 async function confirmImport() {
   const rows = importResult.value?.valid || []
   if (!rows.length) return
@@ -158,6 +169,7 @@ async function confirmImport() {
   try {
     for (const r of rows) {
       const { projectId, ...body } = r
+      body.totalPrice = computedTotal(body.quantity, body.unitPrice)
       await api.createRecord(projectId, 'bom', body)
     }
     await store.fetchAll()
@@ -181,6 +193,24 @@ async function doExport(format) {
   } catch (e) {
     ui.error(e.message)
   }
+}
+
+// --- BOM list picker + manager ---------------------------------------------
+// `pickerList` is null when picker is closed, `'new'` to open in create mode,
+// or a list summary object to open in edit mode.
+const pickerList = ref(null)
+const listsManagerOpen = ref(false)
+
+function openListPicker(lst = null) {
+  pickerList.value = lst ?? 'new'
+}
+function onPickerSaved() {
+  pickerList.value = null
+}
+function onManagerOpenList(lst) {
+  // Switch from manager to picker in edit mode.
+  listsManagerOpen.value = false
+  pickerList.value = lst
 }
 
 onMounted(() => {
@@ -209,6 +239,12 @@ onMounted(() => {
         <div class="actions">
           <button type="button" class="btn sm add-btn" @click="openAdd">
             <span class="plus">+</span> Add New
+          </button>
+          <button type="button" class="btn sm ghost" @click="openListPicker()">
+            <span class="plus">+</span> Create BOM List
+          </button>
+          <button type="button" class="btn sm ghost" @click="listsManagerOpen = true">
+            Saved Lists
           </button>
           <ExportImportMenu
             :formats="['excel', 'pdf']"
@@ -298,6 +334,19 @@ onMounted(() => {
         @cancel="panel = null"
       />
     </Modal>
+
+    <BomListPicker
+      v-if="pickerList"
+      :list="pickerList === 'new' ? null : pickerList"
+      @close="pickerList = null"
+      @saved="onPickerSaved"
+    />
+
+    <BomListsManager
+      v-if="listsManagerOpen"
+      @close="listsManagerOpen = false"
+      @open-list="onManagerOpenList"
+    />
 
     <ImportResultModal
       v-if="importResult"

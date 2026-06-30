@@ -605,6 +605,122 @@ export function exportBomInventoryPdf(rows, filename) {
 }
 
 // ---------------------------------------------------------------------------
+// Saved BOM list exports (BomListsManager.vue / BomListPicker.vue)
+// A "BOM list" is a named, project-scoped selection of bom_and_costing rows.
+// The Excel form is one workbook with the project summary cover sheet + a
+// dedicated record sheet named after the list. The PDF form is a single
+// document with a project summary table on page 1 followed by the BOM rows
+// table. The Project column is omitted from the rows table since every row
+// already belongs to the same (target) project context.
+// ---------------------------------------------------------------------------
+export async function exportBomListExcel(project, listName, rows, filename) {
+  const wb = new ExcelJS.Workbook()
+  addProjectSummarySheet(wb, project)
+  // Sheet name = list name (deduped + clipped to 31 chars by addRecordSheet).
+  addRecordSheet(wb, 'bom', rows, listName || RECORD_SCHEMAS.bom.label)
+  const name =
+    filename ||
+    `${['bom-list', slug(listName), slug(project?.name), stamp()]
+      .filter(Boolean)
+      .join('-')}.xlsx`
+  await writeAndDownload(wb, name)
+}
+
+export function exportBomListPdf(project, listName, rows, filename) {
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' })
+  const font = registerThaiFont(doc)
+  const title = `BOM List — ${listName || ''}`.trim() || 'BOM List'
+  const subtitle = project?.name ? `Project: ${project.name}` : ''
+  const printed = new Date().toLocaleString('en-GB')
+
+  // Page 1: project summary as a 2-column table (mirrors exportProjectSummaryPdf).
+  const summary = project
+    ? projectSummaryRows(project).map(([label, value]) => {
+        let display = value
+        if (label === 'Start date' || label === 'Due date')
+          display = value ? formatDate(value) : '—'
+        else if (label === 'Value')
+          display =
+            value == null || value === '' ? '—' : Number(value).toLocaleString()
+        else if (display == null || display === '') display = '—'
+        return [label, String(display)]
+      })
+    : []
+
+  if (summary.length) {
+    autoTable(doc, {
+      head: [['Field', 'Value']],
+      body: summary,
+      startY: 56,
+      margin: { top: 56, bottom: 28, left: 28, right: 28 },
+      styles: {
+        font,
+        fontStyle: 'normal',
+        fontSize: 9,
+        overflow: 'linebreak',
+        cellPadding: 4,
+      },
+      headStyles: { font, fillColor: [79, 129, 189], textColor: 255, fontSize: 9 },
+      columnStyles: { 0: { cellWidth: 140 } },
+      didDrawPage: () => {
+        doc.setFont(font)
+        doc.setFontSize(13)
+        doc.text(title, 28, 34)
+        doc.setFontSize(9)
+        doc.text(subtitle, 28, 46)
+      },
+    })
+    doc.addPage()
+  }
+
+  // Page 2+: the BOM rows. Drop the leading Project column from the inventory
+  // columns since the document is already scoped to one target project.
+  const columns = BOM_INVENTORY_COLUMNS.filter((c) => c.key !== 'projectName')
+  const head = [columns.map((c) => c.label)]
+  const body = rows.map((row) => columns.map((c) => displayValue(c, row[c.key])))
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 56,
+    margin: { top: 56, bottom: 28, left: 20, right: 20 },
+    styles: {
+      font,
+      fontStyle: 'normal',
+      fontSize: 8,
+      overflow: 'linebreak',
+      cellPadding: 3,
+    },
+    headStyles: { font, fillColor: [79, 129, 189], textColor: 255, fontSize: 8 },
+    didDrawPage: () => {
+      doc.setFont(font)
+      doc.setFontSize(13)
+      doc.text(title, 20, 34)
+      doc.setFontSize(9)
+      doc.text(subtitle, 20, 46)
+    },
+  })
+
+  const total = doc.internal.getNumberOfPages()
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i)
+    doc.setFont(font)
+    doc.setFontSize(8)
+    doc.text(`Page ${i} of ${total}    Generated ${printed}`, w - 20, h - 14, {
+      align: 'right',
+    })
+  }
+  doc.save(
+    filename ||
+      `${['bom-list', slug(listName), slug(project?.name), stamp()]
+        .filter(Boolean)
+        .join('-')}.pdf`,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Excel import
 // ---------------------------------------------------------------------------
 

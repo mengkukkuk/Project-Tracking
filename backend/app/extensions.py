@@ -7,7 +7,7 @@ in ``app/__init__.py``) so connections are never leaked between requests.
 from flask_jwt_extended import JWTManager
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 jwt = JWTManager()
@@ -34,5 +34,15 @@ def init_engine(database_url: str):
         pool_pre_ping=True,
         connect_args=connect_args,
     )
+    # SQLite ignores ``ON DELETE CASCADE`` unless foreign-key enforcement is
+    # turned on per-connection. PostgreSQL enforces FKs natively, so this
+    # keeps dev/test behavior consistent with production.
+    if database_url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _sqlite_fk_pragma(dbapi_conn, _):
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.close()
+
     Session.configure(bind=engine)
     return engine
