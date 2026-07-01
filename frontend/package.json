@@ -11,13 +11,13 @@
   "dependencies": {
     "@fontsource/ibm-plex-sans-thai": "^5.2.8",
     "@tanstack/vue-table": "^8.20.5",
-    "echarts": "^5.5.1",
+    "echarts": "^6.1.0",
     "exceljs": "^3.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "pinia": "^2.2.6",
     "vue": "^3.5.13",
-    "vue-echarts": "^7.0.3",
+    "vue-echarts": "^8.0.1",
     "vue-router": "^4.4.5",
     "vuedraggable": "^4.1.0"
   },

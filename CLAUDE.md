@@ -38,7 +38,8 @@ npm run build      # production bundle → dist/
 | `app/api/projects.py` | Project CRUD + `POST /<pid>/ptrack/generate` (backfill process checklist from template) |
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
-| `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions` |
+| `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
+| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named subsets of BOM rows (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
 | `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
 | `app/api/sheets.py` | Google Sheets export/import |
 | `app/api/stats.py` | Dashboard aggregations via SQL `GROUP BY` (no Python loops) |
@@ -54,13 +55,21 @@ npm run build      # production bundle → dist/
 | `stores/ui.js` | Toast notifications, dark mode toggle + persistence |
 | `router.js` | Route guard — requires auth; restores session from token on boot |
 | `views/OverviewView.vue` | KPI cards + charts (funnel, fiscal bars, domain donut, upcoming) |
+| `views/PipelineView.vue` | Read-only Kanban-style board grouping projects by delivery stage (`/pipeline`); per-column value + overdue/critical risk counts |
+| `views/PmCardsView.vue` | Read-only board grouping projects by PM (`/pm-cards`, `store.byPm`), incl. an "unassigned" column |
 | `views/KanbanView.vue` | Drag-and-drop board with optimistic move + rollback |
-| `views/TableView.vue` | Sortable, filterable, searchable project table |
+| `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
+| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
+| `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
 | `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, process checklist, records, comments, activity |
 | `components/ProjectForm.vue` | Create / edit modal |
 | `components/ProcessChecklist.vue` | Grouped `ptrack` checkbox list; drives process-based progress; "Generate from template" empty state |
 | `components/RecordList.vue` / `RecordForm.vue` | Generic CRUD table + modal for the auxiliary record resources |
+| `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
+| `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
+| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
 
 ## Key Decisions
 
@@ -110,6 +119,12 @@ npm run build      # production bundle → dist/
 - SQLAlchemy ORM — no DB-specific types; works on SQLite, PostgreSQL, MSSQL
 - Schema auto-created on startup via `Base.metadata.create_all()`
 - `pool_pre_ping=True` on all engines
+
+### Record export / import
+- Excel export uses `ExcelJS` (styled header, frozen pane, auto-filter, auto-fit columns, `dd/mm/yyyy` dates); PDF export uses `jsPDF` + `jspdf-autotable` with an embedded Thai font. Both are client-side only — no backend export endpoint.
+- CSV export exists **only** for the project list (`TableView` → `exportProjectsCsv`); records use Excel/PDF only.
+- BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
+- **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
 
 ## Testing
 

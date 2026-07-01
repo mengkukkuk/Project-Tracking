@@ -8,8 +8,14 @@ A full-stack project-tracking application for automation and engineering project
 │   ├─ Auth        JWT login / register · route guard          │
 │   ├─ Overview    KPIs · funnel · fiscal bars · domain donut  │
 │   │              overdue / upcoming list                      │
+│   ├─ Pipeline    Kanban-style board grouped by delivery stage │
+│   ├─ PM Cards    board grouped by project manager             │
 │   ├─ Kanban      drag-and-drop status (optimistic + rollback) │
-│   ├─ Table       sort · filter · search · pagination         │
+│   ├─ Table       sort · filter · search · pagination · CSV   │
+│   ├─ BOM Global  cross-project BOM inventory · saved lists ·  │
+│   │              Excel import / Excel+PDF export              │
+│   ├─ Dashboard   single-project exec report (cost, docs,     │
+│   │              process) · per-section Excel/PDF export      │
 │   └─ Detail      edit · tasks · process checklist · records  │
 │                  comments · activity log                      │
 │        │  /api  (Vite proxy in dev)                          │
@@ -21,6 +27,8 @@ A full-stack project-tracking application for automation and engineering project
 │   ├─ /api/projects/:id/comments · /api/comments/:id          │
 │   ├─ /api/projects/:id/records/:resource  (ptrack, bom, ...) │
 │   ├─ /api/projects/:id/ptrack/generate  (backfill checklist) │
+│   ├─ /api/bom/all     BOM rows across all projects            │
+│   ├─ /api/bom-lists   saved named BOM selections   (CRUD)    │
 │   ├─ /api/ptemplate   process checklist template             │
 │   ├─ /api/sheets      Google Sheets export / import          │
 │   ├─ /api/stats       SQL aggregations (no full-table scan)  │
@@ -161,5 +169,9 @@ Manage afterwards: `nssm status ProjTracking`, `tailscale serve status`.
 - **Activity feed** — every create / update / status-move is logged per project.
 - **Process-driven progress** — the project progress bar is derived from the per-project process checklist (`ptrack`); the same value drives the detail drawer, Table view, and Kanban cards. Falls back to task counts when no checklist exists. Older projects can backfill the checklist on demand via "Generate from template".
 - **Per-project records** — each project carries auxiliary records (`ptrack` process checklist, `survey`, `mom` meeting minutes, `bom` bill-of-materials, `verification`, `exceptions`) under `/api/projects/:id/records/:resource`.
+- **Record export / import** — every record list supports Excel and PDF export (`frontend/src/utils/recordExport.js`, via `ExcelJS` / `jsPDF`) through the shared `ExportImportMenu` component; the project Table view additionally supports CSV export.
+- **BOM Global view** (`/bom`) — a cross-project BOM inventory (`GET /api/bom/all`) with Excel import (maps rows to projects by name or id), Excel/PDF export, and **saved BOM lists** — named, reusable subsets of BOM rows scoped to a target project (`/api/bom-lists`, CRUD).
+- **Dashboard view** (`/dashboard`) — a single-project executive report combining cost/procurement insights, document intelligence (survey, verification, MOM, exceptions), and the week-grouped process checklist, each exportable to Excel/PDF.
+- **Pipeline / PM Cards views** — read-only Kanban-style boards grouping projects by delivery stage (`/pipeline`) or by project manager (`/pm-cards`), with per-column risk indicators (overdue / critical counts).
 - **Google Sheets sync** — `/api/sheets/export` and `/api/sheets/import` round-trip the project list with a configured spreadsheet.
 - **Dark mode** — persisted in `localStorage`, respects OS preference on first visit.
