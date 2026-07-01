@@ -14,6 +14,7 @@ venv/
 # Env / secrets
 .env
 .env.local
+backend/ngrok.yml
 
 # Node / Vite
 node_modules/
