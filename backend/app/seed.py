@@ -85,23 +85,24 @@ DEMO_USERS = [
     ("นายปัญญา เจริญผล",         "panya.c@scada.local",       "password",  "member", 32842),
 ]
 
-# Format: (name, domain, customer, pm, status, value, progress, fy, priority, days_to_due)
-# pm must match a name from DEMO_USERS.
+# Format: (name, domain, customer, pm, status, value, progress, fy, priority, days_to_due, team_size, complexity)
+# pm must match a name from DEMO_USERS. team_size/complexity seed the Summaries
+# pipeline (complexity 1-10) with a deliberate spread so demo grades cover A-D.
 DEMO_PROJECTS = [
-    ("Kiosk ตรวจสอบเอกสาร R1",        "Robot",        "กรมสรรพสามิต", "นายโอภาส สุ่มเมา",        "Pre-Sale",         40_000_000,  0,   "70", "high",     90),
-    ("Battery Monitoring",              "IoT",          "กรมสรรพสามิต", "นายพิชัยวุธ โพธิดอกไม้",  "Pre-Sale",         25_000_000,  5,   "70", "medium",  120),
-    ("AI Mobile Lab 5 ใน 7",           "Vision Sensor","เอกชน",         "นายปัญญา เจริญผล",        "Pre-Sale",         28_000_000, 10,   "71", "medium",  200),
-    ("Vision Replacement P2",           "Vision Sensor","โรงงาน X",      "นายโอภาส สุ่มเมา",        "Pre-Sale",         22_000_000,  8,   "71", "low",     210),
-    ("Marker Phase 4",                  "PLC",          "โรงงาน Y",      "นายพิชัยวุธ โพธิดอกไม้",  "Pre-Sale",         40_000_000, 12,   "70", "high",     60),
-    ("Marker Phase 5",                  "PLC",          "โรงงาน Y",      "นายโอภาส สุ่มเมา",        "Project Initiation",17_000_000, 30,   "70", "medium",   45),
-    ("Vision Replacement P3 10 ใน 30", "Vision Sensor","โรงงาน X",      "นายพิชัยวุธ โพธิดอกไม้",  "Project Initiation",75_000_000, 35,   "71", "critical",  30),
-    ("E-STAMP",                         "IoT",          "กรมสรรพสามิต", "นายปัญญา เจริญผล",        "Project Initiation",60_000_000, 40,   "70", "high",     -5),
-    ("AI โครงการอัตโนมัติ",             "AI",           "เอกชน",         "นายพิชัยวุธ โพธิดอกไม้",  "award",             9_000_000, 55,   "70", "medium",   25),
-    ("Mobile Lab P2",                   "Vision Sensor","เอกชน",         "นายโอภาส สุ่มเมา",        "award",            12_000_000, 60,   "71", "low",      75),
-    ("AI Chatbot กรมสรรพสามิต",        "AI",           "กรมสรรพสามิต", "นายพิชัยวุธ โพธิดอกไม้",  "Project Delivery",  8_000_000, 75,   "69", "medium",   10),
-    ("T-VER บริการคาร์บอน",            "IoT",          "เอกชน",         "Admin",                   "Project Delivery", 30_000_000, 80,   "69", "high",     -2),
-    ("AI โครงการ DEMO",                "Robot",        "เอกชน",         "นายปัญญา เจริญผล",        "Project Delivery",  5_000_000, 70,   "70", "low",      18),
-    ("Meter Modernization",             "PLC",          "กรมสรรพสามิต", "นายปัญญา เจริญผล",        "Completed",        95_000_000, 100,  "69", "high",    -40),
+    ("Kiosk ตรวจสอบเอกสาร R1",        "Robot",        "กรมสรรพสามิต", "นายโอภาส สุ่มเมา",        "Pre-Sale",         40_000_000,  0,   "70", "high",     90,   8,  7),
+    ("Battery Monitoring",              "IoT",          "กรมสรรพสามิต", "นายพิชัยวุธ โพธิดอกไม้",  "Pre-Sale",         25_000_000,  5,   "70", "medium",  120,   5,  4),
+    ("AI Mobile Lab 5 ใน 7",           "Vision Sensor","เอกชน",         "นายปัญญา เจริญผล",        "Pre-Sale",         28_000_000, 10,   "71", "medium",  200,   6,  8),
+    ("Vision Replacement P2",           "Vision Sensor","โรงงาน X",      "นายโอภาส สุ่มเมา",        "Pre-Sale",         22_000_000,  8,   "71", "low",     210,   4,  5),
+    ("Marker Phase 4",                  "PLC",          "โรงงาน Y",      "นายพิชัยวุธ โพธิดอกไม้",  "Pre-Sale",         40_000_000, 12,   "70", "high",     60,   9,  6),
+    ("Marker Phase 5",                  "PLC",          "โรงงาน Y",      "นายโอภาส สุ่มเมา",        "Project Initiation",17_000_000, 30,   "70", "medium",   45,   5,  5),
+    ("Vision Replacement P3 10 ใน 30", "Vision Sensor","โรงงาน X",      "นายพิชัยวุธ โพธิดอกไม้",  "Project Initiation",75_000_000, 35,   "71", "critical",  30,  12,  9),
+    ("E-STAMP",                         "IoT",          "กรมสรรพสามิต", "นายปัญญา เจริญผล",        "Project Initiation",60_000_000, 40,   "70", "high",     -5,  10,  6),
+    ("AI โครงการอัตโนมัติ",             "AI",           "เอกชน",         "นายพิชัยวุธ โพธิดอกไม้",  "award",             9_000_000, 55,   "70", "medium",   25,   4,  7),
+    ("Mobile Lab P2",                   "Vision Sensor","เอกชน",         "นายโอภาส สุ่มเมา",        "award",            12_000_000, 60,   "71", "low",      75,   3,  3),
+    ("AI Chatbot กรมสรรพสามิต",        "AI",           "กรมสรรพสามิต", "นายพิชัยวุธ โพธิดอกไม้",  "Project Delivery",  8_000_000, 75,   "69", "medium",   10,   6,  5),
+    ("T-VER บริการคาร์บอน",            "IoT",          "เอกชน",         "Admin",                   "Project Delivery", 30_000_000, 80,   "69", "high",     -2,   8,  6),
+    ("AI โครงการ DEMO",                "Robot",        "เอกชน",         "นายปัญญา เจริญผล",        "Project Delivery",  5_000_000, 70,   "70", "low",      18,   3,  4),
+    ("Meter Modernization",             "PLC",          "กรมสรรพสามิต", "นายปัญญา เจริญผล",        "Completed",        95_000_000, 100,  "69", "high",    -40,  15,  8),
 ]
 
 DEMO_TAGS = {
@@ -168,11 +169,13 @@ def seed():
     total_tasks = len(DEMO_PTEMPLATE)
 
     for (
-        name, domain, customer, pm, status, value, progress, fy, priority, days
+        name, domain, customer, pm, status, value, progress, fy, priority, days,
+        team_size, complexity,
     ) in DEMO_PROJECTS:
         p = Project(
             name=name, domain=domain, customer=customer, pm=pm, status=status,
             value=value, progress=progress, fiscal_year=fy, priority=priority,
+            team_size=team_size, complexity=complexity,
             start_date=today - timedelta(days=30),
             due_date=today + timedelta(days=days),
             owner_id=users.get(pm, admin).id,

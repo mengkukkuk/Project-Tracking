@@ -194,6 +194,8 @@ def create_project():
         priority=priority_field(data, default="medium"),
         value=number_field(data, "value", default=0, minimum=0),
         progress=int_field(data, "progress", default=0, minimum=0, maximum=100),
+        team_size=int_field(data, "teamSize", minimum=1, maximum=999),
+        complexity=int_field(data, "complexity", minimum=1, maximum=10),
         fiscal_year=str_field(data, "fiscalYear", default="future", max_len=8),
         start_date=date_field(data, "startDate"),
         due_date=date_field(data, "dueDate"),
@@ -282,6 +284,10 @@ def update_project(pid):
         p.value = number_field(data, "value", default=0, minimum=0)
     if "progress" in data:
         p.progress = int_field(data, "progress", default=0, minimum=0, maximum=100)
+    if "teamSize" in data:
+        p.team_size = int_field(data, "teamSize", minimum=1, maximum=999)
+    if "complexity" in data:
+        p.complexity = int_field(data, "complexity", minimum=1, maximum=10)
     if "fiscalYear" in data:
         p.fiscal_year = str_field(data, "fiscalYear", max_len=8)
     start_date_changed = False

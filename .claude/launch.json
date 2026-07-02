@@ -5,9 +5,16 @@
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 5173,
+      "port": 5174,
       "autoPort": true,
       "cwd": "frontend"
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": ".venv/Scripts/python",
+      "runtimeArgs": ["-m", "flask", "run", "--port", "5000"],
+      "port": 5000,
+      "cwd": "backend"
     }
   ]
 }

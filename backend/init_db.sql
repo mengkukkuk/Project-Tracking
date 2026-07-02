@@ -79,8 +79,15 @@ CREATE TABLE IF NOT EXISTS projects (
   due_date    DATE,
   owner_id    INTEGER         REFERENCES users (id) ON DELETE SET NULL,
   created_at  TIMESTAMP,
-  updated_at  TIMESTAMP
+  updated_at  TIMESTAMP,
+  team_size   INTEGER,
+  complexity  INTEGER
 );
+
+-- Existing installs predating team_size/complexity: CREATE TABLE IF NOT EXISTS
+-- above is a no-op once the table exists, so add the columns explicitly.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size  INTEGER;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS complexity INTEGER;
 
 -- ── project_tags (M2M join table) ─────────────────────────────
 CREATE TABLE IF NOT EXISTS project_tags (

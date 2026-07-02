@@ -9,6 +9,7 @@ const routes = [
   { path: '/table', component: () => import('@/views/TableView.vue') },
   { path: '/bom', component: () => import('@/views/BomGlobalView.vue') },
   { path: '/dashboard', component: () => import('@/views/DashboardView.vue') },
+  { path: '/summaries', component: () => import('@/views/SummariesView.vue') },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

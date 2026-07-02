@@ -89,3 +89,46 @@ def test_pagination(client, auth):
     body = res.get_json()
     assert body["total"] == 5
     assert len(body["items"]) == 2
+
+
+def test_create_team_size_complexity(client, auth):
+    res = _create(client, auth, teamSize=6, complexity=7)
+    assert res.status_code == 201
+    data = res.get_json()
+    assert data["teamSize"] == 6
+    assert data["complexity"] == 7
+
+
+def test_team_size_complexity_default_none(client, auth):
+    res = _create(client, auth)
+    assert res.status_code == 201
+    data = res.get_json()
+    assert data["teamSize"] is None
+    assert data["complexity"] is None
+
+
+def test_update_team_size_complexity(client, auth):
+    pid = _create(client, auth).get_json()["id"]
+
+    res = client.patch(
+        f"/api/projects/{pid}", json={"teamSize": 4, "complexity": 9}, headers=auth
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["teamSize"] == 4
+    assert data["complexity"] == 9
+
+    # out-of-range values are rejected
+    res = client.patch(f"/api/projects/{pid}", json={"complexity": 11}, headers=auth)
+    assert res.status_code == 422
+    res = client.patch(f"/api/projects/{pid}", json={"teamSize": 0}, headers=auth)
+    assert res.status_code == 422
+
+    # explicit null clears the field back to unset
+    res = client.patch(
+        f"/api/projects/{pid}", json={"teamSize": None, "complexity": None}, headers=auth
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["teamSize"] is None
+    assert data["complexity"] is None

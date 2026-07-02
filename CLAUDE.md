@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 25 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 40 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -29,7 +29,7 @@ npm run build      # production bundle → dist/
 |---|---|
 | `app/__init__.py` | App factory — wires DB, JWT, CORS, rate limiter, blueprints |
 | `app/config.py` | All config from env vars; `Config` (prod) and `TestConfig` |
-| `app/models.py` | SQLAlchemy ORM: `User`, `Project`, `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
+| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
 | `app/auth.py` | `/api/auth/*` — register, login, `/me`; rate-limited |
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
@@ -61,6 +61,7 @@ npm run build      # production bundle → dist/
 | `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
 | `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
 | `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
+| `views/SummariesView.vue` | 4-step "Summaries" pipeline (`/summaries`): Project → editable Inputs (budget/team size/duration/complexity) → derived Calculations → Final Results (grade, ring gauges, charts) per project, plus an all-projects comparison chart. Math lives in `utils/summaryCalc.js` |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
 | `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, process checklist, records, comments, activity |
 | `components/ProjectForm.vue` | Create / edit modal |
@@ -69,7 +70,9 @@ npm run build      # production bundle → dist/
 | `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
 | `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
 | `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
 | `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
+| `utils/summaryCalc.js` | Pure-JS math for the Summaries pipeline: input seeding (`seedTeamSize`/`seedComplexity`/`derivedDurationWeeks`), `computeMetrics`/`computeResults`/`gradeFor`. No store/API access, so the view can recompute on every keystroke |
 
 ## Key Decisions
 
@@ -115,6 +118,12 @@ npm run build      # production bundle → dist/
 - Toggling a process checkbox is optimistic with rollback (mirrors `toggleTask`); `_syncProcessCounts()` swaps the `projects` array reference so @tanstack/vue-table re-runs the progress accessor without a manual refresh.
 - Older projects (predating create-time seeding) get an empty state with a **Generate from template** button → `POST /api/projects/<pid>/ptrack/generate` (idempotent, owner/admin-gated).
 
+### Summaries pipeline (`/summaries`)
+- `Project.team_size` / `Project.complexity` are nullable ints (team_size ≥ 1, complexity 1–10), validated via `int_field` in `create_project`/`update_project` (`app/api/projects.py`); sending JSON `null` clears the field back to unset.
+- When unset, the frontend seeds them at render time (never writes them back): `teamSize ← max(1, pms.length)`, `complexity ← priority map (low 3 / medium 5 / high 7 / critical 9)` — see `seedTeamSize`/`seedComplexity` in `utils/summaryCalc.js`.
+- **Budget** maps to the existing `value` field (THB). **Duration (weeks)** is derived from `startDate`→`dueDate` and is a what-if-only input — editing it never persists, because rewriting `due_date` would trigger `recompute_ptrack_dates` and move overdue flags on other views.
+- Editing Budget/Team Size/Complexity is optimistic with a 600ms debounced single `PATCH` (mirrors the checklist toggle's optimistic-with-rollback pattern) — no save button.
+
 ### Database portability
 - SQLAlchemy ORM — no DB-specific types; works on SQLite, PostgreSQL, MSSQL
 - Schema auto-created on startup via `Base.metadata.create_all()`
@@ -133,7 +142,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 25 tests across auth, projects, tasks, comments, stats, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
+- 40 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -158,6 +167,13 @@ DATABASE_URL=sqlite:///project_tracking.db
 ```
 
 To reseed: run `python seed.py` (drops + recreates all tables). Safe on dev DBs only.
+
+`Base.metadata.create_all()` does **not** add columns to an already-existing table — it only creates missing tables. Installs that predate `team_size`/`complexity` (added for the Summaries pipeline) need a one-time migration on their existing `projects` table:
+```sql
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size  INTEGER;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS complexity INTEGER;
+```
+On the PostgreSQL dev setup the table lives in the `pjtrk` schema (see `app/extensions.py:init_engine`, which sets `search_path=pjtrk`), so run it schema-qualified: `ALTER TABLE pjtrk.projects ADD COLUMN IF NOT EXISTS team_size INTEGER; ...`. `backend/init_db.sql` includes this migration inline. A fresh SQLite file or a fresh `python seed.py` run already has both columns — no action needed.
 
 ## Common Pitfalls
 

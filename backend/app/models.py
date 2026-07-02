@@ -123,6 +123,8 @@ class Project(Base):
     priority = Column(String(16), nullable=False, default="medium")
     value = Column(Numeric(14, 2), default=0)   # THB
     progress = Column(Integer, default=0)       # 0-100
+    team_size = Column(Integer)                 # Summaries pipeline input, nullable
+    complexity = Column(Integer)                # Summaries pipeline input, 1-10, nullable
     fiscal_year = Column(String(8))             # "69", "70", "71", "future"
     start_date = Column(Date)
     due_date = Column(Date)
@@ -182,6 +184,8 @@ class Project(Base):
             "priority": self.priority,
             "value": float(self.value or 0),
             "progress": self.progress or 0,
+            "teamSize": self.team_size,
+            "complexity": self.complexity,
             "fiscalYear": self.fiscal_year,
             "startDate": _iso(self.start_date),
             "dueDate": _iso(self.due_date),

@@ -23,6 +23,8 @@ const form = reactive({
   // status is derived from progress on the server — not user-settable.
   priority: p?.priority || 'medium',
   value: p?.value ?? 0,
+  teamSize: p?.teamSize ?? '',
+  complexity: p?.complexity ?? '',
   fiscalYear: p?.fiscalYear || 'future',
   startDate: p?.startDate || '',
   dueDate: p?.dueDate || '',
@@ -127,6 +129,8 @@ function submit() {
   emit('submit', {
     ...form,
     value: Number(form.value) || 0,
+    teamSize: form.teamSize === '' ? null : Number(form.teamSize),
+    complexity: form.complexity === '' ? null : Number(form.complexity),
     startDate: form.startDate || null,
     dueDate: form.dueDate || null,
     tags: tags.value,
@@ -337,6 +341,35 @@ function submit() {
               ฿<span>{{ valueDisplay }}</span>
             </div>
           </label>
+
+          <label class="under">
+            <span>Team size</span>
+            <input
+              v-model="form.teamSize"
+              type="number"
+              min="1"
+              class="u-input"
+              placeholder="Optional"
+            />
+          </label>
+
+          <label class="under">
+            <span>Complexity (1–10)</span>
+            <input
+              v-model="form.complexity"
+              type="number"
+              min="1"
+              max="10"
+              class="u-input"
+              placeholder="Optional"
+            />
+          </label>
+
+          <p class="prog-note span2">
+            <span class="prog-num mono">Σ</span>
+            Team size and complexity feed the Summaries pipeline. Leave blank
+            to auto-estimate from assigned PMs and priority.
+          </p>
         </div>
       </section>
 

@@ -23,6 +23,7 @@ const nav = [
   { to: '/table', label: 'Table', icon: 'table' },
   { to: '/bom', label: 'BOM', icon: 'money' },
   { to: '/dashboard', label: 'Dashboard', icon: 'target' },
+  { to: '/summaries', label: 'Summaries', icon: 'calculator' },
 ]
 
 const isPublic = computed(() => route.meta.public)
