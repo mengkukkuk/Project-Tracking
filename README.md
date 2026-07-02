@@ -1,5 +1,5 @@
 # Project-Tracking
-
+# Last updated 2/7/2026
 A full-stack project-tracking application for automation and engineering projects. Built with a **Vue 3 SPA** frontend and a **Flask REST API** backend, with JWT authentication, role-based authorization, CRUD operations, tasks, comments, an activity feed, rich analytics dashboards, and dark mode.
 
 ```
