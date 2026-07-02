@@ -13,46 +13,56 @@ set LEGACY_FRONTEND_SVC=ProjTrackingFrontend
 set BASE=%~dp0
 if "%BASE:~-1%"=="\" set BASE=%BASE:~0,-1%
 
+set NSSM_EXE=
+for %%i in (nssm.exe) do set "NSSM_EXE=%%~$PATH:i"
+if not defined NSSM_EXE if exist "%USERPROFILE%\Desktop\files\nssm-2.24-101-g897c7ad\win64\nssm.exe" set "NSSM_EXE=%USERPROFILE%\Desktop\files\nssm-2.24-101-g897c7ad\win64\nssm.exe"
+if not defined NSSM_EXE if exist "%USERPROFILE%\Desktop\files\nssm.exe" set "NSSM_EXE=%USERPROFILE%\Desktop\files\nssm.exe"
+if not defined NSSM_EXE (
+    echo ERROR: nssm.exe not found. Install NSSM or add it to PATH.
+    goto :eof
+)
+set NSSM_CMD="%NSSM_EXE%"
+
 echo Stopping and removing services...
 echo.
 
 :: ---- Backend -----------------------------------------------
-nssm status %SERVICE% >nul 2>&1
+%NSSM_CMD% status %SERVICE% >nul 2>&1
 if errorlevel 1 (
     echo [SKIP] %SERVICE% not found.
 ) else (
     echo Stopping %SERVICE% ...
-    nssm stop %SERVICE% confirm
+    %NSSM_CMD% stop %SERVICE% confirm
     echo Removing %SERVICE% ...
-    nssm remove %SERVICE% confirm
+    %NSSM_CMD% remove %SERVICE% confirm
     echo Done: %SERVICE% removed.
 )
 
 echo.
 
 :: ---- Ngrok tunnel --------------------------------------------
-nssm status %NGROK_SVC% >nul 2>&1
+%NSSM_CMD% status %NGROK_SVC% >nul 2>&1
 if errorlevel 1 (
     echo [SKIP] %NGROK_SVC% not found.
 ) else (
     echo Stopping %NGROK_SVC% ...
-    nssm stop %NGROK_SVC% confirm
+    %NSSM_CMD% stop %NGROK_SVC% confirm
     echo Removing %NGROK_SVC% ...
-    nssm remove %NGROK_SVC% confirm
+    %NSSM_CMD% remove %NGROK_SVC% confirm
     echo Done: %NGROK_SVC% removed.
 )
 
 echo.
 
 :: ---- Legacy cleanup: old Tailscale-based frontend service ---
-nssm status %LEGACY_FRONTEND_SVC% >nul 2>&1
+%NSSM_CMD% status %LEGACY_FRONTEND_SVC% >nul 2>&1
 if errorlevel 1 (
     echo [SKIP] %LEGACY_FRONTEND_SVC% not found.
 ) else (
     echo Stopping legacy %LEGACY_FRONTEND_SVC% ...
-    nssm stop %LEGACY_FRONTEND_SVC% confirm
+    %NSSM_CMD% stop %LEGACY_FRONTEND_SVC% confirm
     echo Removing legacy %LEGACY_FRONTEND_SVC% ...
-    nssm remove %LEGACY_FRONTEND_SVC% confirm
+    %NSSM_CMD% remove %LEGACY_FRONTEND_SVC% confirm
     echo Done: %LEGACY_FRONTEND_SVC% removed.
 )
 

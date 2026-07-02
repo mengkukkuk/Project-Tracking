@@ -18,6 +18,24 @@ if "%BASE:~-1%"=="\" set BASE=%BASE:~0,-1%
 set PYTHON=%BASE%\.venv\Scripts\waitress-serve.exe
 set LOGDIR=%BASE%\logs
 
+set NSSM_EXE=
+for %%i in (nssm.exe) do set "NSSM_EXE=%%~$PATH:i"
+if not defined NSSM_EXE if exist "%USERPROFILE%\Desktop\files\nssm-2.24-101-g897c7ad\win64\nssm.exe" set "NSSM_EXE=%USERPROFILE%\Desktop\files\nssm-2.24-101-g897c7ad\win64\nssm.exe"
+if not defined NSSM_EXE if exist "%USERPROFILE%\Desktop\files\nssm.exe" set "NSSM_EXE=%USERPROFILE%\Desktop\files\nssm.exe"
+if not defined NSSM_EXE (
+    echo ERROR: nssm.exe not found. Install NSSM or add it to PATH.
+    goto :eof
+)
+set NSSM_CMD="%NSSM_EXE%"
+
+set NGROK_EXE=
+for %%i in (ngrok.exe) do set "NGROK_EXE=%%~$PATH:i"
+if not defined NGROK_EXE if exist "%USERPROFILE%\Desktop\files\ngrok.exe" set "NGROK_EXE=%USERPROFILE%\Desktop\files\ngrok.exe"
+if not defined NGROK_EXE (
+    echo ERROR: ngrok.exe not found. Install it or add it to PATH.
+    goto :eof
+)
+
 :: Pre-flight: the virtualenv must exist (run setup first — see README).
 if not exist "%PYTHON%" (
     echo ERROR: %PYTHON% not found.
@@ -76,26 +94,26 @@ if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 echo.
 echo Installing service: %SERVICE% ...
 
-nssm install %SERVICE% "%PYTHON%" --host=0.0.0.0 --port=5000 --threads=4 wsgi:app
-nssm set %SERVICE% AppDirectory "%BASE%"
-nssm set %SERVICE% DisplayName "Project Tracking Backend"
-nssm set %SERVICE% Description "Flask/Waitress REST API + SPA for Project Tracking"
-nssm set %SERVICE% Start SERVICE_AUTO_START
+%NSSM_CMD% install %SERVICE% "%PYTHON%" --host=0.0.0.0 --port=5000 --threads=4 wsgi:app
+%NSSM_CMD% set %SERVICE% AppDirectory "%BASE%"
+%NSSM_CMD% set %SERVICE% DisplayName "Project Tracking Backend"
+%NSSM_CMD% set %SERVICE% Description "Flask/Waitress REST API + SPA for Project Tracking"
+%NSSM_CMD% set %SERVICE% Start SERVICE_AUTO_START
 
 :: Redirect stdout/stderr to log files
-nssm set %SERVICE% AppStdout "%LOGDIR%\service.log"
-nssm set %SERVICE% AppStderr "%LOGDIR%\service_error.log"
-nssm set %SERVICE% AppRotateFiles 1
-nssm set %SERVICE% AppRotateSeconds 86400
-nssm set %SERVICE% AppRotateBytes 10485760
+%NSSM_CMD% set %SERVICE% AppStdout "%LOGDIR%\service.log"
+%NSSM_CMD% set %SERVICE% AppStderr "%LOGDIR%\service_error.log"
+%NSSM_CMD% set %SERVICE% AppRotateFiles 1
+%NSSM_CMD% set %SERVICE% AppRotateSeconds 86400
+%NSSM_CMD% set %SERVICE% AppRotateBytes 10485760
 
 :: Restart on failure
-nssm set %SERVICE% AppExit Default Restart
-nssm set %SERVICE% AppRestartDelay 3000
+%NSSM_CMD% set %SERVICE% AppExit Default Restart
+%NSSM_CMD% set %SERVICE% AppRestartDelay 3000
 
 echo.
 echo Starting service ...
-nssm start %SERVICE%
+%NSSM_CMD% start %SERVICE%
 
 :: ============================================================
 :: Ngrok tunnel — forwards https://%NGROK_DOMAIN% to port 5000
@@ -107,41 +125,34 @@ set NGROK_CFG=%BASE%\ngrok.yml
 
 echo.
 echo Configuring ngrok authtoken ...
-ngrok config add-authtoken %NGROK_AUTH_TOKEN% --config "%NGROK_CFG%"
+"%NGROK_EXE%" config add-authtoken "%NGROK_AUTH_TOKEN%" --config "%NGROK_CFG%"
 if errorlevel 1 (
-    echo ERROR: ngrok config add-authtoken failed. Is ngrok installed and on PATH?
-    goto :eof
-)
-
-set NGROK_EXE=
-for /f "delims=" %%i in ('where ngrok.exe 2^>nul') do if not defined NGROK_EXE set NGROK_EXE=%%i
-if not defined NGROK_EXE (
-    echo ERROR: ngrok.exe not found on PATH. Install ngrok first: https://ngrok.com/download
+    echo ERROR: ngrok config add-authtoken failed.
     goto :eof
 )
 
 echo.
 echo Installing service: %NGROK_SVC% ...
 
-nssm install %NGROK_SVC% "%NGROK_EXE%" http 5000 --url https://%NGROK_DOMAIN% --config "%NGROK_CFG%" --log stdout
-nssm set %NGROK_SVC% AppDirectory "%BASE%"
-nssm set %NGROK_SVC% DisplayName "Project Tracking Ngrok Tunnel"
-nssm set %NGROK_SVC% Description "Forwards https://%NGROK_DOMAIN% to the local backend on port 5000"
-nssm set %NGROK_SVC% Start SERVICE_AUTO_START
-nssm set %NGROK_SVC% DependOnService %SERVICE%
+%NSSM_CMD% install %NGROK_SVC% "%NGROK_EXE%" http 5000 --domain "%NGROK_DOMAIN%" --config "%NGROK_CFG%" --log stdout
+%NSSM_CMD% set %NGROK_SVC% AppDirectory "%BASE%"
+%NSSM_CMD% set %NGROK_SVC% DisplayName "Project Tracking Ngrok Tunnel"
+%NSSM_CMD% set %NGROK_SVC% Description "Forwards https://%NGROK_DOMAIN% to the local backend on port 5000"
+%NSSM_CMD% set %NGROK_SVC% Start SERVICE_AUTO_START
+%NSSM_CMD% set %NGROK_SVC% DependOnService %SERVICE%
 
-nssm set %NGROK_SVC% AppStdout "%LOGDIR%\ngrok.log"
-nssm set %NGROK_SVC% AppStderr "%LOGDIR%\ngrok_error.log"
-nssm set %NGROK_SVC% AppRotateFiles 1
-nssm set %NGROK_SVC% AppRotateSeconds 86400
-nssm set %NGROK_SVC% AppRotateBytes 10485760
+%NSSM_CMD% set %NGROK_SVC% AppStdout "%LOGDIR%\ngrok.log"
+%NSSM_CMD% set %NGROK_SVC% AppStderr "%LOGDIR%\ngrok_error.log"
+%NSSM_CMD% set %NGROK_SVC% AppRotateFiles 1
+%NSSM_CMD% set %NGROK_SVC% AppRotateSeconds 86400
+%NSSM_CMD% set %NGROK_SVC% AppRotateBytes 10485760
 
-nssm set %NGROK_SVC% AppExit Default Restart
-nssm set %NGROK_SVC% AppRestartDelay 3000
+%NSSM_CMD% set %NGROK_SVC% AppExit Default Restart
+%NSSM_CMD% set %NGROK_SVC% AppRestartDelay 3000
 
 echo.
 echo Starting ngrok tunnel service ...
-nssm start %NGROK_SVC%
+%NSSM_CMD% start %NGROK_SVC%
 
 echo.
 echo ============================================================
