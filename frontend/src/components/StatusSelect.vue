@@ -18,7 +18,7 @@ watch(() => props.status, (s) => { value.value = s })
 const COLORS = {
   'Pre-Sale': ['#f59e0b', '#fef3c7'],
   'Project Initiation': ['#3b82f6', '#dbeafe'],
-  Award: ['#8b5cf6', '#ede9fe'],
+  award: ['#8b5cf6', '#ede9fe'],
   'Project Delivery': ['#14b8a6', '#ccfbf1'],
   Completed: ['#10b981', '#d1fae5'],
 }

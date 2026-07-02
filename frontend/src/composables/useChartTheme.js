@@ -6,7 +6,7 @@ import { useUiStore } from '@/stores/ui'
 export const STAGE_COLORS = {
   'Pre-Sale': '#f59e0b',
   'Project Initiation': '#3b82f6',
-  Award: '#8b5cf6',
+  award: '#8b5cf6',
   'Project Delivery': '#14b8a6',
   Completed: '#10b981',
 }

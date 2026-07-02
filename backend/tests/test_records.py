@@ -20,7 +20,7 @@ def test_ptemplate_bulk_inserts_into_ptrack(client, auth):
     # The process *name* lives in process_tags; ptemplate links by processid.
     Session.add_all([
         ProcessTag(processid=1, process="Pre-Sale"),
-        ProcessTag(processid=2, process="Award"),
+        ProcessTag(processid=2, process="award"),
     ])
     Session.commit()
 
@@ -40,7 +40,7 @@ def test_ptemplate_bulk_inserts_into_ptrack(client, auth):
     ).get_json()["items"]
     assert len(rows) == 2
     # process is resolved from process_tags via the template's processid.
-    assert {r["process"] for r in rows} == {"Pre-Sale", "Award"}
+    assert {r["process"] for r in rows} == {"Pre-Sale", "award"}
     assert all(r["pm"] == "นายเอ" for r in rows)
     assert all(r["checked"] is False for r in rows)
 
@@ -133,7 +133,7 @@ def test_records_require_auth(client):
 def test_project_dict_has_process_counts(client, auth):
     Session.add_all([
         ProcessTag(processid=1, process="Pre-Sale"),
-        ProcessTag(processid=2, process="Award"),
+        ProcessTag(processid=2, process="award"),
     ])
     Session.add_all([
         PTemplate(processid=1, task="Survey"),

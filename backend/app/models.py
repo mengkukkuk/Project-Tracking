@@ -25,7 +25,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 Base = declarative_base()
 
 # Canonical pipeline stages — order matters for the funnel.
-STAGES = ["Pre-Sale", "Project Initiation", "Award", "Project Delivery", "Completed"]
+STAGES = ["Pre-Sale", "Project Initiation", "award", "Project Delivery", "Completed"]
 PRIORITIES = ["low", "medium", "high", "critical"]
 ROLES = ["admin", "member"]
 
@@ -37,7 +37,7 @@ def derived_status(progress: int) -> str:
     progress bar (which itself is driven by the process checklist):
         0-19   -> Pre-Sale
         20-39  -> Project Initiation
-        40-59  -> Award
+        40-59  -> award
         60-79  -> Project Delivery
         80-100 -> Completed
     """

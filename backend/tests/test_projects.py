@@ -68,14 +68,14 @@ def test_get_update_delete(client, auth):
     assert res.status_code == 200
 
     # status is no longer accepted in PATCH bodies — it derives from progress.
-    # progress=50 -> "Award" bucket (40-59). No "moved" activity is logged
+    # progress=50 -> "award" bucket (40-59). No "moved" activity is logged
     # because status is computed, not assigned.
     res = client.patch(
-        f"/api/projects/{pid}", json={"status": "Award", "progress": 50}, headers=auth
+        f"/api/projects/{pid}", json={"status": "award", "progress": 50}, headers=auth
     )
     assert res.status_code == 200
     data = res.get_json()
-    assert data["status"] == "Award"
+    assert data["status"] == "award"
     assert data["progress"] == 50
 
     assert client.delete(f"/api/projects/{pid}", headers=auth).status_code == 204

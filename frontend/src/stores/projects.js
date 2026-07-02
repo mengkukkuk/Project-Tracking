@@ -5,7 +5,7 @@ import { useUiStore } from '@/stores/ui'
 export const STAGES = [
   'Pre-Sale',
   'Project Initiation',
-  'Award',
+  'award',
   'Project Delivery',
   'Completed',
 ]
