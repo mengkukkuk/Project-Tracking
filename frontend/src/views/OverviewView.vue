@@ -68,9 +68,9 @@ function dueLabel(iso) {
   <div class="view">
     <header class="page-header">
       <div>
-        <div class="page-kicker">Command center</div>
-        <h1 class="page-title">Project Tracking Overview</h1>
-        <p class="page-subtitle">A focused view of delivery health, pipeline value, and projects that need attention.</p>
+        <div class="page-kicker">Overview</div>
+        <h1 class="page-title">Project Tracking</h1>
+        <!--p class="page-subtitle">ภาพรวมของโปรเจค</p-->
       </div>
       <span class="updated">Updated {{ new Date().toLocaleDateString('en-GB') }}</span>
     </header>
@@ -90,7 +90,7 @@ function dueLabel(iso) {
       <div class="section-head">
         <div>
           <h2>Needs attention</h2>
-          <p>Sorted by due risk, critical priority, then high-value work.</p>
+          <!--p>Sorted by due risk, critical priority, then high-value work.</p-->
         </div>
         <div class="risk-strip">
           <span><AppIcon name="alert" :size="14" /> {{ riskCounts.overdue }} overdue</span>

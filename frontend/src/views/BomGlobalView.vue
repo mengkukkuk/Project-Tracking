@@ -234,7 +234,7 @@ onMounted(() => {
       </div>
 
       <div class="masthead-row">
-        <h1 class="masthead-title"><em>BOM</em>&nbsp;Inventory</h1>
+        <h1 class="masthead-title">BOM Inventory</h1>
 
         <div class="actions">
           <button type="button" class="btn sm add-btn" @click="openAdd">
@@ -257,7 +257,7 @@ onMounted(() => {
       </div>
 
       <p class="masthead-sub">
-        All recorded materials, products, and equipment across every project — search, sort, and export.
+        แสดงรายการ BOM ที่มีการบันทึกไว้ || เพิ่มอุปกรณ์, สร้างรายการ, Export excel/PDF
       </p>
     </header>
 
@@ -266,7 +266,7 @@ onMounted(() => {
         :value="store.q"
         class="search"
         type="search"
-        placeholder="Search device, spec, category, supplier, project…"
+        placeholder="Search by device, spec, category, supplier, project…"
         @input="store.setQuery($event.target.value)"
       />
     </div>

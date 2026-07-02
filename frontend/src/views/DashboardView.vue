@@ -372,10 +372,10 @@ const docSummaries = computed(() => [
   <div class="view">
     <header class="page-header">
       <div>
-        <div class="page-kicker">Executive view · ภาพรวมผู้บริหาร</div>
+        <div class="page-kicker">Executive view</div>
         <h1 class="page-title">Dashboard · แดชบอร์ดโครงการ</h1>
         <p class="page-subtitle">
-          A single-project executive report — เลือกโครงการเพื่อดูสรุปภาพรวม, ต้นทุน, เอกสาร และตารางติดตาม 20 ขั้นตอน
+          สรุปภาพรวม, ต้นทุน, เอกสารย่อย และ Solution process
         </p>
       </div>
     </header>
@@ -401,7 +401,7 @@ const docSummaries = computed(() => [
         <div class="section-head">
           <div>
             <div class="section-kicker">📌 1. Executive Summary &amp; Project Health</div>
-            <h2>สรุปภาพรวมและสุขภาพโครงการ</h2>
+            <h2>สรุปภาพรวมและสถานะโครงการ</h2>
           </div>
           <ExportImportMenu
             :formats="['excel', 'pdf']"
@@ -436,7 +436,7 @@ const docSummaries = computed(() => [
             <div class="val mono">{{ project.dueDate ? date(project.dueDate) : '—' }}</div>
           </div>
           <div class="field">
-            <div class="lbl">คอขวดปัจจุบัน · Current Blocker</div>
+            <div class="lbl">คอขวดปัจจุบัน · Bottle neck</div>
             <div class="val blocker">
               <span v-if="blocker">⏳ {{ blocker.label }}</span>
               <span v-else class="dim">— ไม่มี · None</span>
@@ -486,7 +486,7 @@ const docSummaries = computed(() => [
             <div v-if="lastBomApprove" class="sub">วันที่ล่าสุดที่ลูกค้ายืนยัน · Latest approval date</div>
           </div>
           <div class="field span-2">
-            <div class="lbl">มูลค่าที่งอกจากการขอแก้ · Value Added from Change Requests</div>
+            <div class="lbl">มูลค่าที่เพิ่มมาจากการขอแก้ไข · Value Added from Change Requests</div>
             <div v-if="changeRequestSummary.count" class="val">
               <span class="strong">เพิ่มขึ้น: {{ changeRequestSummary.count }} รายการ · {{ changeRequestSummary.count }} change{{ changeRequestSummary.count === 1 ? '' : 's' }}</span>
             </div>

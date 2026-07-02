@@ -41,9 +41,9 @@ function colRisk(stage) {
   <div class="view">
     <header class="page-header">
       <div>
-        <div class="page-kicker">Pipeline board</div>
+        <div class="page-kicker">Pipeline view</div>
         <h1 class="page-title">Pipeline</h1>
-        <p class="page-subtitle">Drag projects through the delivery lifecycle and watch value/risk move with them.</p>
+        <p class="page-subtitle">จัดกลุ่ม Project ตามสถานะ</p>
       </div>
     </header>
 

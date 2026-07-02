@@ -97,7 +97,7 @@ async function doExport(format) {
       </div>
 
       <div class="masthead-row">
-        <h1 class="masthead-title"> <em>Tracking&nbsp;Table</em> </h1>
+        <h1 class="masthead-title">Tracking&nbsp;Table</h1>
 
         <div class="actions">
           <div class="segmented" aria-label="Table density">
@@ -113,7 +113,7 @@ async function doExport(format) {
       </div>
 
       <p class="masthead-sub">
-        Lists of the current projects pipeline — sort, filter, inspect, and export.
+        แสดงรายการ Project ทั้งหมด || Export to excel/pdf
       </p>
     </header>
 

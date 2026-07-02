@@ -32,9 +32,9 @@ function initials(name) {
   <div class="view">
     <header class="page-header">
       <div>
-        <div class="page-kicker">People board</div>
+        <div class="page-kicker">Project managers view</div>
         <h1 class="page-title">PM cards</h1>
-        <p class="page-subtitle">Every project grouped by its project manager — one card per PM.</p>
+        <p class="page-subtitle">จัดกลุ่ม Project ตามผู้รับผิดชอบ</p>
       </div>
     </header>
 
