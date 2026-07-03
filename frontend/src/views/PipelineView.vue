@@ -1,5 +1,6 @@
 <script setup>
-import { reactive, watch } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useProjectsStore, STAGES } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
 import { STAGE_COLORS } from '@/composables/useChartTheme'
@@ -7,75 +8,119 @@ import ProjectCard from '@/components/ProjectCard.vue'
 import ProjectFilters from '@/components/ProjectFilters.vue'
 
 const store = useProjectsStore()
+const route = useRoute()
+const router = useRouter()
 const { baht, daysUntil } = useFormat()
 
-const cols = reactive(Object.fromEntries(STAGES.map((s) => [s, []])))
+// The URL is the source of truth for grouping mode, so the toggle state is
+// shareable/bookmarkable and survives back/forward navigation. Anything
+// other than 'pm' (including an absent param) resolves to 'status'.
+const mode = computed({
+  get: () => (route.query.group === 'pm' ? 'pm' : 'status'),
+  set: (value) => {
+    router.replace({ query: { ...route.query, group: value === 'pm' ? 'pm' : undefined } })
+  },
+})
 
-function rebuild() {
-  const grouped = store.byStage
-  for (const s of STAGES) cols[s] = [...(grouped[s] || [])]
+function initials(name) {
+  const parts = (name || '?').trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
-watch(() => store.projects, rebuild, { immediate: true, deep: false })
 
-// Drag-to-change-status is disabled: project status is now derived from the
-// process-checklist progress %, so users can't move it directly. The board
-// remains grouped-by-stage for read-only inspection.
-
-function colTotal(stage) {
-  return cols[stage].reduce((a, p) => a + (p.value || 0), 0)
+function colTotal(projects) {
+  return projects.reduce((a, p) => a + (p.value || 0), 0)
 }
 
-function colRisk(stage) {
-  const rows = cols[stage]
+function colRisk(projects) {
   return {
-    overdue: rows.filter((p) => {
+    overdue: projects.filter((p) => {
       const due = daysUntil(p.dueDate)
       return due != null && due < 0 && p.status !== 'Completed'
     }).length,
-    critical: rows.filter((p) => p.priority === 'critical').length,
+    critical: projects.filter((p) => p.priority === 'critical').length,
   }
 }
+
+// Normalized column shape so the template only needs one v-for loop,
+// regardless of which store getter produced the grouping.
+const columns = computed(() => {
+  if (mode.value === 'status') {
+    const grouped = store.byStage
+    return STAGES.map((stage) => ({
+      key: stage,
+      label: stage,
+      projects: grouped[stage] || [],
+      dotColor: STAGE_COLORS[stage],
+      avatarText: null,
+      isUnassigned: false,
+    }))
+  }
+  return store.byPm.map((pm) => ({
+    key: pm.key,
+    label: pm.name,
+    projects: pm.projects,
+    dotColor: null,
+    avatarText: initials(pm.name),
+    isUnassigned: pm.key === '__none__',
+  }))
+})
 </script>
 
 <template>
   <div class="view">
     <header class="page-header">
       <div>
-        <div class="page-kicker">Pipeline view</div>
+        <div class="page-kicker">{{ mode === 'pm' ? 'Project managers view' : 'Pipeline view' }}</div>
         <h1 class="page-title">Pipeline</h1>
-        <p class="page-subtitle">จัดกลุ่ม Project ตามสถานะ</p>
+        <p class="page-subtitle">
+          {{ mode === 'pm' ? 'จัดกลุ่ม Project ตามผู้รับผิดชอบ' : 'จัดกลุ่ม Project ตามสถานะ' }}
+        </p>
+      </div>
+      <div class="segmented" aria-label="Group by">
+        <button type="button" :class="{ active: mode === 'status' }" @click="mode = 'status'">Status</button>
+        <button type="button" :class="{ active: mode === 'pm' }" @click="mode = 'pm'">PMs</button>
       </div>
     </header>
 
     <ProjectFilters compact />
 
-    <div class="board">
-      <div class="board-inner">
-      <div v-for="stage in STAGES" :key="stage" class="column">
-        <div class="col-head" :style="{ borderTopColor: STAGE_COLORS[stage] }">
-          <div class="col-title">
-            <span class="dot" :style="{ background: STAGE_COLORS[stage] }" />
-            {{ stage }}
+    <div v-if="columns.length" class="board">
+      <div class="board-inner" :class="mode === 'status' ? 'by-status' : 'by-pm'">
+        <div v-for="col in columns" :key="col.key" class="column">
+          <div
+            class="col-head"
+            :class="{ unassigned: col.isUnassigned }"
+            :style="col.dotColor ? { borderTopColor: col.dotColor } : null"
+          >
+            <div class="col-title">
+              <span v-if="col.dotColor" class="dot" :style="{ background: col.dotColor }" />
+              <span v-else class="avatar" :class="{ ghost: col.isUnassigned }">{{ col.avatarText }}</span>
+              <span class="col-label" :title="col.label">{{ col.label }}</span>
+            </div>
+            <div class="col-meta">
+              <span class="count">{{ col.projects.length }} project{{ col.projects.length === 1 ? '' : 's' }}</span>
+              <span class="sum mono">{{ baht(colTotal(col.projects)) }}</span>
+            </div>
+            <div v-if="colRisk(col.projects).overdue || colRisk(col.projects).critical" class="risk-line">
+              <span v-if="colRisk(col.projects).overdue" class="risk danger">{{ colRisk(col.projects).overdue }} overdue</span>
+              <span v-if="colRisk(col.projects).critical" class="risk warn">{{ colRisk(col.projects).critical }} critical</span>
+            </div>
           </div>
-          <div class="col-meta">
-            <span class="count">{{ cols[stage].length }} projects</span>
-            <span class="sum mono">{{ baht(colTotal(stage)) }}</span>
-          </div>
-          <div v-if="colRisk(stage).overdue || colRisk(stage).critical" class="risk-line">
-            <span v-if="colRisk(stage).overdue" class="risk danger">{{ colRisk(stage).overdue }} overdue</span>
-            <span v-if="colRisk(stage).critical" class="risk warn">{{ colRisk(stage).critical }} critical</span>
-          </div>
-        </div>
 
-        <div class="col-body">
-          <div v-for="element in cols[stage]" :key="element.id" class="card-wrap">
-            <ProjectCard :project="element" @open="store.openDetail" />
+          <div class="col-body">
+            <div v-for="element in col.projects" :key="element.id" class="card-wrap">
+              <ProjectCard :project="element" @open="store.openDetail" />
+            </div>
+            <div v-if="!col.projects.length" class="col-empty">
+              {{ mode === 'pm' ? 'No projects' : 'No projects in this stage' }}
+            </div>
           </div>
-          <div v-if="!cols[stage].length" class="col-empty">No projects in this stage</div>
         </div>
-      </div>
       </div>
     </div>
+
+    <div v-else class="empty-board">No projects match the current filters.</div>
   </div>
 </template>
 
@@ -84,11 +129,21 @@ function colRisk(stage) {
    content stays upright while the native horizontal scrollbar renders above
    the cards. Reset on mobile (vertical stack + sticky headers). */
 .board { overflow-x: auto; transform: rotateX(180deg); }
-.board-inner { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); gap: 14px; padding-bottom: 12px; align-items: start; transform: rotateX(180deg); }
+.board-inner { display: flex; gap: 14px; padding-bottom: 12px; align-items: start; transform: rotateX(180deg); }
+.board-inner.by-status { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); }
+.board-inner.by-pm .column { flex: 1 0 264px; max-width: 360px; }
+
 .column { display: flex; flex-direction: column; min-width: 0; }
-.col-head { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid; border-radius: 8px 8px 0 0; padding: 11px 13px; }
-.col-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); }
-.dot { width: 7px; height: 7px; border-radius: 50%; }
+.col-head { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 8px 8px 0 0; padding: 11px 13px; }
+.col-head.unassigned { border-top-color: var(--text-dim); }
+.col-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.avatar {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0;
+}
+.avatar.ghost { background: var(--text-dim); }
+.col-label { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
 .count { font-size: 11px; color: var(--text-dim); }
 .sum { font-size: 12px; color: var(--text-dim); }
@@ -102,21 +157,41 @@ function colRisk(stage) {
 .risk.danger { color: var(--danger); background: var(--critical-bg); }
 .risk.warn { color: var(--warning); background: var(--warning-bg); }
 .col-body { background: var(--bg-sunken); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 10px; flex: 1; min-height: 160px; display: flex; flex-direction: column; gap: 9px; }
-.ghost { opacity: .4; }
 .col-empty { text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px 0; border: 1px dashed var(--border); border-radius: 8px; }
+.empty-board { padding: 60px; text-align: center; color: var(--text-dim); border: 1px dashed var(--border); border-radius: 8px; }
+
+.segmented { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); flex-shrink: 0; }
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  min-height: 28px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.segmented button.active { background: var(--accent); color: #fff; }
+
 @media (max-width: 960px) {
-  .board-inner { grid-template-columns: repeat(5, minmax(230px, 270px)); }
+  .board-inner.by-status { grid-template-columns: repeat(5, minmax(230px, 270px)); }
 }
 @media (max-width: 760px) {
   .board { overflow-x: visible; transform: none; }
   .board-inner {
-    display: flex;
     flex-direction: column;
     gap: 14px;
     padding-bottom: 0;
     transform: none;
   }
+  .board-inner.by-status { display: flex; }
   .column { width: 100%; }
+  .board-inner.by-pm .column { width: 100%; max-width: none; flex: none; }
   .col-head {
     position: sticky;
     top: 56px;

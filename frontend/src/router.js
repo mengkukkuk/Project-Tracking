@@ -5,7 +5,7 @@ const routes = [
   { path: '/login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
   { path: '/', component: () => import('@/views/OverviewView.vue') },
   { path: '/pipeline', component: () => import('@/views/PipelineView.vue') },
-  { path: '/pm-cards', component: () => import('@/views/PmCardsView.vue') },
+  { path: '/pm-cards', redirect: { path: '/pipeline', query: { group: 'pm' } } },
   { path: '/table', component: () => import('@/views/TableView.vue') },
   { path: '/bom', component: () => import('@/views/BomGlobalView.vue') },
   { path: '/dashboard', component: () => import('@/views/DashboardView.vue') },

@@ -59,12 +59,14 @@ export function computeMetrics(inputs) {
 }
 
 export function computeResults(metrics, inputs) {
+  //Calculations
   const { productivityIndex, resourceEfficiency, weeklyBurnRate } = metrics
   const teamSize = Math.max(1, Number(inputs.teamSize) || 1)
   const complexity = Math.max(1, Number(inputs.complexity) || 1)
   const durationWeeks = Math.max(1, Number(inputs.durationWeeks) || 1)
 
-  const roiScore = Math.min(100, (productivityIndex * 8) / (resourceEfficiency + 1))
+  //Final results
+  const roiScore = Math.min(100, (productivityIndex * 1000) / (resourceEfficiency + 1))
   const riskLevel = Math.min(100, (complexity * 12) / (teamSize / 5 + 1))
   const performanceRating = Math.min(100, (productivityIndex + roiScore) / 2)
   const healthScore = clamp(100 - riskLevel * 0.6 + (resourceEfficiency > 3 ? 12 : 0), 0, 100)
