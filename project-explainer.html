@@ -850,10 +850,10 @@ footer span { color: var(--cyan); }
         <rect x="38" y="192" width="224" height="80" rx="3" fill="rgba(168,85,247,0.06)" stroke="rgba(168,85,247,0.18)" stroke-width="1"/>
         <text x="150" y="212" text-anchor="middle" fill="#a855f7" font-family="JetBrains Mono" font-size="10" font-weight="700">Vue Components</text>
         <text x="88"  y="232" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">OverviewView</text>
-        <text x="212" y="232" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">KanbanView</text>
+        <text x="212" y="232" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">PipelineView</text>
         <text x="88"  y="248" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">TableView</text>
         <text x="212" y="248" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">ProjectDetail</text>
-        <text x="150" y="264" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">+ 15 components</text>
+        <text x="150" y="264" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">+ 25 components</text>
 
         <rect x="38" y="282" width="224" height="40" rx="3" fill="rgba(168,85,247,0.08)" stroke="rgba(168,85,247,0.25)" stroke-width="1"/>
         <text x="150" y="300" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="10" font-weight="700">api/index.js</text>
@@ -966,7 +966,7 @@ footer span { color: var(--cyan); }
         <text x="870" y="362" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">survey_report</text>
         <text x="760" y="362" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">customer_mom</text>
         <text x="815" y="394" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">exception_log · internal_verification</text>
-        <text x="815" y="410" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">tags · ptemplate · process_tags</text>
+        <text x="815" y="410" text-anchor="middle" fill="#7a9ab8" font-family="JetBrains Mono" font-size="7.5">tags · ptemplate · process_tags · bom_lists</text>
 
         <!-- Google Sheets -->
         <rect x="386" y="386" width="208" height="28" rx="3" fill="rgba(57,255,20,0.05)" stroke="rgba(57,255,20,0.2)" stroke-width="1"/>
@@ -1227,6 +1227,13 @@ footer span { color: var(--cyan); }
         <tr><td><span class="method POST">POST</span></td><td class="ep">/projects/<em>:id</em>/records/<em>:resource</em></td><td><span class="auth-badge">JWT</span></td><td>Create auxiliary record</td></tr>
         <tr><td><span class="method PATCH">PATCH</span></td><td class="ep">/records/<em>:resource</em>/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Update record (toggle ptrack checkbox, etc.)</td></tr>
         <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/records/<em>:resource</em>/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete record</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/bom/all</td><td><span class="auth-badge">JWT</span></td><td>BOM rows across all projects, joined with project name</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/bom-lists</td><td><span class="auth-badge">JWT</span></td><td>List saved BOM lists (summary form)</td></tr>
+        <tr><td><span class="method POST">POST</span></td><td class="ep">/bom-lists</td><td><span class="auth-badge">JWT</span></td><td>Create a named BOM list (FK item refs + target project)</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/bom-lists/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>BOM list detail, items resolved with project name</td></tr>
+        <tr><td><span class="method PATCH">PATCH</span></td><td class="ep">/bom-lists/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Rename / replace items. Owner or admin only.</td></tr>
+        <tr><td><span class="method DELETE">DELETE</span></td><td class="ep">/bom-lists/<em>:id</em></td><td><span class="auth-badge">JWT</span></td><td>Delete BOM list. Owner or admin only.</td></tr>
+        <tr><td><span class="method GET">GET</span></td><td class="ep">/ptemplate</td><td><span class="auth-badge">JWT</span></td><td>Process checklist template, process name resolved via process_tags</td></tr>
         <tr><td><span class="method GET">GET</span></td><td class="ep">/stats</td><td><span class="auth-badge">JWT</span></td><td>Dashboard KPIs: funnel, fiscal, domain, upcoming — all SQL GROUP BY</td></tr>
         <tr><td><span class="method GET">GET</span></td><td class="ep">/users</td><td><span class="auth-badge">JWT</span></td><td>List all users (for PM assignment dropdown)</td></tr>
         <tr><td><span class="method GET">GET</span></td><td class="ep">/sheets/status</td><td><span class="auth-badge">JWT</span></td><td>Check Google Sheets connection</td></tr>
@@ -1275,9 +1282,24 @@ footer span { color: var(--cyan); }
         <div class="schema-col"><span class="col-key">  </span><span class="col-name">status</span><span class="col-type">pipeline stage</span></div>
         <div class="schema-col"><span class="col-key">  </span><span class="col-name">priority</span><span class="col-type">low→critical</span></div>
         <div class="schema-col"><span class="col-key">  </span><span class="col-name">value</span><span class="col-type">Numeric(14,2)</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">team_size, complexity</span><span class="col-type">Integer, nullable</span></div>
         <div class="schema-col"><span class="col-key">  </span><span class="col-name">fiscal_year</span><span class="col-type">String(8)</span></div>
         <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">owner_id</span><span class="col-type">FK users</span></div>
         <div class="schema-col"><span class="col-key">  </span><span class="col-name">start_date, due_date</span><span class="col-type">Date</span></div>
+      </div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-table-head">
+        <span class="schema-table-name">bom_lists / bom_list_items</span>
+        <span class="schema-table-icon">📑</span>
+      </div>
+      <div class="schema-cols">
+        <div class="schema-col"><span class="col-key">🔑</span><span class="col-name">id</span><span class="col-type">Integer PK</span></div>
+        <div class="schema-col"><span class="col-key">  </span><span class="col-name">name</span><span class="col-type">Text</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">project_id</span><span class="col-type">FK CASCADE</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">owner_id</span><span class="col-type">FK users</span></div>
+        <div class="schema-col"><span class="col-fk">🔗</span><span class="col-name">items[].bom_id</span><span class="col-type">FK bom_and_costing</span></div>
       </div>
     </div>
 
@@ -1343,6 +1365,9 @@ footer span { color: var(--cyan); }
 
   <div class="info-box mt-2">
     <strong>ℹ Process Progress Logic:</strong> Every project's progress % = <code>processDone / processCount</code> (from ptrack rows). Falls back to task counts for projects without a process checklist. Shipped on every <code>Project.to_dict()</code> call so all views stay consistent.
+  </div>
+  <div class="info-box">
+    <strong>ℹ <code>status</code> is derived, not stored input:</strong> <code>derived_status()</code> buckets live progress into 5 stages — Pre-Sale (0–19%) → Project Initiation (20–39%) → award (40–59%) → Project Delivery (60–79%) → Completed (80–100%). Clients cannot set it directly; <code>PATCH /projects/:id</code> silently drops any <code>status</code> key.
   </div>
 </section>
 
@@ -1438,10 +1463,10 @@ footer span { color: var(--cyan); }
         <div class="step-num">06</div>
         <div>
           <div class="step-content-title">Run tests</div>
-          <div class="step-content-body">25 tests across auth, projects, tasks, comments, stats, and records. Always run inside <code>.venv</code>.</div>
+          <div class="step-content-body">40 tests across auth, projects, tasks/comments, stats, BOM lists, and records. Always run inside <code>.venv</code>.</div>
           <div class="code-block" data-label="CMD — backend/">
 <span class="cb-cmd">.venv\Scripts\python -m pytest</span> tests/ -v
-<span class="cb-comment"># 25 tests — uses in-memory SQLite (TestConfig)</span>
+<span class="cb-comment"># 40 tests — uses in-memory SQLite (TestConfig)</span>
           </div>
         </div>
       </li>
@@ -1558,6 +1583,11 @@ footer span { color: var(--cyan); }
       <div class="env-row"><span class="env-key">b@scada.local</span><span class="env-val">password — member</span></div>
       <div class="env-row"><span class="env-key">c@scada.local</span><span class="env-val">password — member</span></div>
     </div>
+    <div class="env-card">
+      <div class="env-card-title">🌐 NGROK (Windows service deploy only)</div>
+      <div class="env-row"><span class="env-key">NGROK_AUTH_TOKEN</span><span class="env-val">from dashboard.ngrok.com</span></div>
+      <div class="env-row"><span class="env-key">NGROK_DOMAIN</span><span class="env-val">your reserved ngrok domain</span></div>
+    </div>
   </div>
 </section>
 
@@ -1574,7 +1604,7 @@ footer span { color: var(--cyan); }
     <div class="deploy-card fade-in">
       <div class="deploy-card-head">
         <span class="deploy-card-icon">🪟</span>
-        <span class="deploy-card-title">Windows — Waitress WSGI Service</span>
+        <span class="deploy-card-title">Windows — NSSM Service + ngrok Tunnel</span>
       </div>
       <div class="deploy-card-body">
         <div class="code-block" data-label="wsgi.py (already exists)">
@@ -1582,21 +1612,24 @@ footer span { color: var(--cyan); }
 <span class="cb-key">from</span> app <span class="cb-key">import</span> create_app
 app = create_app()
         </div>
-        <div class="code-block" data-label="CMD — run Waitress">
-<span class="cb-comment"># Install as Windows service via NSSM or run directly:</span>
-<span class="cb-cmd">.venv\Scripts\waitress-serve</span> <span class="cb-str">\</span>
-  --port=5000 <span class="cb-str">\</span>
-  --call wsgi:app
+        <div class="code-block" data-label="CMD — backend/, run as Administrator">
+<span class="cb-comment"># Set NGROK_AUTH_TOKEN + NGROK_DOMAIN in .env first, then:</span>
+<span class="cb-cmd">install_service.bat</span>
 
-<span class="cb-comment"># Or use the included batch file:</span>
-<span class="cb-cmd">start_service.bat</span>
+<span class="cb-comment"># Builds the frontend (relative /api base) and installs two
+# NSSM services: ProjTracking (Waitress, serves API + SPA on
+# :5000) and ProjTrackingNgrok (tunnels https://NGROK_DOMAIN
+# to :5000 — single public HTTPS origin, no CORS setup needed)
+
+# Remove both later with:</span>
+<span class="cb-cmd">uninstall_service.bat</span>
         </div>
         <ul style="color:var(--text2); font-size:0.84rem; padding-left:1.2rem; margin-top:0.75rem; line-height:2;">
           <li>Set <code>FLASK_DEBUG=false</code> in <code>.env</code></li>
           <li>Set strong <code>SECRET_KEY</code> &amp; <code>JWT_SECRET_KEY</code></li>
-          <li>Set <code>CORS_ORIGINS=https://yourapp.com</code></li>
+          <li>Frontend is built with a relative <code>/api</code> base, so <code>CORS_ORIGINS</code> doesn't matter for this path — same origin</li>
           <li>Use PostgreSQL — not SQLite for production</li>
-          <li>Run <code>npm run build</code> → serve <code>frontend/dist/</code> via IIS or Nginx</li>
+          <li><code>install_service.bat</code> runs <code>npm run build</code> itself — no manual build step needed</li>
         </ul>
       </div>
     </div>
@@ -1675,7 +1708,7 @@ app = create_app()
 <span class="cb-comment">#  - GitHub Pages (no /api/ proxy needed externally)</span>
         </div>
         <div class="warn-box">
-          <strong>⚠ SPA Routing:</strong> The Vite build outputs a single <code>index.html</code>. All routes (<code>/kanban</code>, <code>/table</code>, etc.) are client-side. Your web server must return <code>index.html</code> for all non-<code>/api/</code> paths — configure a fallback rule.
+          <strong>⚠ SPA Routing:</strong> The Vite build outputs a single <code>index.html</code>. All routes (<code>/pipeline</code>, <code>/table</code>, etc.) are client-side. Your web server must return <code>index.html</code> for all non-<code>/api/</code> paths — configure a fallback rule.
         </div>
       </div>
     </div>
@@ -1707,7 +1740,7 @@ app = create_app()
     <div class="flow-card fade-in">
       <span class="card-icon">🧪</span>
       <div class="card-title">Running Tests</div>
-      <div class="card-meta">PYTEST — 25 TESTS</div>
+      <div class="card-meta">PYTEST — 40 TESTS</div>
       <div class="card-body">Always use <code>.venv\Scripts\python -m pytest</code> — the global Python env has a <code>hydra</code> package that breaks pytest plugin loading. Tests use <code>TestConfig</code> with in-memory SQLite. Auth fixture password: <code>secret123</code>.</div>
     </div>
     <div class="flow-card fade-in">
@@ -1730,7 +1763,7 @@ app = create_app()
     </div>
   </div>
 
-  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Optimistic UI Pattern (Kanban &amp; Process Checklist)</h3>
+  <h3 style="font-family:var(--font-h);font-size:1.2rem;color:#fff;margin:2.5rem 0 1rem;">Optimistic UI Pattern (Process Checklist)</h3>
   <div class="code-block fade-in" data-label="stores/projects.js — pattern">
 <span class="cb-comment">// 1. Immediately update local state (optimistic)</span>
 <span class="cb-key">const</span> backup = { ...project }
@@ -1779,7 +1812,7 @@ project.processDone += checked ? 1 : -1
   <span>SCADA MML</span> — Project Tracking System · Architecture Explainer
   <br>
   <span style="opacity:0.4; font-size:0.65rem; margin-top:0.5rem; display:block;">
-    Vue 3 · Flask 3 · SQLAlchemy 2 · JWT · PostgreSQL — Generated 2026-06-17
+    Vue 3 · Flask 3 · SQLAlchemy 2 · JWT · PostgreSQL — Generated 2026-07-03
   </span>
 </footer>
 

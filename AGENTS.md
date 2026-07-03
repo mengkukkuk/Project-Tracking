@@ -7,7 +7,7 @@ Development guide for Codex. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 16 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 40 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -29,15 +29,19 @@ npm run build      # production bundle → dist/
 |---|---|
 | `app/__init__.py` | App factory — wires DB, JWT, CORS, rate limiter, blueprints |
 | `app/config.py` | All config from env vars; `Config` (prod) and `TestConfig` |
-| `app/models.py` | SQLAlchemy ORM: `User`, `Project`, `Task`, `Comment`, `Activity`, `Tag` |
+| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
 | `app/auth.py` | `/api/auth/*` — register, login, `/me`; rate-limited |
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
 | `app/errors.py` | Centralized error handlers — all errors → `{"error": {...}}` |
 | `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` |
-| `app/api/projects.py` | Project CRUD with owner-or-admin authz |
+| `app/api/projects.py` | Project CRUD + `POST /<pid>/ptrack/generate` (backfill process checklist from template) |
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
+| `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
+| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named subsets of BOM rows (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
+| `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
+| `app/api/sheets.py` | Google Sheets export/import |
 | `app/api/stats.py` | Dashboard aggregations via SQL `GROUP BY` (no Python loops) |
 | `app/seed.py` | Demo data seeder — drops and recreates schema; dev only |
 
@@ -51,13 +55,31 @@ npm run build      # production bundle → dist/
 | `stores/ui.js` | Toast notifications, dark mode toggle + persistence |
 | `router.js` | Route guard — requires auth; restores session from token on boot |
 | `views/OverviewView.vue` | KPI cards + charts (funnel, fiscal bars, domain donut, upcoming) |
-| `views/KanbanView.vue` | Drag-and-drop board with optimistic move + rollback |
-| `views/TableView.vue` | Sortable, filterable, searchable project table |
+| `views/PipelineView.vue` | Read-only Kanban-style board grouping projects by delivery stage (`/pipeline`); per-column value + overdue/critical risk counts |
+| `views/PmCardsView.vue` | Read-only board grouping projects by PM (`/pm-cards`, `store.byPm`), incl. an "unassigned" column |
+| `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
+| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
+| `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
+| `views/SummariesView.vue` | 4-step "Summaries" pipeline (`/summaries`): Project → editable Inputs (budget/team size/duration/complexity) → derived Calculations → Final Results (grade, ring gauges, charts) per project, plus an all-projects comparison chart. Math lives in `utils/summaryCalc.js` |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
-| `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, comments, activity |
+| `components/ProjectDetail.vue` | Slide-in drawer: detail, tasks checklist, process checklist, records, comments, activity |
 | `components/ProjectForm.vue` | Create / edit modal |
+| `components/ProcessChecklist.vue` | Grouped `ptrack` checkbox list; drives process-based progress; "Generate from template" empty state |
+| `components/RecordList.vue` / `RecordForm.vue` | Generic CRUD table + modal for the auxiliary record resources |
+| `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
+| `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
+| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
+| `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
+| `utils/summaryCalc.js` | Pure-JS math for the Summaries pipeline: input seeding (`seedTeamSize`/`seedComplexity`/`derivedDurationWeeks`), `computeMetrics`/`computeResults`/`gradeFor`. No store/API access, so the view can recompute on every keystroke |
 
 ## Key Decisions
+
+### Typography (project default)
+- **Single typeface: IBM Plex Sans Thai** — the only font used across the entire app.
+- Defined once as the `--font` CSS variable in `frontend/src/assets/main.css` and loaded via Google Fonts there.
+- **Always use `font-family: var(--font)`** (or `inherit`) in new components. Do NOT introduce additional font families (no serif display faces, no monospace).
+- The `.mono` helper class is kept for figures/labels but now maps to `var(--font)` with `font-variant-numeric: tabular-nums` for column alignment — it is no longer a monospaced face.
 
 ### Authorization model
 - **Admin**: full access to all resources
@@ -88,10 +110,30 @@ npm run build      # production bundle → dist/
 - Dev: `CORS_ORIGINS=*` in `.env`
 - Origin list is split and whitespace-stripped before passing to Flask-CORS
 
+### Process-driven progress
+- Every project's progress percentage is derived from its **process checklist** (`ptrack` rows): `processDone / processCount`.
+- Falls back to the Task-entity counts (`taskDone / taskCount`) for projects with no process checklist.
+- Backend ships `processCount` / `processDone` on **every** `Project.to_dict()` (list and detail), so the detail drawer bar, Table view Progress column, and Pipeline/PM Cards views stay consistent via the shared `taskProgress(p)` helper in `stores/projects.js`.
+- Toggling a process checkbox is optimistic with rollback (mirrors `toggleTask`); `_syncProcessCounts()` swaps the `projects` array reference so @tanstack/vue-table re-runs the progress accessor without a manual refresh.
+- Older projects (predating create-time seeding) get an empty state with a **Generate from template** button → `POST /api/projects/<pid>/ptrack/generate` (idempotent, owner/admin-gated).
+- **`status` is derived, not user-editable.** `Project.status` is computed server-side from live progress via `derived_status()` (`app/models.py`) across 5 buckets — `Pre-Sale` (0–19%) → `Project Initiation` (20–39%) → `award` (40–59%) → `Project Delivery` (60–79%) → `Completed` (80–100%). `PATCH /api/projects/:id` silently ignores any `status` key in the payload. There is no drag-and-drop status board — `PipelineView`/`PmCardsView` are read-only groupings by this derived status/PM.
+
+### Summaries pipeline (`/summaries`)
+- `Project.team_size` / `Project.complexity` are nullable ints (team_size ≥ 1, complexity 1–10), validated via `int_field` in `create_project`/`update_project` (`app/api/projects.py`); sending JSON `null` clears the field back to unset.
+- When unset, the frontend seeds them at render time (never writes them back): `teamSize ← max(1, pms.length)`, `complexity ← priority map (low 3 / medium 5 / high 7 / critical 9)` — see `seedTeamSize`/`seedComplexity` in `utils/summaryCalc.js`.
+- **Budget** maps to the existing `value` field (THB). **Duration (weeks)** is derived from `startDate`→`dueDate` and is a what-if-only input — editing it never persists, because rewriting `due_date` would trigger `recompute_ptrack_dates` and move overdue flags on other views.
+- Editing Budget/Team Size/Complexity is optimistic with a 600ms debounced single `PATCH` (mirrors the checklist toggle's optimistic-with-rollback pattern) — no save button.
+
 ### Database portability
 - SQLAlchemy ORM — no DB-specific types; works on SQLite, PostgreSQL, MSSQL
 - Schema auto-created on startup via `Base.metadata.create_all()`
 - `pool_pre_ping=True` on all engines
+
+### Record export / import
+- Excel export uses `ExcelJS` (styled header, frozen pane, auto-filter, auto-fit columns, `dd/mm/yyyy` dates); PDF export uses `jsPDF` + `jspdf-autotable` with an embedded Thai font. Both are client-side only — no backend export endpoint.
+- CSV export exists **only** for the project list (`TableView` → `exportProjectsCsv`); records use Excel/PDF only.
+- BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
+- **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
 
 ## Testing
 
@@ -100,7 +142,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 16 tests across auth, projects, tasks, comments, stats
+- 40 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -126,6 +168,13 @@ DATABASE_URL=sqlite:///project_tracking.db
 
 To reseed: run `python seed.py` (drops + recreates all tables). Safe on dev DBs only.
 
+`Base.metadata.create_all()` does **not** add columns to an already-existing table — it only creates missing tables. Installs that predate `team_size`/`complexity` (added for the Summaries pipeline) need a one-time migration on their existing `projects` table:
+```sql
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size  INTEGER;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS complexity INTEGER;
+```
+On the PostgreSQL dev setup the table lives in the `pjtrk` schema (see `app/extensions.py:init_engine`, which sets `search_path=pjtrk`), so run it schema-qualified: `ALTER TABLE pjtrk.projects ADD COLUMN IF NOT EXISTS team_size INTEGER; ...`. `backend/init_db.sql` includes this migration inline. A fresh SQLite file or a fresh `python seed.py` run already has both columns — no action needed.
+
 ## Common Pitfalls
 
 - **pytest fails on global Python** — always use `.venv/Scripts/python -m pytest`
@@ -133,3 +182,5 @@ To reseed: run `python seed.py` (drops + recreates all tables). Safe on dev DBs 
 - **Rate limit 429 in manual testing** — login cap is 10/min per IP; wait or restart Flask
 - **Tag names >48 chars** — `_resolve_tags()` raises 422 before the DB constraint fires
 - **Owner check on seeded projects** — `owner_id` is assigned from the `pm` field (not admin); test authz with the actual owning user, not admin
+- **`ptrack.checked` column name** — the ORM attribute is `checked` but maps the DB column literally named `"check"` (`Column("check", Boolean)`). Always access via the attribute, never raw SQL.
+- **`ptemplate` has no `process` column** — the process *name* lives in `process_tags`, joined by `processid`. `_seed_ptrack` and `ptemplate` API resolve the name at read time.

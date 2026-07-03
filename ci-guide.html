@@ -261,10 +261,14 @@
 
   <table>
     <tr><th>Job</th><th>Tests</th><th>Database</th><th>~Duration</th></tr>
-    <tr><td><strong>backend-test</strong></td><td>16 pytest tests — auth, projects, tasks, comments, stats</td><td>SQLite in-memory</td><td>30 s</td></tr>
+    <tr><td><strong>backend-test</strong></td><td>40 pytest tests — auth, projects, tasks/comments, stats, BOM lists, records</td><td>SQLite in-memory</td><td>30 s</td></tr>
     <tr><td><strong>frontend-build</strong></td><td>Vite production build — catches import errors and broken aliases</td><td>—</td><td>45 s</td></tr>
     <tr><td><strong>e2e</strong></td><td>Playwright — login flows, project CRUD, task toggle</td><td>SQLite + SEED_ON_START</td><td>2–3 min</td></tr>
   </table>
+
+  <div class="callout warning">
+    <strong>⚠️ Known-broken E2E case.</strong> <code>projects.spec.js</code>'s <em>"kanban view loads columns"</em> test still navigates to <code>/kanban</code>, which no longer exists — the router redirects to <code>/</code> and the test fails looking for <code>[data-col]</code>. The Kanban drag-and-drop view was removed; <code>PipelineView</code>/<code>PmCardsView</code> are its read-only replacements. This is a stale test, not a product bug — see <a href="#e2e-tests">E2E test coverage</a>.
+  </div>
 
   <!-- ── Prerequisites ── -->
   <h2 id="prerequisites">Prerequisites</h2>
@@ -297,7 +301,7 @@
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-body">
-        <strong>Run all 16 tests</strong>
+        <strong>Run all 40 tests</strong>
 <pre><span class="cm"># From Project-Tracking/backend/</span>
 <span class="cd">.venv\Scripts\python -m pytest tests/ -v</span></pre>
       </div>
@@ -309,20 +313,24 @@
 <pre><span class="cd">.venv\Scripts\python -m pytest tests/test_auth.py -v</span>
 <span class="cd">.venv\Scripts\python -m pytest tests/test_projects.py -v</span>
 <span class="cd">.venv\Scripts\python -m pytest tests/test_tasks_comments.py -v</span>
-<span class="cd">.venv\Scripts\python -m pytest tests/test_stats.py -v</span></pre>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_stats.py -v</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_bom_lists.py -v</span>
+<span class="cd">.venv\Scripts\python -m pytest tests/test_records.py -v</span></pre>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-body">
         <strong>Expected output</strong>
-<pre><span class="cm">collected 16 items
+<pre><span class="cm">collected 40 items
 
-tests/test_auth.py::test_register_ok          </span><span class="cg">PASSED</span>
-<span class="cm">tests/test_auth.py::test_login_ok             </span><span class="cg">PASSED</span>
-<span class="cm">tests/test_projects.py::test_create_project   </span><span class="cg">PASSED</span>
+tests/test_auth.py::test_register_first_user_is_admin   </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_auth.py::test_login_and_me                   </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_projects.py::test_create_project              </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_records.py::test_generate_ptrack_idempotent   </span><span class="cg">PASSED</span>
+<span class="cm">tests/test_bom_lists.py::test_create_bom_list_returns_summary </span><span class="cg">PASSED</span>
 <span class="cm">...
-</span><span class="cg">16 passed in 1.23s</span></pre>
+</span><span class="cg">40 passed in 1.5s</span></pre>
       </div>
     </div>
   </div>
@@ -334,10 +342,12 @@ tests/test_auth.py::test_register_ok          </span><span class="cg">PASSED</sp
   <h3>Test files and coverage</h3>
   <table>
     <tr><th>File</th><th>What it covers</th></tr>
-    <tr><td><code>test_auth.py</code></td><td>Register, login, /me, duplicate email, short password rejection</td></tr>
-    <tr><td><code>test_projects.py</code></td><td>CRUD, owner-only authorization, 404 handling</td></tr>
-    <tr><td><code>test_tasks_comments.py</code></td><td>Task create/update/delete, comment CRUD, cascade delete</td></tr>
+    <tr><td><code>test_auth.py</code></td><td>Health check, register (first user → admin), duplicate email, short password rejection, login/me, bad password, protected-route 401</td></tr>
+    <tr><td><code>test_projects.py</code></td><td>CRUD, validation errors, filter/search/sort, pagination, owner-only authorization, <code>teamSize</code>/<code>complexity</code> create/PATCH/null-clear</td></tr>
+    <tr><td><code>test_tasks_comments.py</code></td><td>Task create/toggle/delete, comment CRUD, required-field validation</td></tr>
     <tr><td><code>test_stats.py</code></td><td>Stats endpoint shape, funnel and fiscal year aggregations</td></tr>
+    <tr><td><code>test_bom_lists.py</code></td><td>BOM list CRUD, item replace, owner-or-admin authz, cascade on source-row delete, unknown FK 422s, auth required</td></tr>
+    <tr><td><code>test_records.py</code></td><td>ptemplate bulk-insert into ptrack, BOM/MOM record CRUD, cross-project BOM listing, process counts on <code>Project.to_dict()</code>, ptrack generate (empty/idempotent/authz)</td></tr>
   </table>
 
   <!-- ── Frontend Build ── -->
@@ -436,17 +446,23 @@ dist/assets/index-*.js   312.80 kB │ gzip: 98.23 kB</span></pre>
 
   <h3>E2E test coverage</h3>
   <table>
-    <tr><th>Spec</th><th>Test case</th><th>What it verifies</th></tr>
-    <tr><td rowspan="5"><code>auth.spec.js</code></td><td>login page loads</td><td>Unauthenticated user redirects to /login</td></tr>
-    <tr><td>wrong password shows error</td><td>401 message appears in UI</td></tr>
-    <tr><td>admin can log in</td><td>Token stored, nav visible after login</td></tr>
-    <tr><td>logout clears session</td><td>Redirect to /login, protected route guard active</td></tr>
-    <tr><td>unauthenticated route guard</td><td>/kanban → /login redirect</td></tr>
-    <tr><td rowspan="4"><code>projects.spec.js</code></td><td>overview KPI cards</td><td>"total projects" card visible on dashboard</td></tr>
-    <tr><td>table view lists rows</td><td>At least one seeded project in table</td></tr>
-    <tr><td>create and delete project</td><td>New row appears; deleted row disappears</td></tr>
-    <tr><td>toggle task checkbox</td><td>Checkbox state flips and persists</td></tr>
+    <tr><th>Spec</th><th>Test case</th><th>What it verifies</th><th>Status</th></tr>
+    <tr><td rowspan="6"><code>auth.spec.js</code></td><td>login page loads</td><td>Unauthenticated user redirects to /login</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>wrong password shows error</td><td>401 message appears in UI</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>admin can log in and reach dashboard</td><td>Token stored, nav visible after login</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>member can log in</td><td>Member credentials also authenticate</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>logout clears session</td><td>Redirect to /login, protected route guard active</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>unauthenticated route guard</td><td>/kanban → /login redirect (guard fires before the route resolves, so this still passes even though /kanban itself is gone)</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td rowspan="5"><code>projects.spec.js</code></td><td>overview KPI cards</td><td>"total projects" card visible on dashboard</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>table view lists rows</td><td>At least one seeded project in table</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>kanban view loads columns</td><td>Navigates to <code>/kanban</code> (removed route → redirects to <code>/</code>) and looks for <code>[data-col]</code></td><td><span class="pill fail">FAIL</span></td></tr>
+    <tr><td>create and delete project</td><td>New row appears; deleted row disappears</td><td><span class="pill pass">PASS</span></td></tr>
+    <tr><td>toggle task checkbox</td><td>Checkbox state flips and persists</td><td><span class="pill pass">PASS</span></td></tr>
   </table>
+
+  <div class="callout warning">
+    <strong>⚠️ Fix needed, not covered by this guide:</strong> update or remove the <code>kanban view loads columns</code> case in <code>projects.spec.js</code> to target <code>/pipeline</code> or <code>/pm-cards</code> instead. Left as-is intentionally here — this guide documents current CI behavior, it doesn't patch the test suite.
+  </div>
 
   <!-- ── Pipeline Jobs ── -->
   <h2 id="pipeline">CI/CD Pipeline Jobs</h2>
@@ -621,7 +637,7 @@ git push origin feature/my-branch</span>
     <tr><td>ID</td><td>integer</td><td><span class="pill grey">Skip-check only</span></td></tr>
     <tr><td>Name</td><td>text</td><td><span class="pill pass">Required</span></td></tr>
     <tr><td>Domain, Customer, PM</td><td>text</td><td><span class="pill pending">Optional</span></td></tr>
-    <tr><td>Status</td><td>Pre-Sale / award / Project Delivery / Completed</td><td><span class="pill pending">Optional</span></td></tr>
+    <tr><td>Status</td><td>Pre-Sale / Project Initiation / award / Project Delivery / Completed</td><td><span class="pill pending">Optional, new rows only</span></td></tr>
     <tr><td>Priority</td><td>low / medium / high / critical</td><td><span class="pill pending">Optional</span></td></tr>
     <tr><td>Value (THB)</td><td>number</td><td><span class="pill pending">Optional</span></td></tr>
     <tr><td>Progress %</td><td>0–100</td><td><span class="pill pending">Optional</span></td></tr>
@@ -631,29 +647,43 @@ git push origin feature/my-branch</span>
     <tr><td>Tasks Total, Tasks Done, Owner, Created, Updated</td><td>auto-generated</td><td><span class="pill fail">Export only</span></td></tr>
   </table>
 
+  <div class="callout info">
+    <strong>ℹ️ Status is a seed value, not a live editor.</strong> <code>status</code> is normally derived server-side from progress (<code>derived_status()</code>) — the import row's Status column only seeds the brand-new project's initial value; it gets recomputed the next time that project's progress-affecting fields change (a ptrack toggle, a task toggle, or "Generate from template").
+  </div>
+
   <!-- ── Windows Service ── -->
-  <h2 id="service">Windows Service (NSSM)</h2>
-  <p>The backend can run as a Windows service that starts automatically on boot using <strong>waitress</strong> as the WSGI server.</p>
+  <h2 id="service">Windows Service (NSSM + ngrok)</h2>
+  <p>The backend can run as a Windows service that starts automatically on boot using <strong>waitress</strong> as the WSGI server, fronted by an <strong>ngrok</strong> tunnel for a public HTTPS origin. <code>backend/install_service.bat</code> installs both.</p>
 
   <h3>Install (run once as Administrator)</h3>
-<pre><span class="cm"># From Project-Tracking/backend/</span>
-<span class="cd">start_service.bat</span>
-<span class="cm"># Installs ProjTracking service, sets auto-start, starts it immediately</span></pre>
+<pre><span class="cm"># From Project-Tracking/backend/ — requires NGROK_AUTH_TOKEN + NGROK_DOMAIN in .env</span>
+<span class="cd">install_service.bat</span>
+<span class="cm"># Builds the frontend (relative /api base), installs + starts:
+#   ProjTracking       — Waitress serving API + built SPA on :5000
+#   ProjTrackingNgrok  — ngrok http tunnel → https://&lt;NGROK_DOMAIN&gt;</span></pre>
 
-  <h3>Manage the service</h3>
-<pre><span class="cd">nssm status  ProjTracking</span>    <span class="cm"># SERVICE_RUNNING / STOPPED</span>
-<span class="cd">nssm start   ProjTracking</span>
-<span class="cd">nssm stop    ProjTracking</span>
-<span class="cd">nssm restart ProjTracking</span>    <span class="cm"># after .env changes</span>
-<span class="cd">nssm remove  ProjTracking confirm</span>  <span class="cm"># uninstall</span></pre>
+  <h3>Manage the services</h3>
+<pre><span class="cd">nssm status  ProjTracking</span>        <span class="cm"># SERVICE_RUNNING / STOPPED</span>
+<span class="cd">nssm status  ProjTrackingNgrok</span>
+<span class="cd">nssm restart ProjTracking</span>        <span class="cm"># after .env changes</span>
+<span class="cd">nssm restart ProjTrackingNgrok</span>
+
+<span class="cm"># Uninstall both (as Administrator):</span>
+<span class="cd">uninstall_service.bat</span></pre>
 
   <h3>Logs</h3>
 <pre><span class="cm"># Written to backend/logs/ — rotates daily at 10 MB</span>
 <span class="cd">type backend\logs\service.log</span>
-<span class="cd">type backend\logs\service_error.log</span></pre>
+<span class="cd">type backend\logs\service_error.log</span>
+<span class="cd">type backend\logs\ngrok.log</span>
+<span class="cd">type backend\logs\ngrok_error.log</span></pre>
 
   <div class="callout success">
-    <strong>✅ Auto-restart on crash</strong> — NSSM restarts the service after a 3-second delay. Logs rotate daily. Runs on port 5000 with 4 worker threads.
+    <strong>✅ Auto-restart on crash</strong> — NSSM restarts both services after a 3-second delay. Logs rotate daily. Backend runs on port 5000 with 4 worker threads; ngrok depends on the backend service being up first.
+  </div>
+
+  <div class="callout warning">
+    <strong>⚠️ Must run elevated.</strong> <code>install_service.bat</code> checks for Administrator rights itself and refuses to continue silently — NSSM otherwise no-ops on install/set/start when not elevated, which can look like success while installing nothing.
   </div>
 
   <!-- ── API Endpoints ── -->
@@ -745,7 +775,7 @@ git push origin feature/my-branch</span>
   </table>
 
   <footer>
-    <p>Project Tracking · CI/CD Testing Guide · 2026-06-14 · Flask 3 + Vue 3 + Playwright + GitHub Actions</p>
+    <p>Project Tracking · CI/CD Testing Guide · 2026-07-03 · Flask 3 + Vue 3 + Playwright + GitHub Actions</p>
   </footer>
 
 </main>

@@ -57,7 +57,6 @@ npm run build      # production bundle → dist/
 | `views/OverviewView.vue` | KPI cards + charts (funnel, fiscal bars, domain donut, upcoming) |
 | `views/PipelineView.vue` | Read-only Kanban-style board grouping projects by delivery stage (`/pipeline`); per-column value + overdue/critical risk counts |
 | `views/PmCardsView.vue` | Read-only board grouping projects by PM (`/pm-cards`, `store.byPm`), incl. an "unassigned" column |
-| `views/KanbanView.vue` | Drag-and-drop board with optimistic move + rollback |
 | `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
 | `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
 | `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
@@ -114,9 +113,10 @@ npm run build      # production bundle → dist/
 ### Process-driven progress
 - Every project's progress percentage is derived from its **process checklist** (`ptrack` rows): `processDone / processCount`.
 - Falls back to the Task-entity counts (`taskDone / taskCount`) for projects with no process checklist.
-- Backend ships `processCount` / `processDone` on **every** `Project.to_dict()` (list and detail), so the detail drawer bar, Table view Progress column, and Kanban cards stay consistent via the shared `taskProgress(p)` helper in `stores/projects.js`.
+- Backend ships `processCount` / `processDone` on **every** `Project.to_dict()` (list and detail), so the detail drawer bar, Table view Progress column, and Pipeline/PM Cards views stay consistent via the shared `taskProgress(p)` helper in `stores/projects.js`.
 - Toggling a process checkbox is optimistic with rollback (mirrors `toggleTask`); `_syncProcessCounts()` swaps the `projects` array reference so @tanstack/vue-table re-runs the progress accessor without a manual refresh.
 - Older projects (predating create-time seeding) get an empty state with a **Generate from template** button → `POST /api/projects/<pid>/ptrack/generate` (idempotent, owner/admin-gated).
+- **`status` is derived, not user-editable.** `Project.status` is computed server-side from live progress via `derived_status()` (`app/models.py`) across 5 buckets — `Pre-Sale` (0–19%) → `Project Initiation` (20–39%) → `award` (40–59%) → `Project Delivery` (60–79%) → `Completed` (80–100%). `PATCH /api/projects/:id` silently ignores any `status` key in the payload; the column is kept in sync via `recompute_project_status()` whenever progress-affecting fields change (ptrack toggle, task toggle, ptrack generate). There is no drag-and-drop status board — `PipelineView`/`PmCardsView` are read-only groupings by this derived status/PM.
 
 ### Summaries pipeline (`/summaries`)
 - `Project.team_size` / `Project.complexity` are nullable ints (team_size ≥ 1, complexity 1–10), validated via `int_field` in `create_project`/`update_project` (`app/api/projects.py`); sending JSON `null` clears the field back to unset.
