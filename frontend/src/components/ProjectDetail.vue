@@ -91,7 +91,7 @@ function dueClass(iso) {
 <template>
   <Teleport to="body">
     <div class="drawer-overlay" @click.self="emit('close')">
-      <aside class="drawer" aria-label="Project details">
+      <aside class="drawer lc-surface" aria-label="Project details">
         <header class="drawer-head">
           <div class="title-wrap">
             <span class="eyebrow">Project detail</span>
@@ -250,12 +250,13 @@ function dueClass(iso) {
   animation: fade-in .16s ease;
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Frosted surface from .lc-surface; kept square + edge-flush with a leftward
+   float shadow so it reads as a panel sliding in from the right. */
 .drawer {
   width: min(1000px, 100vw);
   height: 100vh;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 var(--lc-inner-sheen), var(--shadow-lg);
   display: flex;
   flex-direction: column;
   animation: slide-in .2s ease;
@@ -419,7 +420,12 @@ function dueClass(iso) {
 @media (max-width: 680px) {
   .drawer-overlay { z-index: 1000; }
   .drawer { width: 100vw; height: 100dvh; }
-  .drawer-head { padding: 14px 16px; position: sticky; top: 0; background: var(--surface); z-index: 3; }
+  .drawer-head {
+    padding: 14px 16px; position: sticky; top: 0; z-index: 3;
+    background: var(--lc-base-strong);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
   .quick { grid-template-columns: 1fr; margin: 12px 14px 0; }
   .progress-value { justify-self: end; }
   .hero { padding: 14px 14px 0; }

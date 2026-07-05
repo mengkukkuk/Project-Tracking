@@ -18,7 +18,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 <template>
   <Teleport to="body">
     <div class="overlay" @click.self="emit('close')">
-      <div class="modal" :class="{ wide }">
+      <div class="modal lc-surface" :class="{ wide }">
         <header class="modal-head">
           <h2>{{ title }}</h2>
           <button class="icon-btn" @click="emit('close')" aria-label="Close">
@@ -45,9 +45,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   animation: ovl .18s ease;
 }
 @keyframes ovl { from { opacity: 0; } to { opacity: 1; } }
+/* Surface (frost/rim/sheen) comes from the shared .lc-surface helper. */
 .modal {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; box-shadow: var(--shadow-lg);
   width: 100%; max-width: 540px; animation: pop .2s ease;
 }
 .modal.wide { max-width: 880px; }
@@ -76,7 +75,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     border-radius: 0;
     border: 0;
   }
-  .modal-head { position: sticky; top: 0; background: var(--surface); z-index: 2; }
+  /* Full-bleed sheet: drop the rounded rim-light hairline. */
+  .modal::before { display: none; }
+  .modal-head {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--lc-base-strong);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
   .modal-body { padding: 16px 14px calc(80px + env(safe-area-inset-bottom)); }
 }
 </style>

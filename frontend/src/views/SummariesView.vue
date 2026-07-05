@@ -169,7 +169,7 @@ const compareRows = computed(() =>
       <!-- Flow indicator -->
       <div class="flow-strip">
         <template v-for="(step, i) in flowSteps" :key="step.step">
-          <div class="flow-chip">
+          <div class="flow-chip lc-chip">
             <span class="flow-num">{{ step.step }}</span>
             <AppIcon :name="step.icon" :size="13" />
             <span>{{ step.label }}</span>
@@ -184,7 +184,7 @@ const compareRows = computed(() =>
           v-for="s in summaries"
           :key="s.project.id"
           type="button"
-          class="selector-card"
+          class="selector-card lc-surface lc-lift"
           :class="{ active: s.project.id === selectedProject?.id }"
           :style="
             s.project.id === selectedProject?.id
@@ -324,7 +324,7 @@ const compareRows = computed(() =>
               </div>
               <div class="final-cost">
                 <p class="label-sm">Total Cost</p>
-                <p class="cost-value mono">{{ baht(results.totalCost) }}</p>
+                <p class="cost-value mono readout">{{ baht(results.totalCost) }}</p>
               </div>
             </div>
             <div class="ring-grid">
@@ -377,14 +377,12 @@ const compareRows = computed(() =>
   overflow-x: auto;
   margin-bottom: 16px;
 }
+/* Surface (glass pill) from the shared .lc-chip helper. */
 .flow-chip {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
   color: var(--text);
@@ -405,19 +403,15 @@ const compareRows = computed(() =>
   gap: 10px;
   margin-bottom: 16px;
 }
+/* Surface (frost/rim/lift) from the shared .lc-surface / .lc-lift helpers;
+   the active state's border + tint come from inline styles in the template. */
 .selector-card {
   text-align: left;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
   padding: 12px;
   cursor: pointer;
   font: inherit;
   color: inherit;
-  transition: border-color .12s, box-shadow .12s;
 }
-.selector-card:hover { box-shadow: var(--shadow); }
-.selector-card.active { box-shadow: var(--shadow); }
 .selector-icon {
   width: 28px; height: 28px; border-radius: 8px;
   display: grid; place-items: center;

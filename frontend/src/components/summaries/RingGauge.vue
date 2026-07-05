@@ -32,7 +32,7 @@ function clamp(v) {
           class="ring-progress"
         />
       </svg>
-      <span class="ring-value mono">{{ Math.round(value) }}</span>
+      <span class="ring-value mono readout">{{ Math.round(value) }}</span>
     </div>
     <span class="ring-label">{{ label }}</span>
   </div>
