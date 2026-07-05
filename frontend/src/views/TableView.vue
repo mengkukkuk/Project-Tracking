@@ -1,11 +1,7 @@
 <script setup>
-import { ref, h, computed } from 'vue'
-import {
-  useVueTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  FlexRender,
-} from '@tanstack/vue-table'
+import { ref, shallowRef, computed, h, defineComponent } from 'vue'
+import { AgGridVue } from 'ag-grid-vue3'
+import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useProjectsStore, taskProgress } from '@/stores/projects'
 import { useFormat } from '@/composables/useFormat'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -20,56 +16,148 @@ import {
   exportProjectsCsv,
 } from '@/utils/recordExport'
 
+ModuleRegistry.registerModules([AllCommunityModule])
+
 const store = useProjectsStore()
 const ui = useUiStore()
 const { baht, date } = useFormat()
 
-const sorting = ref([{ id: 'dueDate', desc: false }])
 const density = ref('comfortable')
+const gridApi = shallowRef(null)
 
 const today = new Date()
   .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   .toUpperCase()
 
-// Right-aligned, figure-style columns get the ledger numeral treatment.
-const NUM_COLS = new Set(['value'])
-
-const columns = [
-  { accessorKey: 'domain', header: 'Domain' },
-  {
-    accessorKey: 'name',
-    header: 'Project',
-    cell: (i) => h('strong', { class: 'project-cell' }, i.getValue()),
-  },
-  { accessorKey: 'pm', header: 'PM' },
-  { accessorKey: 'customer', header: 'Customer' },
-  { accessorKey: 'value', header: 'Value', cell: (i) => baht(i.getValue()) },
-  { accessorKey: 'priority', header: 'Priority', cell: (i) => h(PriorityBadge, { priority: i.getValue() }) },
-  { accessorKey: 'status', header: 'Status', cell: (i) => h(StatusBadge, { status: i.getValue() }) },
-  {
-    id: 'progress',
-    accessorFn: (row) => taskProgress(row),
-    header: 'Progress',
-    cell: (i) => h(ProgressBar, { value: i.getValue(), showLabel: true }),
-  },
-  { accessorKey: 'dueDate', header: 'Due date', cell: (i) => date(i.getValue()) },
-]
-
-const table = useVueTable({
-  get data() { return store.projects },
-  columns,
-  state: {
-    get sorting() { return sorting.value },
-  },
-  onSortingChange: (u) => (sorting.value = typeof u === 'function' ? u(sorting.value) : u),
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel(),
+// Theming API — every colour is a live reference into this app's own CSS custom
+// properties (see assets/main.css), so light/dark mode and the accent colour
+// drive the grid with no second source of truth. No ag-grid CSS import needed.
+const gridTheme = themeMaterial.withParams({
+  accentColor: 'var(--accent)',
+  backgroundColor: 'var(--surface)',
+  foregroundColor: 'var(--text)',
+  borderColor: 'var(--border)',
+  headerBackgroundColor: 'var(--bg)',
+  headerTextColor: 'var(--text-dim)',
+  headerFontWeight: 600,
+  oddRowBackgroundColor: 'transparent',
+  rowHoverColor: 'color-mix(in srgb, var(--accent) 5%, var(--surface))',
+  fontFamily: "'IBM Plex Sans Thai', system-ui, sans-serif",
+  fontSize: 13,
+  headerFontSize: 10,
+  wrapperBorder: false,
+  headerRowBorder: { color: 'var(--border)', width: 1.5 },
+  rowBorder: { color: 'var(--border)', width: 1 },
+  columnBorder: false,
+  spacing: 7,
 })
 
-const shownCount = computed(() => table.getSortedRowModel().rows.length)
+const rowHeight = computed(() => (density.value === 'compact' ? 34 : 46))
+const headerHeight = computed(() => (density.value === 'compact' ? 34 : 40))
+
+// Thin Vue wrappers so the existing badge/progress components can be reused
+// as ag-grid cellRenderers (each receives `params` with `.value` / `.data`).
+const ProjectCell = defineComponent({
+  props: ['params'],
+  render() { return h('strong', { class: 'project-cell' }, this.params.value) },
+})
+const PriorityCell = defineComponent({
+  props: ['params'],
+  render() {
+    return h('span', { class: 'grid-cell-center' }, [h(PriorityBadge, { priority: this.params.value })])
+  },
+})
+const StatusCell = defineComponent({
+  props: ['params'],
+  render() {
+    return h('span', { class: 'grid-cell-center' }, [h(StatusBadge, { status: this.params.value })])
+  },
+})
+const ProgressCell = defineComponent({
+  props: ['params'],
+  render() { return h(ProgressBar, { value: this.params.value, showLabel: true }) },
+})
+
+const defaultColDef = {
+  sortable: true,
+  resizable: true,
+  suppressMovable: true,
+}
+
+const columnDefs = computed(() => [
+  {
+    colId: 'folio',
+    headerName: '№',
+    width: 64,
+    pinned: 'left',
+    sortable: false,
+    resizable: false,
+    valueGetter: (p) => p.node.rowIndex + 1,
+    valueFormatter: (p) => String(p.value).padStart(2, '0'),
+    cellClass: 'folio-col mono',
+    headerClass: 'folio-col',
+  },
+  { field: 'domain', headerName: 'Domain', minWidth: 120 },
+  {
+    field: 'name',
+    headerName: 'Project',
+    pinned: 'left',
+    flex: 1.6,
+    minWidth: 190,
+    cellRenderer: ProjectCell,
+  },
+  { field: 'pm', headerName: 'PM', minWidth: 110 },
+  { field: 'customer', headerName: 'Customer', minWidth: 150 },
+  {
+    field: 'value',
+    headerName: 'Value',
+    minWidth: 100,
+    cellClass: 'num',
+    headerClass: 'num',
+    valueFormatter: (p) => baht(p.value),
+  },
+  { field: 'priority', headerName: 'Priority', minWidth: 110, cellRenderer: PriorityCell },
+  { field: 'status', headerName: 'Status', minWidth: 150, cellRenderer: StatusCell },
+  {
+    colId: 'progress',
+    headerName: 'Progress',
+    minWidth: 170,
+    flex: 1,
+    valueGetter: (p) => taskProgress(p.data),
+    cellRenderer: ProgressCell,
+  },
+  {
+    field: 'dueDate',
+    headerName: 'Due date',
+    minWidth: 110,
+    sort: 'asc',
+    valueFormatter: (p) => date(p.value),
+  },
+])
+
+const rowData = computed(() => store.projects)
+const shownCount = computed(() => store.projects.length)
+
+const noRowsTemplate =
+  '<div class="empty"><span class="empty-mark">—</span>No entries match the current view.</div>'
+
+function onGridReady(e) {
+  gridApi.value = e.api
+}
+
+function onRowClicked(e) {
+  store.openDetail(e.data.id)
+}
+
+// Export the currently sorted/filtered order, mirroring what's on screen.
+function sortedRows() {
+  const rows = []
+  gridApi.value?.forEachNodeAfterFilterAndSort((n) => rows.push(n.data))
+  return rows
+}
 
 async function doExport(format) {
-  const rows = table.getSortedRowModel().rows.map((r) => r.original)
+  const rows = sortedRows()
   if (!rows.length) return
   try {
     if (format === 'excel') await exportProjectsExcel(rows)
@@ -126,50 +214,21 @@ async function doExport(format) {
     </div>
 
     <!-- The ledger --------------------------------------------------------- -->
-    <div class="ledger" :class="density">
-      <table>
-        <thead>
-          <tr v-for="hg in table.getHeaderGroups()" :key="hg.id">
-            <th class="folio-col">№</th>
-            <th
-              v-for="header in hg.headers"
-              :key="header.id"
-              :class="{ sortable: header.column.getCanSort(), num: NUM_COLS.has(header.column.id) }"
-              @click="header.column.getToggleSortingHandler()?.($event)"
-            >
-              <span class="th-label">
-                <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-                <span class="sort-ind" :class="{ on: header.column.getIsSorted() }">
-                  {{ header.column.getIsSorted() === 'asc' ? '▲' : header.column.getIsSorted() === 'desc' ? '▼' : '◆' }}
-                </span>
-              </span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(row, idx) in table.getRowModel().rows"
-            :key="row.id"
-            class="row"
-            @click="store.openDetail(row.original.id)"
-          >
-            <td class="folio-col mono">{{ String(idx + 1).padStart(2, '0') }}</td>
-            <td
-              v-for="cell in row.getVisibleCells()"
-              :key="cell.id"
-              :class="{ num: NUM_COLS.has(cell.column.id) }"
-            >
-              <FlexRender :render="cell.column.columnDef.cell ?? cell.column.columnDef.accessorKey" :props="cell.getContext()" />
-            </td>
-          </tr>
-          <tr v-if="!table.getRowModel().rows.length">
-            <td :colspan="columns.length + 1" class="empty">
-              <span class="empty-mark">—</span>
-              No entries match the current view.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="ledger" :class="density" :style="{ '--row-h': rowHeight + 'px' }">
+      <AgGridVue
+        class="grid"
+        :theme="gridTheme"
+        :columnDefs="columnDefs"
+        :rowData="rowData"
+        :defaultColDef="defaultColDef"
+        :rowHeight="rowHeight"
+        :headerHeight="headerHeight"
+        domLayout="autoHeight"
+        :suppressCellFocus="true"
+        :overlayNoRowsTemplate="noRowsTemplate"
+        @grid-ready="onGridReady"
+        @row-clicked="onRowClicked"
+      />
     </div>
   </div>
 </template>
@@ -291,95 +350,63 @@ async function doExport(format) {
 .byline .of { color: var(--border); }
 .byline .of { color: color-mix(in srgb, var(--text-dim) 70%, transparent); }
 
-/* ---- The ledger table ---- */
+/* ---- The ledger (ag-grid) ---- */
 .ledger {
-  overflow-x: auto;
-  overflow-y: visible;
   border-top: 1.5px solid var(--rule);
   border-bottom: 1.5px solid var(--rule);
 }
-table { width: 100%; border-collapse: collapse; min-width: 880px; }
+.grid { width: 100%; }
 
-thead th {
-  text-align: left;
-  padding: 11px 14px;
-  font-family: var(--font);
+/* ag-grid renders its own internal DOM imperatively, so these rules reach
+   into it via :deep() rather than styling this component's own template. */
+:deep(.ag-header-cell-text) {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .12em;
-  color: var(--text-dim);
-  background: var(--bg);
-  border-bottom: 1.5px solid var(--rule);
-  user-select: none;
-  white-space: nowrap;
-  vertical-align: bottom;
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
-.th-label { display: inline-flex; align-items: center; gap: 6px; }
-th.sortable { cursor: pointer; transition: color .12s; }
-th.sortable:hover { color: var(--text); }
-th.num, td.num { text-align: right; }
-th.num .th-label { flex-direction: row-reverse; }
-
-.sort-ind {
-  font-size: 8px;
-  opacity: 0;
-  color: var(--accent);
-  transition: opacity .12s, transform .12s;
-}
-th.sortable:hover .sort-ind { opacity: .35; }
-.sort-ind.on { opacity: 1; }
-
-.folio-col {
-  width: 1%;
-  text-align: right;
-  padding-right: 10px !important;
-  color: color-mix(in srgb, var(--text-dim) 65%, transparent);
-  font-size: 11px;
-}
-thead .folio-col { font-size: 11px; }
-
-tbody td {
-  padding: 13px 14px;
-  font-size: 13px;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-td.num {
+:deep(.ag-header-cell.num .ag-header-cell-label) { justify-content: flex-end; }
+:deep(.ag-cell.num) {
   font-family: var(--font);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -.01em;
+  justify-content: flex-end;
+  text-align: right;
 }
-
-.compact tbody td { padding: 8px 12px; }
-.compact thead th { padding: 8px 12px; }
-
-.row {
-  cursor: pointer;
-  position: relative;
-  transition: background .12s;
+:deep(.folio-col) {
+  color: color-mix(in srgb, var(--text-dim) 65%, transparent);
+  font-size: 11px;
+  justify-content: flex-end;
+  text-align: right;
 }
-.row td:first-child { box-shadow: inset 0 0 0 0 var(--accent); transition: box-shadow .12s; }
-.row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
-.row:hover td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
-.row:hover .folio-col { color: var(--accent-dim); }
-tbody tr:last-child td { border-bottom: none; }
-
-.empty {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 48px;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 15px;
+:deep(.ag-row) { cursor: pointer; }
+/* ag-grid's cell content is a flex item that stretches to the row's full
+   height by default — badges/pills have no intrinsic height, so they'd
+   otherwise balloon to fill it. Auto margins win over any ancestor's
+   align-items, so this centers them at their natural size regardless of
+   ag-grid's internal wrapper structure. */
+:deep(.grid-cell-center) {
+  display: inline-flex;
+  align-items: center;
+  margin-top: auto;
+  margin-bottom: auto;
+  max-width: 100%;
 }
-.empty-mark { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
-
+/* Pin the priority/status pills to a fixed height (50% of the current row
+   height, from --row-h set below) instead of letting them stretch to fill
+   the cell — kept scoped to this view via :deep() so the shared
+   PriorityBadge/StatusBadge components stay untouched for other views. */
+:deep(.pri),
+:deep(.badge) {
+  box-sizing: border-box;
+  height: calc(var(--row-h) * 0.5);
+  display: inline-flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+}
 :deep(.project-cell) {
   font-family: var(--serif);
   font-weight: 600;
@@ -387,6 +414,20 @@ tbody tr:last-child td { border-bottom: none; }
   letter-spacing: -.005em;
   line-height: 1.25;
 }
+:deep(.empty) {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 48px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+}
+:deep(.empty-mark) { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
+
+/* Density: header/row height are bound reactively via props; compact only
+   trims horizontal breathing room. */
+.compact :deep(.ag-cell),
+.compact :deep(.ag-header-cell) { padding-left: 10px; padding-right: 10px; }
 
 @media (max-width: 720px) {
   .masthead-row { align-items: stretch; }
@@ -394,58 +435,6 @@ tbody tr:last-child td { border-bottom: none; }
   .masthead-title { font-size: clamp(28px, 9vw, 40px); }
   .dateline { gap: 6px; font-size: 9.5px; flex-wrap: wrap; }
   .actions { width: 100%; justify-content: space-between; }
-
-  /* Stack each table row as an editorial card */
-  .ledger {
-    border: 0;
-    overflow: visible;
-  }
-  table { min-width: 0; display: block; }
-  thead { display: none; }
-  tbody, tr { display: block; }
-  .row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas:
-      "folio name      status"
-      "folio meta      value"
-      "tags  tags      tags";
-    column-gap: 12px;
-    row-gap: 6px;
-    align-items: center;
-    padding: 14px 12px;
-    margin: 0 -2px;
-    border-bottom: 1px solid var(--border);
-  }
-  .row:hover { background: transparent; }
-  .row:hover td:first-child { box-shadow: none; }
-  .row td { padding: 0; border: 0; font-size: 13px; }
-  .row td:nth-child(1) { grid-area: folio; align-self: start; }
-  .row td:nth-child(3) { grid-area: name; font-size: 16px; }
-  .row td:nth-child(8) { grid-area: status; justify-self: end; }
-  .row td:nth-child(6) { grid-area: value; justify-self: end; font-weight: 700; }
-  /* meta line: domain · pm · customer · due  */
-  .row td:nth-child(2),
-  .row td:nth-child(4),
-  .row td:nth-child(5),
-  .row td:nth-child(10) {
-    grid-area: meta;
-    display: inline;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-  .row td:nth-child(2)::after,
-  .row td:nth-child(4)::after,
-  .row td:nth-child(5)::after {
-    content: ' · ';
-    color: var(--border);
-  }
-  .row td:nth-child(7) { display: none; } /* priority badge — implied by row */
-  .row td:nth-child(9) {                 /* progress bar full-width */
-    grid-area: tags;
-    display: block;
-  }
-  :deep(.project-cell) { font-size: 16px; }
   .empty { padding: 32px 12px; }
 }
 </style>
