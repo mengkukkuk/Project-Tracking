@@ -1,11 +1,7 @@
 <script setup>
-import { ref, h, computed, onMounted } from 'vue'
-import {
-  useVueTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  FlexRender,
-} from '@tanstack/vue-table'
+import { ref, shallowRef, h, computed, defineComponent, watch, onMounted } from 'vue'
+import { AgGridVue } from 'ag-grid-vue3'
+import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useBomStore } from '@/stores/bom'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
@@ -23,21 +19,23 @@ import {
 } from '@/utils/recordExport'
 import { api } from '@/api'
 
+// Module registration is global; ag-grid dedupes, so multiple views registering
+// AllCommunityModule is harmless.
+ModuleRegistry.registerModules([AllCommunityModule])
+
 const store = useBomStore()
 const projectsStore = useProjectsStore()
 const ui = useUiStore()
 const { date } = useFormat()
 
-const sorting = ref([{ id: 'projectName', desc: false }])
+const gridApi = shallowRef(null)
 
 const today = new Date()
   .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   .toUpperCase()
 
 const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
-
-// Right-aligned figure columns.
-const NUM_COLS = new Set(['quantity', 'unitPrice', 'totalPrice', 'leadTime'])
+const dash = (p) => (p.value == null || p.value === '' ? '—' : p.value)
 
 // Client-side text search across the most useful free-text fields.
 const filtered = computed(() => {
@@ -50,55 +48,131 @@ const filtered = computed(() => {
   )
 })
 
-const columns = [
-  {
-    accessorKey: 'projectName',
-    header: 'Project',
-    cell: (i) => h('strong', { class: 'project-cell' }, i.getValue() || '—'),
-  },
-  { accessorKey: 'deviceName', header: 'Device name', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'category', header: 'Category', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'version', header: 'Version', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'quantity', header: 'Qty', cell: (i) => num(i.getValue()) },
-  { accessorKey: 'unit', header: 'Unit', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'position', header: 'Position', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'unitPrice', header: 'Unit price', cell: (i) => num(i.getValue()) },
-  {
-    accessorKey: 'totalPrice',
-    header: 'Total price',
-    cell: (i) => h('span', { class: 'total-figure' }, num(i.getValue())),
-  },
-  { accessorKey: 'leadTime', header: 'Lead time', cell: (i) => num(i.getValue()) },
-  { accessorKey: 'supplier', header: 'Supplier', cell: (i) => i.getValue() || '—' },
-  { accessorKey: 'dateApprove', header: 'Approved on', cell: (i) => date(i.getValue()) },
-  {
-    id: 'actions',
-    header: '',
-    enableSorting: false,
-    cell: (i) =>
-      h('div', { class: 'row-actions' }, [
-        h('button', { class: 'mini', type: 'button', onClick: () => openEdit(i.row.original) }, 'Edit'),
-        h('button', { class: 'mini danger', type: 'button', onClick: () => remove(i.row.original) }, 'Delete'),
-      ]),
-  },
-]
-
-const table = useVueTable({
-  get data() {
-    return filtered.value
-  },
-  columns,
-  state: {
-    get sorting() {
-      return sorting.value
-    },
-  },
-  onSortingChange: (u) => (sorting.value = typeof u === 'function' ? u(sorting.value) : u),
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel(),
+// Every colour is a live var() into assets/main.css, so dark mode / accent
+// recolour the grid for free — no second theme to maintain.
+const gridTheme = themeMaterial.withParams({
+  accentColor: 'var(--accent)',
+  backgroundColor: 'var(--surface)',
+  foregroundColor: 'var(--text)',
+  borderColor: 'var(--border)',
+  headerBackgroundColor: 'var(--bg)',
+  headerTextColor: 'var(--text-dim)',
+  headerFontWeight: 600,
+  oddRowBackgroundColor: 'transparent',
+  rowHoverColor: 'color-mix(in srgb, var(--accent) 5%, var(--surface))',
+  fontFamily: "'IBM Plex Sans Thai', system-ui, sans-serif",
+  fontSize: 13,
+  headerFontSize: 10,
+  wrapperBorder: false,
+  headerRowBorder: { color: 'var(--border)', width: 1.5 },
+  rowBorder: { color: 'var(--border)', width: 1 },
+  columnBorder: false,
+  spacing: 7,
 })
 
-const shownCount = computed(() => table.getSortedRowModel().rows.length)
+const rowHeight = 46
+const headerHeight = 40
+
+// cellRenderers are thin defineComponent wrappers so the presentational look
+// stays in the view; ag-grid injects `params` (with .value/.data).
+const ProjectCell = defineComponent({
+  props: ['params'],
+  render() {
+    return h('strong', { class: 'project-cell' }, this.params.value || '—')
+  },
+})
+const TotalCell = defineComponent({
+  props: ['params'],
+  render() {
+    return h('span', { class: 'total-figure' }, num(this.params.value))
+  },
+})
+const ActionsCell = defineComponent({
+  props: ['params'],
+  render() {
+    const row = this.params.data
+    return h('div', { class: 'row-actions' }, [
+      h(
+        'button',
+        {
+          class: 'mini',
+          type: 'button',
+          onClick: (e) => {
+            e.stopPropagation()
+            openEdit(row)
+          },
+        },
+        'Edit',
+      ),
+      h(
+        'button',
+        {
+          class: 'mini danger',
+          type: 'button',
+          onClick: (e) => {
+            e.stopPropagation()
+            remove(row)
+          },
+        },
+        'Delete',
+      ),
+    ])
+  },
+})
+
+const defaultColDef = { sortable: true, resizable: true, suppressMovable: true }
+
+const columnDefs = [
+  {
+    colId: 'folio', headerName: '№', width: 64, pinned: 'left',
+    sortable: false, resizable: false,
+    valueGetter: (p) => p.node.rowIndex + 1,
+    valueFormatter: (p) => String(p.value).padStart(2, '0'),
+    cellClass: 'folio-col mono', headerClass: 'folio-col',
+  },
+  { field: 'projectName', headerName: 'Project', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: ProjectCell },
+  { field: 'deviceName', headerName: 'Device name', flex: 1.2, minWidth: 150, valueFormatter: dash },
+  { field: 'category', headerName: 'Category', minWidth: 120, valueFormatter: dash },
+  { field: 'version', headerName: 'Version', minWidth: 90, valueFormatter: dash },
+  { field: 'quantity', headerName: 'Qty', minWidth: 80, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+  { field: 'unit', headerName: 'Unit', minWidth: 80, valueFormatter: dash },
+  { field: 'position', headerName: 'Position', minWidth: 110, valueFormatter: dash },
+  { field: 'unitPrice', headerName: 'Unit price', minWidth: 100, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+  { field: 'totalPrice', headerName: 'Total price', minWidth: 110, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
+  { field: 'leadTime', headerName: 'Lead time', minWidth: 100, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+  { field: 'supplier', headerName: 'Supplier', minWidth: 130, valueFormatter: dash },
+  { field: 'dateApprove', headerName: 'Approved on', minWidth: 120, valueFormatter: (p) => date(p.value) },
+  { colId: 'actions', headerName: '', width: 130, pinned: 'right', sortable: false, resizable: false, cellRenderer: ActionsCell, cellClass: 'actions-cell' },
+]
+
+const shownCount = computed(() => filtered.value.length)
+const noRowsTemplate = '<div class="empty"><span class="empty-mark">—</span>No BOM records match the current view.</div>'
+const loadingTemplate = '<div class="empty">Loading…</div>'
+
+function onGridReady(e) {
+  gridApi.value = e.api
+  if (store.loading) e.api.showLoadingOverlay()
+}
+
+// ag-grid owns overlay display; keep it in sync with the store's loading flag
+// and the filtered set (autoHeight grids don't auto-toggle the no-rows overlay).
+watch(
+  () => [store.loading, filtered.value.length],
+  ([loading, count]) => {
+    if (!gridApi.value) return
+    if (loading) gridApi.value.showLoadingOverlay()
+    else if (!count) gridApi.value.showNoRowsOverlay()
+    else gridApi.value.hideOverlay()
+  },
+)
+
+// Export must mirror what's on screen (current sort + filter), so read from the
+// grid rather than the store.
+function sortedRows() {
+  const rows = []
+  gridApi.value?.forEachNodeAfterFilterAndSort((n) => rows.push(n.data))
+  return rows
+}
 
 // --- Add / inline edit ------------------------------------------------------
 // `panel` is null when closed, the row object when editing, or the sentinel
@@ -188,7 +262,7 @@ async function confirmImport() {
 
 // --- Export (filtered + sorted set) -----------------------------------------
 async function doExport(format) {
-  const rows = table.getSortedRowModel().rows.map((r) => r.original)
+  const rows = sortedRows()
   if (!rows.length) return
   try {
     if (format === 'excel') await exportBomInventoryExcel(rows)
@@ -281,48 +355,21 @@ onMounted(() => {
       <span class="of">of {{ store.rows.length }} on record</span>
     </div>
 
-    <div class="ledger">
-      <table>
-        <thead>
-          <tr v-for="hg in table.getHeaderGroups()" :key="hg.id">
-            <th class="folio-col">№</th>
-            <th
-              v-for="header in hg.headers"
-              :key="header.id"
-              :class="{ sortable: header.column.getCanSort(), num: NUM_COLS.has(header.column.id) }"
-              @click="header.column.getToggleSortingHandler()?.($event)"
-            >
-              <span class="th-label">
-                <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-                <span v-if="header.column.getCanSort()" class="sort-ind" :class="{ on: header.column.getIsSorted() }">
-                  {{ header.column.getIsSorted() === 'asc' ? '▲' : header.column.getIsSorted() === 'desc' ? '▼' : '◆' }}
-                </span>
-              </span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, idx) in table.getRowModel().rows" :key="row.id" class="row">
-            <td class="folio-col mono">{{ String(idx + 1).padStart(2, '0') }}</td>
-            <td
-              v-for="cell in row.getVisibleCells()"
-              :key="cell.id"
-              :class="{ num: NUM_COLS.has(cell.column.id) }"
-            >
-              <FlexRender :render="cell.column.columnDef.cell ?? cell.column.columnDef.accessorKey" :props="cell.getContext()" />
-            </td>
-          </tr>
-          <tr v-if="store.loading">
-            <td :colspan="columns.length + 1" class="empty">Loading…</td>
-          </tr>
-          <tr v-else-if="!table.getRowModel().rows.length">
-            <td :colspan="columns.length + 1" class="empty">
-              <span class="empty-mark">—</span>
-              No BOM records match the current view.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="ledger" :style="{ '--row-h': rowHeight + 'px' }">
+      <AgGridVue
+        class="grid"
+        :theme="gridTheme"
+        :columnDefs="columnDefs"
+        :rowData="filtered"
+        :defaultColDef="defaultColDef"
+        :rowHeight="rowHeight"
+        :headerHeight="headerHeight"
+        domLayout="autoHeight"
+        :suppressCellFocus="true"
+        :overlayNoRowsTemplate="noRowsTemplate"
+        :overlayLoadingTemplate="loadingTemplate"
+        @grid-ready="onGridReady"
+      />
     </div>
 
     <Modal
@@ -446,71 +493,38 @@ onMounted(() => {
 .byline .of { color: color-mix(in srgb, var(--text-dim) 70%, transparent); }
 
 .ledger {
-  overflow-x: auto;
-  overflow-y: visible;
   border-top: 1.5px solid var(--rule);
   border-bottom: 1.5px solid var(--rule);
 }
-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+.grid { width: 100%; }
 
-thead th {
-  text-align: left;
-  padding: 11px 12px;
+:deep(.ag-header-cell-text) {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .12em;
-  color: var(--text-dim);
-  background: var(--bg);
-  border-bottom: 1.5px solid var(--rule);
-  user-select: none;
-  white-space: nowrap;
-  vertical-align: bottom;
 }
-@media (min-width: 761px) {
-  thead th { position: sticky; top: 0; z-index: 1; }
-}
-.th-label { display: inline-flex; align-items: center; gap: 6px; }
-th.sortable { cursor: pointer; transition: color .12s; }
-th.sortable:hover { color: var(--text); }
-th.num, td.num { text-align: right; }
-th.num .th-label { flex-direction: row-reverse; }
-
-.sort-ind { font-size: 8px; opacity: 0; color: var(--accent); transition: opacity .12s; }
-th.sortable:hover .sort-ind { opacity: .35; }
-.sort-ind.on { opacity: 1; }
-
-.folio-col {
-  width: 1%;
-  text-align: right;
-  padding-right: 10px !important;
-  color: color-mix(in srgb, var(--text-dim) 65%, transparent);
-  font-size: 11px;
-}
-
-tbody td {
-  padding: 11px 12px;
-  font-size: 13px;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-  white-space: nowrap;
-}
-td.num {
+:deep(.ag-header-cell.num .ag-header-cell-label) { justify-content: flex-end; }
+:deep(.ag-cell.num) {
+  font-family: var(--font);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -.01em;
+  justify-content: flex-end;
+  text-align: right;
 }
+:deep(.folio-col) {
+  color: color-mix(in srgb, var(--text-dim) 65%, transparent);
+  font-size: 11px;
+  justify-content: flex-end;
+  text-align: right;
+}
+:deep(.ag-cell.actions-cell) { justify-content: flex-end; }
+
 :deep(.total-figure) {
   font-weight: 700;
   color: var(--accent-dim);
 }
-.row { position: relative; transition: background .12s; }
-.row td:first-child { box-shadow: inset 0 0 0 0 var(--accent); transition: box-shadow .12s; }
-.row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
-.row:hover td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
-.row:hover .folio-col { color: var(--accent-dim); }
-tbody tr:last-child td { border-bottom: none; }
 
 .add-btn {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent),
@@ -520,14 +534,19 @@ tbody tr:last-child td { border-bottom: none; }
 
 :deep(.row-actions) { display: inline-flex; gap: 6px; }
 :deep(.mini) {
+  box-sizing: border-box;
+  height: calc(var(--row-h) * 0.5);
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
   border-radius: 999px;
-  padding: 4px 11px;
+  padding: 0 11px;
   font: inherit;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
   letter-spacing: .02em;
   cursor: pointer;
   transition: color .12s, border-color .12s, background-color .12s;
