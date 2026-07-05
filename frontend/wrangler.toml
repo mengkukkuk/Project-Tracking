@@ -1,0 +1,17 @@
+name = "project-tracking"
+main = "worker/index.ts"
+compatibility_date = "2026-07-05"
+
+# Serve the built Vue SPA as static assets, and only invoke the Worker for /api/*.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"   # history-mode deep links -> index.html
+binding = "ASSETS"
+run_worker_first = ["/api/*"]                     # everything else is served straight from ./dist
+
+# KV holds the current (ephemeral) Cloudflare quick-tunnel URL under key "backend_url".
+# Create it once with:  npx wrangler kv namespace create CONFIG
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "33032bdc02b24980baaa4732b9545741"
