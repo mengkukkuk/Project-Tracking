@@ -11,6 +11,8 @@
   "dependencies": {
     "@fontsource/ibm-plex-sans-thai": "^5.2.8",
     "@tanstack/vue-table": "^8.20.5",
+    "ag-grid": "^18.1.2",
+    "ag-grid-vue3": "^36.0.0",
     "echarts": "^6.1.0",
     "exceljs": "^3.4.0",
     "jspdf": "^4.2.1",
