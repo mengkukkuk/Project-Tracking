@@ -17,7 +17,7 @@ defineEmits(['click'])
   <button
     v-if="actionable"
     type="button"
-    class="kpi card actionable"
+    class="kpi card actionable lc-lift"
     @click="$emit('click')"
   >
     <span class="kpi-icon" :style="{ background: accent + '1a', color: accent }">
@@ -25,17 +25,17 @@ defineEmits(['click'])
     </span>
     <span class="kpi-body">
       <span class="kpi-label">{{ label }}</span>
-      <span class="kpi-value mono">{{ value }}</span>
+      <span class="kpi-value mono readout">{{ value }}</span>
       <span v-if="sub" class="kpi-sub">{{ sub }}</span>
     </span>
   </button>
-  <div v-else class="kpi card">
+  <div v-else class="kpi card lc-lift">
     <div class="kpi-icon" :style="{ background: accent + '1a', color: accent }">
       <AppIcon v-if="icon" :name="icon" :size="20" />
     </div>
     <div class="kpi-body">
       <div class="kpi-label">{{ label }}</div>
-      <div class="kpi-value mono">{{ value }}</div>
+      <div class="kpi-value mono readout">{{ value }}</div>
       <div v-if="sub" class="kpi-sub">{{ sub }}</div>
     </div>
   </div>
@@ -46,14 +46,13 @@ defineEmits(['click'])
   width: 100%;
   display: flex; align-items: center; gap: 14px; padding: 16px 18px;
   text-align: left; border-color: var(--border);
-  transition: transform .15s, box-shadow .15s, border-color .15s;
 }
 button.kpi {
   font: inherit;
   color: inherit;
   cursor: pointer;
 }
-.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+/* lift/shadow come from the shared .lc-lift helper */
 .kpi.actionable:hover { border-color: var(--accent); }
 .kpi-icon {
   width: 42px; height: 42px; border-radius: 8px; flex-shrink: 0;

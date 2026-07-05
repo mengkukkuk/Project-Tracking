@@ -27,7 +27,7 @@ const taskLabel = computed(() => {
 </script>
 
 <template>
-  <button class="pcard" type="button" @click="$emit('open', project.id)">
+  <button class="pcard lc-lift" type="button" @click="$emit('open', project.id)">
     <span class="pcard-top">
       <span
         class="domain"
@@ -67,15 +67,41 @@ const taskLabel = computed(() => {
 </template>
 
 <style scoped>
+/* Liquid-crystal card WITHOUT backdrop-filter: dozens render on the pipeline
+   board and they sit on an opaque pool, so the blur is dropped for scroll perf
+   while keeping the base/sheen/rim look. */
 .pcard {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 8px;
   width: 100%;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(130% 90% at 100% -10%, var(--accent-soft), transparent 55%),
+    linear-gradient(180deg, var(--lc-sheen-top), var(--lc-sheen-mid) 32%),
+    var(--lc-base);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 var(--lc-inner-sheen), var(--lc-float);
   padding: 11px 12px; cursor: pointer; text-align: left; font: inherit; color: var(--text);
-  transition: box-shadow .15s, transform .1s, border-color .15s;
+  transition: box-shadow .3s ease, transform .3s ease, border-color .15s;
 }
-.pcard:hover { box-shadow: var(--shadow-lg); border-color: var(--accent); transform: translateY(-1px); }
+.pcard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--lc-rim-bright), var(--lc-rim-fade) 18%, var(--lc-rim-end) 46%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 0;
+}
+.pcard:hover { border-color: var(--accent); }
+.pcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pcard-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .domain { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
 .value { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text); }

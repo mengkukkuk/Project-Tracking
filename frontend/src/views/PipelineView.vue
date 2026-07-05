@@ -134,7 +134,35 @@ const columns = computed(() => {
 .board-inner.by-pm .column { flex: 1 0 264px; max-width: 360px; }
 
 .column { display: flex; flex-direction: column; min-width: 0; }
-.col-head { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 8px 8px 0 0; padding: 11px 13px; }
+.col-head {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 14px 14px 0 0;
+  padding: 11px 13px;
+  background:
+    radial-gradient(130% 90% at 100% -10%, var(--accent-soft), transparent 55%),
+    linear-gradient(180deg, var(--lc-sheen-top), var(--lc-sheen-mid) 32%),
+    var(--lc-base);
+  -webkit-backdrop-filter: blur(var(--lc-blur)) saturate(165%);
+  backdrop-filter: blur(var(--lc-blur)) saturate(165%);
+  box-shadow: inset 0 1px 0 var(--lc-inner-sheen), var(--lc-float);
+}
+.col-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--lc-rim-bright), var(--lc-rim-fade) 18%, var(--lc-rim-end) 46%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 0;
+}
 .col-head.unassigned { border-top-color: var(--text-dim); }
 .col-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -156,7 +184,7 @@ const columns = computed(() => {
 }
 .risk.danger { color: var(--danger); background: var(--critical-bg); }
 .risk.warn { color: var(--warning); background: var(--warning-bg); }
-.col-body { background: var(--bg-sunken); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 10px; flex: 1; min-height: 160px; display: flex; flex-direction: column; gap: 9px; }
+.col-body { background: var(--bg-sunken); border: 1px solid var(--border); border-top: none; border-radius: 0 0 14px 14px; padding: 10px; flex: 1; min-height: 160px; display: flex; flex-direction: column; gap: 9px; }
 .col-empty { text-align: center; color: var(--text-dim); font-size: 12px; padding: 20px 0; border: 1px dashed var(--border); border-radius: 8px; }
 .empty-board { padding: 60px; text-align: center; color: var(--text-dim); border: 1px dashed var(--border); border-radius: 8px; }
 
@@ -196,7 +224,12 @@ const columns = computed(() => {
     position: sticky;
     top: 56px;
     z-index: 5;
-    border-radius: 8px 8px 0 0;
+    border-radius: 14px 14px 0 0;
+    /* near-opaque so cards scrolling underneath don't bleed through */
+    background:
+      radial-gradient(130% 90% at 100% -10%, var(--accent-soft), transparent 55%),
+      linear-gradient(180deg, var(--lc-sheen-top), var(--lc-sheen-mid) 32%),
+      var(--lc-base-strong);
   }
   .col-body {
     min-height: 80px;

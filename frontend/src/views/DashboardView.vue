@@ -463,12 +463,12 @@ const docSummaries = computed(() => [
         <div class="sec1-grid">
           <div class="field">
             <div class="lbl">ต้นทุนรวม จาก BOM · Total Cost (BOM)</div>
-            <div class="val strong mono">{{ baht(bomTotal) }}</div>
+            <div class="val strong mono readout">{{ baht(bomTotal) }}</div>
             <div class="sub">{{ bomRows.length }} รายการ · {{ bomRows.length }} item{{ bomRows.length === 1 ? '' : 's' }}</div>
           </div>
           <div class="field">
             <div class="lbl">มูลค่าโครงการ · Project Value</div>
-            <div class="val strong mono">{{ baht(project.value || 0) }}</div>
+            <div class="val strong mono readout">{{ baht(project.value || 0) }}</div>
             <div class="sub">จากข้อมูลโครงการ · From project record</div>
           </div>
           <div class="field">

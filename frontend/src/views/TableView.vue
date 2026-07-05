@@ -261,9 +261,15 @@ async function doExport(format) {
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: color .12s, background .12s;
+  transition: color .12s, background .12s, box-shadow .12s;
 }
-.segmented button.active { background: var(--accent); color: #fff; }
+.segmented button:hover { color: var(--text); }
+.segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.segmented button.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 1px 3px rgba(15, 23, 42, .12);
+}
 
 /* ---- Byline / folio line ---- */
 .byline {
@@ -288,6 +294,7 @@ async function doExport(format) {
 /* ---- The ledger table ---- */
 .ledger {
   overflow-x: auto;
+  overflow-y: visible;
   border-top: 1.5px solid var(--rule);
   border-bottom: 1.5px solid var(--rule);
 }
@@ -302,11 +309,14 @@ thead th {
   text-transform: uppercase;
   letter-spacing: .12em;
   color: var(--text-dim);
-  background: transparent;
+  background: var(--bg);
   border-bottom: 1.5px solid var(--rule);
   user-select: none;
   white-space: nowrap;
   vertical-align: bottom;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .th-label { display: inline-flex; align-items: center; gap: 6px; }
 th.sortable { cursor: pointer; transition: color .12s; }

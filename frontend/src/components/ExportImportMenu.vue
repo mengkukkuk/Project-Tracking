@@ -60,7 +60,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenu))
         <AppIcon name="download" :size="14" />
         Export
       </button>
-      <div v-if="menuOpen" class="export-menu">
+      <div v-if="menuOpen" class="export-menu lc-surface">
         <button v-if="formats.includes('excel')" @click="chooseFormat('excel')">
           Excel (.xlsx)
         </button>
@@ -84,10 +84,11 @@ onUnmounted(() => document.removeEventListener('click', closeMenu))
 <style scoped>
 .eim { display: inline-flex; align-items: center; gap: 6px; }
 .export-wrap { position: relative; }
+/* Surface from .lc-surface; near-opaque base so the menu stays readable over
+   whatever content sits behind it. */
 .export-menu {
+  --lc-base: var(--lc-base-strong);
   position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; box-shadow: var(--shadow-lg);
   padding: 4px; min-width: 140px; display: grid;
 }
 .export-menu button {

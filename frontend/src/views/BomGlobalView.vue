@@ -63,7 +63,11 @@ const columns = [
   { accessorKey: 'unit', header: 'Unit', cell: (i) => i.getValue() || '—' },
   { accessorKey: 'position', header: 'Position', cell: (i) => i.getValue() || '—' },
   { accessorKey: 'unitPrice', header: 'Unit price', cell: (i) => num(i.getValue()) },
-  { accessorKey: 'totalPrice', header: 'Total price', cell: (i) => num(i.getValue()) },
+  {
+    accessorKey: 'totalPrice',
+    header: 'Total price',
+    cell: (i) => h('span', { class: 'total-figure' }, num(i.getValue())),
+  },
   { accessorKey: 'leadTime', header: 'Lead time', cell: (i) => num(i.getValue()) },
   { accessorKey: 'supplier', header: 'Supplier', cell: (i) => i.getValue() || '—' },
   { accessorKey: 'dateApprove', header: 'Approved on', cell: (i) => date(i.getValue()) },
@@ -73,8 +77,8 @@ const columns = [
     enableSorting: false,
     cell: (i) =>
       h('div', { class: 'row-actions' }, [
-        h('button', { class: 'mini', onClick: () => openEdit(i.row.original) }, 'Edit'),
-        h('button', { class: 'mini danger', onClick: () => remove(i.row.original) }, 'Delete'),
+        h('button', { class: 'mini', type: 'button', onClick: () => openEdit(i.row.original) }, 'Edit'),
+        h('button', { class: 'mini danger', type: 'button', onClick: () => remove(i.row.original) }, 'Delete'),
       ]),
   },
 ]
@@ -425,7 +429,7 @@ onMounted(() => {
   font: inherit;
   font-size: 13px;
 }
-.search:focus { outline: none; border-color: var(--accent); }
+.search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20, 184, 166, .15); }
 
 .byline {
   display: flex;
@@ -443,6 +447,7 @@ onMounted(() => {
 
 .ledger {
   overflow-x: auto;
+  overflow-y: visible;
   border-top: 1.5px solid var(--rule);
   border-bottom: 1.5px solid var(--rule);
 }
@@ -456,10 +461,14 @@ thead th {
   text-transform: uppercase;
   letter-spacing: .12em;
   color: var(--text-dim);
+  background: var(--bg);
   border-bottom: 1.5px solid var(--rule);
   user-select: none;
   white-space: nowrap;
   vertical-align: bottom;
+}
+@media (min-width: 761px) {
+  thead th { position: sticky; top: 0; z-index: 1; }
 }
 .th-label { display: inline-flex; align-items: center; gap: 6px; }
 th.sortable { cursor: pointer; transition: color .12s; }
@@ -492,26 +501,40 @@ td.num {
   font-weight: 600;
   letter-spacing: -.01em;
 }
+:deep(.total-figure) {
+  font-weight: 700;
+  color: var(--accent-dim);
+}
+.row { position: relative; transition: background .12s; }
+.row td:first-child { box-shadow: inset 0 0 0 0 var(--accent); transition: box-shadow .12s; }
 .row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.row:hover td:first-child { box-shadow: inset 3px 0 0 0 var(--accent); }
+.row:hover .folio-col { color: var(--accent-dim); }
 tbody tr:last-child td { border-bottom: none; }
 
+.add-btn {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .18);
+}
 .add-btn .plus { font-size: 15px; font-weight: 700; line-height: 1; }
 
-.row-actions { display: inline-flex; gap: 6px; }
-.mini {
+:deep(.row-actions) { display: inline-flex; gap: 6px; }
+:deep(.mini) {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
-  border-radius: 6px;
-  padding: 4px 9px;
+  border-radius: 999px;
+  padding: 4px 11px;
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: .02em;
   cursor: pointer;
-  transition: color .12s, border-color .12s;
+  transition: color .12s, border-color .12s, background-color .12s;
 }
-.mini:hover { color: var(--accent); border-color: var(--accent); }
-.mini.danger:hover { color: #c0392b; border-color: #c0392b; }
+:deep(.mini:hover) { color: var(--accent-dim); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+:deep(.mini:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+:deep(.mini.danger:hover) { color: #c0392b; border-color: #c0392b; background: color-mix(in srgb, #c0392b 8%, var(--surface)); }
 
 .empty {
   text-align: center;
