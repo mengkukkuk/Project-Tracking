@@ -82,7 +82,7 @@ call :reinstall "%TUN_SVC%"
 %NSSM% install "%TUN_SVC%" "powershell.exe"                                              || goto :end_fail
 %NSSM% set "%TUN_SVC%" AppParameters "-ExecutionPolicy Bypass -NoProfile -File \"%TUNNEL_PS1%\"" || goto :end_fail
 %NSSM% set "%TUN_SVC%" AppDirectory "%ROOT%\deploy"                                      || goto :end_fail
-%NSSM% set "%TUN_SVC%" AppEnvironmentExtra "CLOUDFLARE_API_TOKEN=cfat_TIB2pf0CnuMGDYABSSMAJrfU4o3bcb55yScIinEx4157aea7" "CF_ACCOUNT_ID=50ec9d8adf2939e545a88b9f0ed2c1ac" "CF_KV_NAMESPACE_ID=33032bdc02b24980baaa4732b9545741" || goto :end_fail
+%NSSM% set "%TUN_SVC%" AppEnvironmentExtra "CLOUDFLARE_API_TOKEN=%CLOUDFLARE_API_TOKEN%" "CF_ACCOUNT_ID=%CF_ACCOUNT_ID%" "CF_KV_NAMESPACE_ID=%CF_KV_NAMESPACE_ID%" || goto :end_fail
 %NSSM% set "%TUN_SVC%" Start SERVICE_AUTO_START                 >nul
 %NSSM% set "%TUN_SVC%" AppStdout "%LOGDIR%\tunnel.out.log"      >nul
 %NSSM% set "%TUN_SVC%" AppStderr "%LOGDIR%\tunnel.err.log"      >nul
