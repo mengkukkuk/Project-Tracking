@@ -21,7 +21,7 @@
 
 param(
   [int]$BackendPort     = 5000,
-  [int]$MetricsPort     = 5054,
+  [int]$MetricsPort     = 5056,
   [string]$KvKey        = "backend_url",
   [string]$CloudflaredExe = "cloudflared",
   [int]$PollSeconds     = 5
