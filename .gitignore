@@ -58,3 +58,4 @@ dist/
 /frontend/test-results/projects-Projects-kanban-view-loads-columns/video.webm
 /frontend/test-results/projects-Projects-overview-page-shows-KPI-cards/video.webm
 /frontend/test-results/projects-Projects-table-view-lists-projects/video.webm
+/deploy/test_nssm.bat
