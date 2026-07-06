@@ -27,7 +27,8 @@ set "PYTHON=%ROOT%\backend\.venv\Scripts\python.exe"
 set "SERVER=%ROOT%\backend\server.py"
 set "TUNNEL_PS1=%ROOT%\deploy\tunnel-run.ps1"
 set "LOGDIR=%ROOT%\deploy\logs"
-if not defined NSSM set "NSSM=nssm"
+if not defined NSSM set "NSSM=nssm"  
+REM optional override in service.config.bat
 
 REM --- Must be Administrator ---------------------------------------------------
 net session >nul 2>&1
