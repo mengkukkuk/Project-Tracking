@@ -45,7 +45,10 @@ if not defined CF_ACCOUNT_ID        set /p "CF_ACCOUNT_ID=Enter CF_ACCOUNT_ID: "
 if not defined CF_KV_NAMESPACE_ID   set /p "CF_KV_NAMESPACE_ID=Enter CF_KV_NAMESPACE_ID: "
 
 REM --- Sanity checks ----------------------------------------------------------
-where %NSSM% >nul 2>&1 || ( echo [ERROR] nssm not found on PATH. Install it, or set NSSM=C:\path\to\nssm.exe & goto :end_fail )
+if exist "%NSSM%" ( rem NSSM points directly at an existing file - OK
+) else (
+  where %NSSM% >nul 2>&1 || ( echo [ERROR] nssm not found on PATH. Install it, or set NSSM=C:\path\to\nssm.exe & goto :end_fail )
+)
 if not exist "%PYTHON%"     ( echo [ERROR] Python venv missing: "%PYTHON%"    & goto :end_fail )
 if not exist "%SERVER%"     ( echo [ERROR] server.py missing:  "%SERVER%"     & goto :end_fail )
 if not exist "%TUNNEL_PS1%" ( echo [ERROR] tunnel script missing: "%TUNNEL_PS1%" & goto :end_fail )
@@ -64,7 +67,8 @@ REM ============================================================================
 REM  1) Backend API service (waitress on 127.0.0.1:5000)
 REM ============================================================================
 call :reinstall "%API_SVC%"
-%NSSM% install "%API_SVC%" "%PYTHON%" "%SERVER%"                || goto :end_fail
+%NSSM% install "%API_SVC%" "%PYTHON%"                           || goto :end_fail
+%NSSM% set "%API_SVC%" AppParameters "\"%SERVER%\""             || goto :end_fail
 %NSSM% set "%API_SVC%" AppDirectory "%ROOT%\backend"            || goto :end_fail
 %NSSM% set "%API_SVC%" Start SERVICE_AUTO_START                 >nul
 %NSSM% set "%API_SVC%" AppStdout "%LOGDIR%\api.out.log"         >nul
