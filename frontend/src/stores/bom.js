@@ -10,7 +10,7 @@ export const useBomStore = defineStore('bom', {
     rows: [],
     loading: false,
     error: null,
-    q: '',
+    filters: { q: '', category: '', supplier: '', projectId: '' },
   }),
 
   actions: {
@@ -28,8 +28,12 @@ export const useBomStore = defineStore('bom', {
       }
     },
 
-    setQuery(v) {
-      this.q = v
+    setFilter(patch) {
+      Object.assign(this.filters, patch)
+    },
+
+    clearFilters() {
+      this.filters = { q: '', category: '', supplier: '', projectId: '' }
     },
 
     async createRow(projectId, payload) {

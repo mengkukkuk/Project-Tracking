@@ -6,6 +6,7 @@ import { useBomStore } from '@/stores/bom'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
+import AppIcon from '@/components/AppIcon.vue'
 import ExportImportMenu from '@/components/ExportImportMenu.vue'
 import ImportResultModal from '@/components/ImportResultModal.vue'
 import Modal from '@/components/Modal.vue'
@@ -37,16 +38,66 @@ const today = new Date()
 const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
 const dash = (p) => (p.value == null || p.value === '' ? '—' : p.value)
 
-// Client-side text search across the most useful free-text fields.
+// --- Filters -----------------------------------------------------------------
+// Facet options are derived from the loaded rows (category/supplier) or the
+// projects store (project); mirrors ProjectFilters.vue's search+selects+active
+// chips pattern, but filtering here is purely client-side (no server round-trip).
+const categoryOptions = computed(() =>
+  [...new Set(store.rows.map((r) => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+)
+const supplierOptions = computed(() =>
+  [...new Set(store.rows.map((r) => r.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+)
+const projectFilterOptions = computed(() =>
+  [...projectsStore.projects].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+)
+
 const filtered = computed(() => {
-  const q = store.q.trim().toLowerCase()
-  if (!q) return store.rows
-  return store.rows.filter((r) =>
-    ['deviceName', 'spec', 'category', 'supplier', 'projectName'].some((k) =>
-      String(r[k] || '').toLowerCase().includes(q),
-    ),
-  )
+  const { q, category, supplier, projectId } = store.filters
+  const needle = q.trim().toLowerCase()
+  return store.rows.filter((r) => {
+    if (category && r.category !== category) return false
+    if (supplier && r.supplier !== supplier) return false
+    if (projectId && String(r.projectId) !== String(projectId)) return false
+    if (!needle) return true
+    return ['deviceName', 'spec', 'category', 'supplier', 'projectName'].some((k) =>
+      String(r[k] || '').toLowerCase().includes(needle),
+    )
+  })
 })
+
+// Local echo of the search text, debounced into the store — same pattern as
+// ProjectFilters.vue's onSearch, so "Clear all" (which replaces store.filters
+// wholesale) stays in sync via the watcher below.
+const qInput = ref(store.filters.q)
+watch(
+  () => store.filters.q,
+  (value) => {
+    if (value !== qInput.value) qInput.value = value || ''
+  },
+)
+let searchTimer
+function onSearch(value) {
+  qInput.value = value
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => store.setFilter({ q: value.trim() }), 250)
+}
+
+const activeFilters = computed(() => {
+  const items = []
+  if (store.filters.q) items.push(['q', `Search: ${store.filters.q}`])
+  if (store.filters.category) items.push(['category', store.filters.category])
+  if (store.filters.supplier) items.push(['supplier', store.filters.supplier])
+  if (store.filters.projectId) {
+    const proj = projectsStore.projects.find((p) => String(p.id) === String(store.filters.projectId))
+    items.push(['projectId', proj?.name || 'Project'])
+  }
+  return items
+})
+
+function clearOne(key) {
+  store.setFilter({ [key]: '' })
+}
 
 // Every colour is a live var() into assets/main.css, so dark mode / accent
 // recolour the grid for free — no second theme to maintain.
@@ -339,15 +390,50 @@ onMounted(() => {
       </p>
     </header>
 
-    <div class="toolbar">
-      <input
-        :value="store.q"
-        class="search"
-        type="search"
-        placeholder="Search by device, spec, category, supplier, project…"
-        @input="store.setQuery($event.target.value)"
-      />
-    </div>
+    <section class="filters" aria-label="BOM filters">
+      <div class="search-box">
+        <AppIcon name="search" :size="16" />
+        <input
+          :value="qInput"
+          type="search"
+          placeholder="Search by device, spec, category, supplier, project…"
+          @input="onSearch($event.target.value)"
+        />
+      </div>
+
+      <div class="selects">
+        <label>
+          <span>Category</span>
+          <select :value="store.filters.category" @change="store.setFilter({ category: $event.target.value })">
+            <option value="">Any category</option>
+            <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Supplier</span>
+          <select :value="store.filters.supplier" @change="store.setFilter({ supplier: $event.target.value })">
+            <option value="">Any supplier</option>
+            <option v-for="s in supplierOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </label>
+        <label>
+          <span>Project</span>
+          <select :value="store.filters.projectId" @change="store.setFilter({ projectId: $event.target.value })">
+            <option value="">Any project</option>
+            <option v-for="p in projectFilterOptions" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div v-if="activeFilters.length" class="active">
+        <span class="active-label"><AppIcon name="filter" :size="14" /> Active</span>
+        <button v-for="[key, label] in activeFilters" :key="key" type="button" class="active-chip" @click="clearOne(key)">
+          {{ label }}
+          <AppIcon name="close" :size="12" />
+        </button>
+        <button type="button" class="clear" @click="store.clearFilters()">Clear all</button>
+      </div>
+    </section>
 
     <div class="byline mono">
       <span class="folio">{{ String(shownCount).padStart(2, '0') }}</span>
@@ -464,19 +550,116 @@ onMounted(() => {
 }
 .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 4px; }
 
-.toolbar { margin: 4px 0 2px; }
-.search {
-  width: 100%;
-  max-width: 420px;
-  padding: 9px 12px;
+.filters {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(100%, 480px);
+  padding: 0 12px;
+  min-height: 40px;
+  color: var(--text-dim);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.search-box input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 13px;
 }
-.search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20, 184, 166, .15); }
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20, 184, 166, .15); }
+
+.selects,
+.active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.selects label { display: grid; gap: 4px; }
+.selects span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.selects select {
+  min-width: 132px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.active { padding-top: 2px; }
+.active-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+.active-chip,
+.clear {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+.clear { color: var(--text-dim); }
+.clear:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (min-width: 1100px) {
+  .filters {
+    grid-template-columns: minmax(280px, 420px) 1fr;
+    align-items: start;
+  }
+  .selects,
+  .active { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .filters { gap: 8px; }
+  .search-box { width: 100%; min-height: 38px; }
+  .selects {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .selects label { gap: 3px; }
+  .selects select { min-width: 0; width: 100%; height: 36px; font-size: 13px; }
+  .active { gap: 6px; }
+  .active-chip { font-size: 11px; padding: 4px 8px; min-height: 26px; }
+}
 
 .byline {
   display: flex;
