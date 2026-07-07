@@ -57,6 +57,9 @@ function submit() {
     else if (f.type === 'date') v = v || null
     out[f.key] = v
   }
+  // Default unit to "pcs" when left blank — mirrors the field's placeholder so
+  // the common case needs no typing.
+  if (out.unit == null || String(out.unit).trim() === '') out.unit = 'pcs'
   emit('submit', out)
 }
 </script>
@@ -114,7 +117,12 @@ function submit() {
           type="checkbox"
           class="checkbox"
         />
-        <input v-else v-model="form[f.key]" class="input" />
+        <input
+          v-else
+          v-model="form[f.key]"
+          class="input"
+          :placeholder="f.key === 'unit' ? 'pcs' : null"
+        />
       </label>
     </div>
 
