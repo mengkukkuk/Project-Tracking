@@ -18,6 +18,7 @@ import {
   exportBomInventoryPdf,
   parseBomInventoryExcel,
 } from '@/utils/recordExport'
+import { RECORD_SCHEMAS } from '@/schemas/records'
 import { api } from '@/api'
 
 // Module registration is global; ag-grid dedupes, so multiple views registering
@@ -142,31 +143,26 @@ const ActionsCell = defineComponent({
   props: ['params'],
   render() {
     const row = this.params.data
+    // Icon-only pill buttons; each carries title + aria-label for a11y/tooltip.
+    const iconBtn = (icon, label, handler, extraClass) =>
+      h(
+        'button',
+        {
+          class: ['mini', 'icon-btn', extraClass].filter(Boolean).join(' '),
+          type: 'button',
+          title: label,
+          'aria-label': label,
+          onClick: (e) => {
+            e.stopPropagation()
+            handler(row)
+          },
+        },
+        [h(AppIcon, { name: icon, size: 15 })],
+      )
     return h('div', { class: 'row-actions' }, [
-      h(
-        'button',
-        {
-          class: 'mini',
-          type: 'button',
-          onClick: (e) => {
-            e.stopPropagation()
-            openEdit(row)
-          },
-        },
-        'Edit',
-      ),
-      h(
-        'button',
-        {
-          class: 'mini danger',
-          type: 'button',
-          onClick: (e) => {
-            e.stopPropagation()
-            remove(row)
-          },
-        },
-        'Delete',
-      ),
+      iconBtn('edit', 'Edit', openEdit),
+      iconBtn('copy', 'Duplicate', duplicate),
+      iconBtn('trash', 'Delete', remove, 'danger'),
     ])
   },
 })
@@ -265,6 +261,21 @@ async function remove(row) {
   try {
     await store.deleteRow(row.id)
     ui.success('BOM record deleted')
+  } catch (e) {
+    ui.error(e.message)
+  }
+}
+
+// Duplicate: create a fresh record in the same project from a copy of the row's
+// BOM fields (id/projectId/projectName are dropped — createRow assigns them).
+async function duplicate(row) {
+  try {
+    const body = {}
+    for (const f of RECORD_SCHEMAS.bom.fields) {
+      body[f.key] = row[f.key] ?? (f.type === 'number' ? null : f.type === 'checkbox' ? false : '')
+    }
+    await store.createRow(row.projectId, body)
+    ui.success('BOM record duplicated')
   } catch (e) {
     ui.error(e.message)
   }
@@ -702,7 +713,12 @@ onMounted(() => {
   justify-content: flex-end;
   text-align: right;
 }
-:deep(.ag-cell.actions-cell) { justify-content: flex-end; }
+:deep(.ag-cell.actions-cell) {
+  justify-content: flex-end;
+  /* Tighter than the grid's default cell padding so three icon buttons fit. */
+  padding-left: 10px;
+  padding-right: 12px;
+}
 
 :deep(.total-figure) {
   font-weight: 700;
@@ -737,6 +753,14 @@ onMounted(() => {
 :deep(.mini:hover) { color: var(--accent-dim); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 :deep(.mini:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 :deep(.mini.danger:hover) { color: #c0392b; border-color: #c0392b; background: color-mix(in srgb, #c0392b 8%, var(--surface)); }
+
+/* Icon-only variant: square footprint, centred glyph — used for the row actions. */
+:deep(.mini.icon-btn) {
+  width: calc(var(--row-h) * 0.5);
+  padding: 0;
+  justify-content: center;
+  color: var(--text-dim);
+}
 
 .empty {
   text-align: center;

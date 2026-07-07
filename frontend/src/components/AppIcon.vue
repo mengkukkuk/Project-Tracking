@@ -66,6 +66,10 @@ defineProps({
       <path d="M10 11v5" />
       <path d="M14 11v5" />
     </template>
+    <template v-else-if="name === 'copy'">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </template>
     <template v-else-if="name === 'close'">
       <path d="M6 6l12 12" />
       <path d="M18 6 6 18" />
