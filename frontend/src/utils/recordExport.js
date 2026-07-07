@@ -137,6 +137,22 @@ function addRecordSheet(wb, resource, rows, sheetName) {
   return ws
 }
 
+// Append a bold "Total" row summing a numeric field beneath an
+// addRecordSheet-populated worksheet (column order must match `fields`).
+// Used by the BOM list exports so a saved list's total cost is visible
+// without opening a formula.
+function addFieldTotalRow(ws, fields, rows, key, label = 'Total') {
+  const idx = fields.findIndex((f) => f.key === key)
+  if (idx === -1 || !rows.length) return
+  const sum = rows.reduce((a, r) => a + (Number(r[key]) || 0), 0)
+  const values = fields.map(() => '')
+  values[idx] = sum
+  if (idx !== 0) values[0] = label
+  const row = ws.addRow(values)
+  row.font = { bold: true }
+  row.getCell(idx + 1).numFmt = '#,##0'
+}
+
 async function writeAndDownload(wb, filename) {
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], {
@@ -617,7 +633,8 @@ export async function exportBomListExcel(project, listName, rows, filename) {
   const wb = new ExcelJS.Workbook()
   addProjectSummarySheet(wb, project)
   // Sheet name = list name (deduped + clipped to 31 chars by addRecordSheet).
-  addRecordSheet(wb, 'bom', rows, listName || RECORD_SCHEMAS.bom.label)
+  const ws = addRecordSheet(wb, 'bom', rows, listName || RECORD_SCHEMAS.bom.label)
+  addFieldTotalRow(ws, RECORD_SCHEMAS.bom.fields, rows, 'totalPrice')
   const name =
     filename ||
     `${['bom-list', slug(listName), slug(project?.name), stamp()]
@@ -679,9 +696,26 @@ export function exportBomListPdf(project, listName, rows, filename) {
   const head = [columns.map((c) => c.label)]
   const body = rows.map((row) => columns.map((c) => displayValue(c, row[c.key])))
 
+  // Total row: sum of Total price, shown once at the end of the table.
+  const totalIdx = columns.findIndex((c) => c.key === 'totalPrice')
+  const foot =
+    totalIdx === -1 || !rows.length
+      ? undefined
+      : [
+          columns.map((c, i) => {
+            if (i === totalIdx) {
+              const sum = rows.reduce((a, r) => a + (Number(r.totalPrice) || 0), 0)
+              return sum.toLocaleString()
+            }
+            return i === totalIdx - 1 ? 'Total' : ''
+          }),
+        ]
+
   autoTable(doc, {
     head,
     body,
+    foot,
+    showFoot: 'lastPage',
     startY: 56,
     margin: { top: 56, bottom: 28, left: 20, right: 20 },
     styles: {
@@ -692,6 +726,7 @@ export function exportBomListPdf(project, listName, rows, filename) {
       cellPadding: 3,
     },
     headStyles: { font, fillColor: [79, 129, 189], textColor: 255, fontSize: 8 },
+    footStyles: { font, fontStyle: 'bold', fontSize: 8 },
     didDrawPage: () => {
       doc.setFont(font)
       doc.setFontSize(13)
