@@ -75,10 +75,10 @@ const headerHeight = 40
 
 // cellRenderers are thin defineComponent wrappers so the presentational look
 // stays in the view; ag-grid injects `params` (with .value/.data).
-const ProjectCell = defineComponent({
+const PrimaryCell = defineComponent({
   props: ['params'],
   render() {
-    return h('strong', { class: 'project-cell' }, this.params.value || '—')
+    return h('strong', { class: 'primary-cell' }, this.params.value || '—')
   },
 })
 const TotalCell = defineComponent({
@@ -130,8 +130,8 @@ const columnDefs = [
     valueFormatter: (p) => String(p.value).padStart(2, '0'),
     cellClass: 'folio-col mono', headerClass: 'folio-col',
   },
-  { field: 'projectName', headerName: 'Project', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: ProjectCell },
-  { field: 'deviceName', headerName: 'Device name', flex: 1.2, minWidth: 150, valueFormatter: dash },
+  { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
+  { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 150, valueFormatter: dash },
   { field: 'category', headerName: 'Category', minWidth: 120, valueFormatter: dash },
   { field: 'version', headerName: 'Version', minWidth: 90, valueFormatter: dash },
   { field: 'quantity', headerName: 'Qty', minWidth: 80, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
@@ -374,7 +374,7 @@ onMounted(() => {
 
     <Modal
       v-if="panel"
-      :title="isEditing ? `Edit BOM — ${panel.projectName || ''}` : 'Add BOM record'"
+      :title="isEditing ? `Edit BOM — ${panel.deviceName || ''}` : 'Add BOM record'"
       wide
       @close="panel = null"
     >
@@ -565,7 +565,7 @@ onMounted(() => {
 }
 .empty-mark { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
 
-:deep(.project-cell) {
+:deep(.primary-cell) {
   font-family: var(--serif);
   font-weight: 600;
   font-size: 14px;
