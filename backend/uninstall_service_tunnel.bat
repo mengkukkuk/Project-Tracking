@@ -60,6 +60,26 @@ if errorlevel 1 (
 
 echo.
 
+:: ---- Orphan cleanup: NSSM stops the tunnel service by killing --
+:: powershell.exe, which can leave its cloudflared child running and
+:: holding the metrics port. Kill any leftover cloudflared.exe so a
+:: later reinstall/start isn't wedged by a dead port bind.
+:: NOTE: intentionally not piping through "find" — on machines with Git
+:: for Windows on PATH, its usr\bin\find.exe (GNU find) can shadow the
+:: real System32\find.exe and silently break `find /i "..."` detection.
+:: taskkill self-reports via errorlevel, so no detection step is needed.
+echo Cleaning up any leftover cloudflared.exe ...
+taskkill /f /im cloudflared.exe >nul 2>&1
+if errorlevel 128 (
+    echo [SKIP] No leftover cloudflared.exe process.
+) else if errorlevel 1 (
+    echo [WARN] Could not stop cloudflared.exe - access denied. Re-run this script as Administrator.
+) else (
+    echo Done: cloudflared.exe cleaned up.
+)
+
+echo.
+
 :: ---- Legacy cleanup: old Tailscale-based frontend service ---
 "%NSSM%" status %LEGACY_FRONTEND_SVC% >nul 2>&1
 if errorlevel 1 (
