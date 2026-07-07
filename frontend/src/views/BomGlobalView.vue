@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, h, computed, defineComponent, watch, onMounted } from 'vue'
+import { ref, shallowRef, h, computed, defineComponent, watch, onMounted, onUnmounted } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useBomStore } from '@/stores/bom'
@@ -31,6 +31,18 @@ const ui = useUiStore()
 const { date } = useFormat()
 
 const gridApi = shallowRef(null)
+
+// Below 760px (App.vue's mobile-shell breakpoint) keep the grid at autoHeight so
+// the page scrolls naturally; on desktop it uses `normal` layout inside a
+// viewport-tall flex column, so its rows scroll internally while the filter panel
+// and column header stay locked in place.
+const mq = window.matchMedia('(max-width: 760px)')
+const isMobile = ref(mq.matches)
+const onMq = (e) => {
+  isMobile.value = e.matches
+}
+mq.addEventListener('change', onMq)
+onUnmounted(() => mq.removeEventListener('change', onMq))
 
 const today = new Date()
   .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -363,15 +375,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="view register">
+  <div class="view register" :class="{ 'is-desktop': !isMobile }">
     <header class="masthead">
-      <div class="dateline mono">
+      <!--div class="dateline mono">
         <span>BOM&nbsp;&amp;&nbsp;Costing</span>
         <span class="sep">·</span>
         <span>Total records : {{ store.rows.length }}</span>
         <span class="sep">·</span>
         <span>{{ today }}</span>
-      </div>
+      </div-->
 
       <div class="masthead-row">
         <h1 class="masthead-title">BOM Inventory</h1>
@@ -413,7 +425,7 @@ onMounted(() => {
       </div>
 
       <div class="selects">
-        <label>
+        <label class="selects">
           <span>Category</span>
           <select :value="store.filters.category" @change="store.setFilter({ category: $event.target.value })">
             <option value="">Any category</option>
@@ -461,7 +473,7 @@ onMounted(() => {
         :defaultColDef="defaultColDef"
         :rowHeight="rowHeight"
         :headerHeight="headerHeight"
-        domLayout="autoHeight"
+        :domLayout="isMobile ? 'autoHeight' : 'normal'"
         :suppressCellFocus="true"
         :overlayNoRowsTemplate="noRowsTemplate"
         :overlayLoadingTemplate="loadingTemplate"
@@ -513,6 +525,21 @@ onMounted(() => {
   --rule: color-mix(in srgb, var(--text) 78%, transparent);
 }
 
+/* Desktop only (bound off the same `isMobile` matchMedia that drives the grid's
+   domLayout, so CSS and JS can never disagree): fill the viewport minus .main's
+   28px top+bottom padding so the page never scrolls — the grid scrolls its rows
+   internally instead, keeping the masthead, filter panel and column header
+   locked in place. On mobile the class is absent, so the view falls back to
+   natural flow and the grid's autoHeight page-scroll. */
+.register.is-desktop {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+}
+.register.is-desktop .masthead,
+.register.is-desktop .filters,
+.register.is-desktop .byline { flex-shrink: 0; }
+
 .masthead {
   border-top: 2px solid var(--rule);
   border-bottom: 1px solid var(--rule);
@@ -544,7 +571,7 @@ onMounted(() => {
 .masthead-title {
   font-family: var(--serif);
   font-weight: 500;
-  font-size: clamp(34px, 5vw, 52px);
+  font-size: clamp(20px, 5vw, 30px);
   line-height: .98;
   letter-spacing: -.015em;
   color: var(--text);
@@ -562,15 +589,18 @@ onMounted(() => {
 .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 4px; }
 
 .filters {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
   margin: 4px 0 2px;
 }
 .search-box {
   display: flex;
   align-items: center;
   gap: 9px;
-  width: min(100%, 480px);
+  flex: 1 1 240px;
+  max-width: 400px;
   padding: 0 12px;
   min-height: 40px;
   color: var(--text-dim);
@@ -597,6 +627,7 @@ onMounted(() => {
   gap: 8px;
   flex-wrap: wrap;
 }
+.active { flex-basis: 100%; }
 .selects label { display: grid; gap: 4px; }
 .selects span {
   font-size: 10px;
@@ -649,26 +680,18 @@ onMounted(() => {
 .clear { color: var(--text-dim); }
 .clear:hover { border-color: var(--accent); color: var(--accent); }
 
-@media (min-width: 1100px) {
-  .filters {
-    grid-template-columns: minmax(280px, 420px) 1fr;
-    align-items: start;
-  }
-  .selects,
-  .active { grid-column: 1 / -1; }
-}
-
 @media (max-width: 640px) {
-  .filters { gap: 8px; }
-  .search-box { width: 100%; min-height: 38px; }
+  .filters { flex-direction: column; align-items: stretch; gap: 8px; }
+  .search-box { flex: 0 0 auto; width: 100%; max-width: none; min-height: 38px; }
   .selects {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+    width: 100%;
   }
   .selects label { gap: 3px; }
   .selects select { min-width: 0; width: 100%; height: 36px; font-size: 13px; }
-  .active { gap: 6px; }
+  .active { flex: 0 0 auto; gap: 6px; }
   .active-chip { font-size: 11px; padding: 4px 8px; min-height: 26px; }
 }
 
@@ -691,6 +714,15 @@ onMounted(() => {
   border-bottom: 1.5px solid var(--rule);
 }
 .grid { width: 100%; }
+
+/* Desktop: the ledger takes the remaining column height; min-height:0 lets the
+   flex item shrink so the grid (not the page) provides the scroll. */
+.register.is-desktop .ledger {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.register.is-desktop .grid { height: 100%; }
 
 :deep(.ag-header-cell-text) {
   font-size: 10px;
