@@ -21,7 +21,6 @@ import {
   gradeFor,
   efficiencyAxis,
   SUMMARY_COLORS,
-  GRADE_COLORS,
 } from '@/utils/summaryCalc'
 
 const store = useProjectsStore()
@@ -194,17 +193,12 @@ const compareRows = computed(() =>
           @click="selectProject(s.project.id)"
         >
           <span class="selector-icon" :style="{ background: `${projectColor(s.project)}22`, color: projectColor(s.project) }">
-            <AppIcon name="target" :size="14" />
+            <AppIcon name="target" :size="13" />
           </span>
-          <p class="selector-name">{{ s.project.name }}</p>
-          <p class="selector-domain">{{ s.project.domain || '—' }}</p>
-          <div class="selector-foot">
-            <span
-              class="selector-grade mono"
-              :style="{ color: GRADE_COLORS[s.grade], borderColor: GRADE_COLORS[s.grade], background: `${GRADE_COLORS[s.grade]}1a` }"
-            >{{ s.grade }}</span>
-            <span class="selector-perf mono">{{ Math.round(s.results.performanceRating) }}%</span>
-          </div>
+          <span class="selector-text">
+            <span class="selector-name">{{ s.project.name }}</span>
+            <span class="selector-domain">{{ s.project.domain || '—' }}</span>
+          </span>
         </button>
       </div>
 
@@ -399,35 +393,59 @@ const compareRows = computed(() =>
 /* Selector grid */
 .selector-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
   margin-bottom: 16px;
 }
 /* Surface (frost/rim/lift) from the shared .lc-surface / .lc-lift helpers;
-   the active state's border + tint come from inline styles in the template. */
+   the active state's border + tint come from inline styles in the template.
+   Compact pill: icon + name/domain in a single row, no grade/percent foot. */
 .selector-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   text-align: left;
-  padding: 12px;
+  padding: 9px 11px;
   cursor: pointer;
   font: inherit;
   color: inherit;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 .selector-icon {
-  width: 28px; height: 28px; border-radius: 8px;
+  width: 26px; height: 26px; border-radius: 8px;
   display: grid; place-items: center;
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.selector-text { min-width: 0; display: flex; flex-direction: column; }
 .selector-name {
   font-size: 12.5px; font-weight: 600; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
-  -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25;
+  transition: letter-spacing 0.22s ease;
 }
-.selector-domain { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-.selector-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.selector-grade {
-  font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; border: 1px solid;
+.selector-domain {
+  font-size: 10.5px; color: var(--text-dim); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.selector-perf { font-size: 11px; color: var(--text-dim); }
+/* Hover microinteraction: lift + spring the icon, nudge the label. */
+.selector-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.55);
+}
+.selector-card:hover .selector-icon {
+  transform: scale(1.14) rotate(-6deg);
+}
+.selector-card:hover .selector-name { letter-spacing: 0.2px; }
+@media (prefers-reduced-motion: reduce) {
+  .selector-card,
+  .selector-icon,
+  .selector-name { transition: none; }
+  .selector-card:hover { transform: none; }
+  .selector-card:hover .selector-icon { transform: none; }
+}
 
 /* Pipeline row */
 .pipeline-grid {
