@@ -22,12 +22,18 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .permissions import permissions_for, role_has_permission
+
 Base = declarative_base()
 
 # Canonical pipeline stages — order matters for the funnel.
 STAGES = ["Pre-Sale", "Project Initiation", "award", "Project Delivery", "Completed"]
 PRIORITIES = ["low", "medium", "high", "critical"]
-ROLES = ["admin", "member"]
+# Ordered most-privileged first. super_admin is the system owner (wildcard
+# permissions); admin is org-scoped full access; member is own-record CRUD.
+ROLES = ["super_admin", "admin", "member"]
+# Roles that pass an owner-or-elevated check regardless of row ownership.
+ELEVATED_ROLES = ("super_admin", "admin")
 
 
 def derived_status(progress: int) -> str:
@@ -89,12 +95,22 @@ class User(Base):
     def check_password(self, raw: str) -> bool:
         return check_password_hash(self.password_hash, raw)
 
+    def has_permission(self, perm: str) -> bool:
+        """Authoritative capability check — resolved from the *live* DB role at
+        request time, never from a (possibly stale) JWT claim. Wildcard-aware.
+        """
+        return role_has_permission(self.role, perm)
+
     def to_dict(self):
+        # ``permissions`` is advisory: the SPA uses it to hide UI it can't act
+        # on. It is NEVER the source of truth for a backend check — every guard
+        # re-derives from the live role via has_permission().
         return {
             "id": self.id,
             "name": self.name,
             "email": self.email,
             "role": self.role,
+            "permissions": sorted(permissions_for(self.role)),
             "createdAt": _iso(self.created_at),
         }
 

@@ -109,6 +109,8 @@ export const api = {
   // misc
   stats: () => req('/stats'),
   listUsers: () => req('/users'),
+  setUserRole: (id, role) =>
+    req(`/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
 
   // google sheets
   sheetsStatus: () => req('/sheets/status'),

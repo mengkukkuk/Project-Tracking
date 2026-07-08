@@ -10,6 +10,11 @@ const routes = [
   { path: '/bom', component: () => import('@/views/BomGlobalView.vue') },
   { path: '/dashboard', component: () => import('@/views/DashboardView.vue') },
   { path: '/summaries', component: () => import('@/views/SummariesView.vue') },
+  {
+    path: '/users',
+    component: () => import('@/views/UsersView.vue'),
+    meta: { permission: 'roles.assign' },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
@@ -27,6 +32,11 @@ router.beforeEach(async (to) => {
     return { path: '/login', query: to.path !== '/' ? { redirect: to.path } : undefined }
   }
   if (to.path === '/login' && auth.isAuthed) return { path: '/' }
+  // Permission-gated routes — bounce to home if the live role lacks it.
+  // (Backend still enforces on every request; this is just UX.)
+  if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
+    return { path: '/' }
+  }
 })
 
 export default router

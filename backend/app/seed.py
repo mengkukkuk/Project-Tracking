@@ -79,7 +79,7 @@ DEMO_PTEMPLATE = [
 
 # Format: (display_name, email, password, role, employee_user_id)
 DEMO_USERS = [
-    ("Admin",                    "admin@scada.local",          "admin123",  "admin",  11111),
+    ("Admin",                    "admin@scada.local",          "admin123",  "super_admin",  11111),
     ("นายพิชัยวุธ โพธิดอกไม้",  "pichaiwoot.p@scada.local",  "password",  "member", 32123),
     ("นายโอภาส สุ่มเมา",         "opast.s@scada.local",       "password",  "member", 32221),
     ("นายปัญญา เจริญผล",         "panya.c@scada.local",       "password",  "member", 32842),

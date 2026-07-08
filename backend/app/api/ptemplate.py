@@ -12,18 +12,13 @@ from ..auth import current_user
 from ..extensions import Session
 from ..models import ProcessTag, PTemplate
 from ..validation import int_field, require_dict, str_field
+from .helpers import require_permission
 
 bp = Blueprint("ptemplate", __name__, url_prefix="/api")
 
 
 def _not_found():
     return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
-
-
-def _admin_only(user):
-    if user is None or user.role != "admin":
-        return {"error": {"type": "http", "code": 403, "message": "Forbidden"}}, 403
-    return None
 
 
 @bp.get("/ptemplate")
@@ -52,7 +47,7 @@ def create_ptemplate():
     only future ``create_project`` calls (and explicit ptrack/generate calls)
     pick up the new row.
     """
-    denied = _admin_only(current_user())
+    denied = require_permission(current_user(), "templates.manage")
     if denied:
         return denied
     data = require_dict(request.get_json(silent=True))
@@ -69,7 +64,7 @@ def create_ptemplate():
 @jwt_required()
 def delete_ptemplate(tid):
     """DELETE /api/ptemplate/<tid> — admin-only: remove a default checklist row."""
-    denied = _admin_only(current_user())
+    denied = require_permission(current_user(), "templates.manage")
     if denied:
         return denied
     row = Session.get(PTemplate, tid)

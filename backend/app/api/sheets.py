@@ -25,6 +25,7 @@ from flask_jwt_extended import jwt_required
 from ..auth import current_user
 from ..extensions import Session
 from ..models import Project, Tag
+from .helpers import require_permission
 
 bp = Blueprint("sheets", __name__, url_prefix="/api/sheets")
 
@@ -145,10 +146,10 @@ def status():
 @bp.post("/export")
 @jwt_required()
 def export_projects():
-    """Write all projects to the configured Google Sheet tab (admin only)."""
-    user = current_user()
-    if not user or user.role != "admin":
-        return {"error": {"type": "auth", "message": "Admin only"}}, 403
+    """Write all projects to the configured Google Sheet tab (sheets.sync)."""
+    denied = require_permission(current_user(), "sheets.sync")
+    if denied:
+        return denied
 
     try:
         service = _service()
@@ -191,8 +192,9 @@ def import_projects():
     Query param ?preview=1 returns what would be created without touching the DB.
     """
     user = current_user()
-    if not user or user.role != "admin":
-        return {"error": {"type": "auth", "message": "Admin only"}}, 403
+    denied = require_permission(user, "sheets.sync")
+    if denied:
+        return denied
 
     preview = request.args.get("preview", "0") == "1"
 

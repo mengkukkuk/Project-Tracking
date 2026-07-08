@@ -2,7 +2,19 @@
 from datetime import date, timedelta
 
 from ..extensions import Session
-from ..models import Activity, ProcessTag, Project, PTrack, Task, derived_status
+from ..models import (
+    ELEVATED_ROLES,
+    Activity,
+    ProcessTag,
+    Project,
+    PTrack,
+    Task,
+    derived_status,
+)
+
+
+def _forbidden():
+    return {"error": {"type": "http", "code": 403, "message": "Forbidden"}}, 403
 
 
 def log_activity(project_id, action, detail, user):
@@ -17,9 +29,24 @@ def log_activity(project_id, action, detail, user):
     )
 
 def require_owner_or_admin(user, owner_id):
-    """Return a 403 response tuple if user is not the owner or an admin, else None."""
-    if user is None or (user.role != "admin" and user.id != owner_id):
-        return {"error": {"type": "http", "code": 403, "message": "Forbidden"}}, 403
+    """Return a 403 response tuple if user is neither the owner nor an elevated
+    role (admin / super_admin), else None.
+
+    This is the *scope* gate: elevated roles act on any row; everyone else only
+    on rows they own. Capability is gated separately via require_permission.
+    """
+    if user is None or (user.role not in ELEVATED_ROLES and user.id != owner_id):
+        return _forbidden()
+    return None
+
+
+def require_permission(user, perm):
+    """Return a 403 response tuple if ``user`` lacks capability ``perm``, else
+    None. Resolves against the live DB role (wildcard-aware), so role changes
+    take effect immediately without waiting for a token to expire.
+    """
+    if user is None or not user.has_permission(perm):
+        return _forbidden()
     return None
 
 

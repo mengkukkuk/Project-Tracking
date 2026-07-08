@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 40 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 51 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -34,7 +34,9 @@ npm run build      # production bundle → dist/
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
 | `app/errors.py` | Centralized error handlers — all errors → `{"error": {...}}` |
-| `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` |
+| `app/permissions.py` | RBAC permission catalog — `ROLE_PERMISSIONS` (member ⊂ admin; super_admin = wildcard) + `role_has_permission()`. Plain data, no `models` import (avoids a cycle) |
+| `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` (scope gate), `require_permission()` (capability gate) |
+| `app/api/users.py` | `GET /api/users` (directory for pickers) + `PATCH /api/users/:id/role` (role assignment, `roles.assign`-gated) |
 | `app/api/projects.py` | Project CRUD + `POST /<pid>/ptrack/generate` (backfill process checklist from template) |
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
@@ -82,10 +84,19 @@ npm run build      # production bundle → dist/
 - The `.mono` helper class is kept for figures/labels but now maps to `var(--font)` with `font-variant-numeric: tabular-nums` for column alignment — it is no longer a monospaced face.
 
 ### Authorization model
-- **Admin**: full access to all resources
-- **Member**: can only edit/delete their own projects and tasks; can delete own comments
-- Enforced by `require_owner_or_admin(user, owner_id)` in `app/api/helpers.py`
-- First user to register is automatically assigned `admin` role
+Three roles (`app/models.py:ROLES`, ordered most-privileged first): `super_admin`, `admin`, `member`.
+- **super_admin**: system owner — wildcard permissions (`{"*"}`); the only role that can grant/modify the `super_admin` role.
+- **admin**: org-scoped full access — all member capabilities plus `sheets.sync`, `templates.manage`, `roles.assign` (but **cannot** grant `super_admin`).
+- **member**: own-record CRUD only (scope narrowed by ownership, not by missing capability).
+- **First user to register is `admin`** (unchanged — register does not mint super_admin). A `super_admin` is reachable only via `seed.py` (`admin@scada.local` is seeded as super_admin), a direct DB edit, or promotion by an existing super_admin through the role endpoint. This is deliberate: with first-user-as-admin + "admin can't grant super_admin", there is no self-service path to the top role.
+
+**Two orthogonal axes** — do not conflate them:
+- **Capability** = "may this role do X at all?" → permission strings in `app/permissions.py` (`ROLE_PERMISSIONS`), checked via `User.has_permission(perm)` / `require_permission(user, perm)` in `app/api/helpers.py`. Resolved from the **live DB role at request time**, never from the JWT — so role changes take effect immediately.
+- **Scope** = "own record vs any record?" → `require_owner_or_admin(user, owner_id)` (elevated roles = `admin`/`super_admin` via `ELEVATED_ROLES`, everyone else must own the row). This is why `member` still holds `projects.update` — the capability is granted, ownership narrows the scope.
+
+The JWT still carries only `{role, name}`; `User.to_dict()` exposes a `permissions` list that is **advisory (UI-hiding only)** — the frontend uses `auth.hasPermission(perm)` to hide elements, but every backend guard re-derives from the live role.
+
+**Role assignment**: `PATCH /api/users/:id/role` (`app/api/users.py`), gated `roles.assign`. Guards: only super_admin may grant/touch super_admin; you cannot change your own role. UI is a permission-gated `/users` view (`UsersView.vue`, shown in nav only when `hasPermission('roles.assign')`).
 
 ### Rate limiting (Flask-Limiter)
 - `POST /api/auth/login` — 10/min per IP
@@ -142,7 +153,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 40 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
+- 51 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -151,7 +162,7 @@ cd backend
 
 | Email | Password | Role |
 |---|---|---|
-| admin@scada.local | admin123 | admin |
+| admin@scada.local | admin123 | super_admin |
 | a@scada.local | password | member |
 | b@scada.local | password | member |
 | c@scada.local | password | member |

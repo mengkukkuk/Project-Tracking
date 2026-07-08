@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required
 
 from ..auth import current_user
 from ..extensions import Session
-from ..models import Comment, Project
+from ..models import ELEVATED_ROLES, Comment, Project
 from ..validation import require_dict, str_field
 
 bp = Blueprint("comments", __name__, url_prefix="/api")
@@ -44,8 +44,10 @@ def delete_comment(cid):
     if not comment:
         return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
     user = current_user()
-    # Only the author or an admin may delete a comment.
-    if user and user.role != "admin" and comment.user_id != user.id:
+    # Only the author or an elevated role (admin / super_admin) may delete.
+    # Ownership here is the comment's author, not the parent project's owner,
+    # so this stays a bespoke check rather than require_owner_or_admin.
+    if user and user.role not in ELEVATED_ROLES and comment.user_id != user.id:
         return {"error": {"type": "http", "code": 403, "message": "Forbidden"}}, 403
     Session.delete(comment)
     Session.commit()

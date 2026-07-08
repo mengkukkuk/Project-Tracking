@@ -16,14 +16,22 @@ const store = useProjectsStore()
 const auth = useAuthStore()
 const ui = useUiStore()
 
-const nav = [
-  { to: '/', label: 'Overview', icon: 'overview' },
-  { to: '/pipeline', label: 'Pipeline', icon: 'pipelines' },
-  { to: '/table', label: 'Table', icon: 'table' },
-  { to: '/bom', label: 'BOM', icon: 'money' },
-  { to: '/dashboard', label: 'Dashboard', icon: 'target' },
-  { to: '/summaries', label: 'Summaries', icon: 'calculator' },
-]
+const nav = computed(() => {
+  const items = [
+    { to: '/', label: 'Overview', icon: 'overview' },
+    { to: '/pipeline', label: 'Pipeline', icon: 'pipelines' },
+    { to: '/table', label: 'Table', icon: 'table' },
+    { to: '/bom', label: 'BOM', icon: 'money' },
+    { to: '/dashboard', label: 'Dashboard', icon: 'target' },
+    { to: '/summaries', label: 'Summaries', icon: 'calculator' },
+  ]
+  // Role management is hidden unless the live role can assign roles. The
+  // backend still enforces this on every request — hiding is UX only.
+  if (auth.hasPermission('roles.assign')) {
+    items.push({ to: '/users', label: 'Users', icon: 'users' })
+  }
+  return items
+})
 
 const isPublic = computed(() => route.meta.public)
 

@@ -10,7 +10,14 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthed: (s) => !!s.token && !!s.user,
-    isAdmin: (s) => s.user?.role === 'admin',
+    // Elevated roles: admin and super_admin both pass owner-or-admin gates.
+    isAdmin: (s) => ['admin', 'super_admin'].includes(s.user?.role),
+    isSuperAdmin: (s) => s.user?.role === 'super_admin',
+    // Advisory only — backend re-checks every request. Used to hide UI.
+    hasPermission: (s) => (perm) => {
+      const perms = s.user?.permissions || []
+      return perms.includes('*') || perms.includes(perm)
+    },
     initials: (s) => (s.user?.name || '?').trim().slice(0, 2).toUpperCase(),
   },
 
