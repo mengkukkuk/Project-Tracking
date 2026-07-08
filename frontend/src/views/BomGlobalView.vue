@@ -233,6 +233,17 @@ function sortedRows() {
   return rows
 }
 
+// --- Device details card ----------------------------------------------------
+// Read-only quick view opened by clicking anywhere on a row. Bound to
+// cell-clicked (not row-clicked) so the actions column — including its empty
+// space — never triggers it; the icon buttons also stopPropagation.
+const detailCard = ref(null)
+
+function onCellClicked(e) {
+  if (e.colDef?.colId === 'actions') return
+  detailCard.value = e.data
+}
+
 // --- Add / inline edit ------------------------------------------------------
 // `panel` is null when closed, the row object when editing, or the sentinel
 // `'new'` when creating. One Modal + one BomGlobalForm covers both flows.
@@ -478,6 +489,7 @@ onMounted(() => {
         :overlayNoRowsTemplate="noRowsTemplate"
         :overlayLoadingTemplate="loadingTemplate"
         @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
       />
     </div>
 
@@ -493,6 +505,35 @@ onMounted(() => {
         @submit="onSave"
         @cancel="panel = null"
       />
+    </Modal>
+
+    <Modal
+      v-if="detailCard"
+      :title="detailCard.deviceName || 'Device details'"
+      @close="detailCard = null"
+    >
+      <div class="device-card">
+        <div class="dc-row">
+          <span class="dc-label">Device name</span>
+          <strong>{{ detailCard.deviceName || '—' }}</strong>
+        </div>
+        <div class="dc-row">
+          <span class="dc-label">Version</span>
+          <span>{{ detailCard.version || '—' }}</span>
+        </div>
+        <div class="dc-row">
+          <span class="dc-label">Price / unit</span>
+          <span class="dc-price">{{ num(detailCard.unitPrice) }}</span>
+        </div>
+        <div class="dc-row">
+          <span class="dc-label">Supplier</span>
+          <span>{{ detailCard.supplier || '—' }}</span>
+        </div>
+        <div class="dc-spec">
+          <span class="dc-label">Spec</span>
+          <div class="dc-spec-panel">{{ detailCard.spec || '—' }}</div>
+        </div>
+      </div>
     </Modal>
 
     <BomListPicker
@@ -808,5 +849,44 @@ onMounted(() => {
   font-family: var(--serif);
   font-weight: 600;
   font-size: 14px;
+}
+
+/* Rows open the details card on click. */
+:deep(.ag-row) { cursor: pointer; }
+
+/* --- Device details card (row-click quick view) --- */
+.device-card { display: grid; gap: 14px; }
+.dc-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+.dc-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.dc-price {
+  font-weight: 700;
+  color: var(--accent-dim);
+  font-variant-numeric: tabular-nums;
+}
+.dc-spec { display: grid; gap: 6px; }
+.dc-spec-panel {
+  resize: vertical; /* user-adjustable height via the corner drag handle */
+  overflow: auto;
+  min-height: 84px;
+  max-height: 60vh;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sunken, var(--bg));
+  white-space: pre-wrap;
+  font-size: 13px;
+  color: var(--text);
 }
 </style>

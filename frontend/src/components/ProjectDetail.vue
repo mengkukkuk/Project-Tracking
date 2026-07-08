@@ -269,6 +269,7 @@ function dueClass(iso) {
   gap: 12px;
   padding: 18px 20px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .eyebrow {
   color: var(--text-dim);
@@ -295,6 +296,7 @@ function dueClass(iso) {
   gap: 12px;
   flex-wrap: wrap;
   padding: 16px 20px 0;
+  flex-shrink: 0;
 }
 .badges,
 .head-actions {
@@ -311,6 +313,7 @@ function dueClass(iso) {
   gap: 12px;
   margin: 14px 20px 0;
   padding: 12px;
+  flex-shrink: 0;
 }
 .quick label {
   display: grid;
@@ -345,6 +348,7 @@ function dueClass(iso) {
   gap: 6px;
   padding: 14px 20px 0;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .tabs button {
   display: inline-flex;
@@ -365,6 +369,8 @@ function dueClass(iso) {
   border-bottom-color: var(--accent);
 }
 .drawer-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 18px 20px 24px;
 }
