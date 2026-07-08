@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 51 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 61 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -98,6 +98,8 @@ The JWT still carries only `{role, name}`; `User.to_dict()` exposes a `permissio
 
 **Role assignment**: `PATCH /api/users/:id/role` (`app/api/users.py`), gated `roles.assign`. Guards: only super_admin may grant/touch super_admin; you cannot change your own role. UI is a permission-gated `/users` view (`UsersView.vue`, shown in nav only when `hasPermission('roles.assign')`).
 
+**Per-user page access (side-nav)**: `page.<key>` permission strings (`PAGE_KEYS` in `app/permissions.py` — `overview`/`pipeline`/`table`/`bom`/`dashboard`/`summaries`) gate each side-nav tab in the SPA (`meta.permission` in `router.js`, nav filtering in `App.vue`). Every role holds all `page.*` by default (they're unioned into `_MEMBER`); `User.page_access` (`models.py`, nullable `Text`, CSV of allowed keys) lets a `member`'s set be **narrowed** — `User.allowed_pages` / `has_permission()` intersect the stored keys against the live catalog, and `NULL`/empty means "all pages" so new catalog pages are auto-granted to unrestricted users. **Elevated roles (`admin`, `super_admin`) always get every page** — the override is members-only. `PATCH /api/users/:id/pages` (body `{pages: [...]}`), gated `pages.assign` (held by `admin` and `super_admin`), rejects elevated targets (403) and empty page lists (422 — a member must have somewhere to land); `set_user_role` clears `page_access` on promotion so a later demotion doesn't silently reapply a stale restriction. `/users` itself stays gated on `roles.assign`, not a `page.*` string. UI: a "Page access" checkbox column on `UsersView.vue`, editable when `hasPermission('pages.assign')`.
+
 ### Rate limiting (Flask-Limiter)
 - `POST /api/auth/login` — 10/min per IP
 - `POST /api/auth/register` — 5/min per IP
@@ -153,7 +155,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 51 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates)
+- 61 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -185,6 +187,8 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size  INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS complexity INTEGER;
 ```
 On the PostgreSQL dev setup the table lives in the `pjtrk` schema (see `app/extensions.py:init_engine`, which sets `search_path=pjtrk`), so run it schema-qualified: `ALTER TABLE pjtrk.projects ADD COLUMN IF NOT EXISTS team_size INTEGER; ...`. `backend/init_db.sql` includes this migration inline. A fresh SQLite file or a fresh `python seed.py` run already has both columns — no action needed.
+
+Same pattern for `users.page_access` (added for per-user page access, see Authorization model above): `ALTER TABLE pjtrk.users ADD COLUMN IF NOT EXISTS page_access TEXT;` on Postgres dev, or `ALTER TABLE users ADD COLUMN page_access TEXT;` on SQLite (no `IF NOT EXISTS` support for columns there). Also inlined in `backend/init_db.sql`.
 
 ## Common Pitfalls
 

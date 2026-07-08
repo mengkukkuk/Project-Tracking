@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { api } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { PAGES } from '@/constants/pages'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -17,6 +18,41 @@ const ALL_ROLES = ['super_admin', 'admin', 'member']
 const assignableRoles = computed(() =>
   auth.isSuperAdmin ? ALL_ROLES : ALL_ROLES.filter((r) => r !== 'super_admin'),
 )
+
+// Page-access checkboxes: members only — super_admin/admin always have every
+// page, so the column only offers editing for member rows. Backend re-derives
+// and enforces on every request; this is UX only.
+const ELEVATED_ROLES = ['super_admin', 'admin']
+const canEditPages = computed(() => auth.hasPermission('pages.assign'))
+
+async function togglePage(u, key, event) {
+  const next = new Set(u.pageAccess)
+  if (next.has(key)) {
+    if (next.size === 1) {
+      // Bail without touching u.pageAccess, so the checkbox is left as an
+      // uncontrolled input the browser already toggled — force it back or
+      // it stays visually unchecked even though nothing was saved.
+      event.target.checked = true
+      ui.error('At least one page must remain accessible')
+      return
+    }
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  const prev = u.pageAccess
+  u.pageAccess = PAGES.map((p) => p.key).filter((k) => next.has(k)) // optimistic
+  savingId.value = u.id
+  try {
+    const updated = await api.setUserPages(u.id, u.pageAccess)
+    Object.assign(u, updated)
+  } catch (e) {
+    u.pageAccess = prev // rollback
+    ui.error(e.message)
+  } finally {
+    savingId.value = null
+  }
+}
 
 function canEdit(u) {
   // Cannot change your own role; only a super_admin may touch a super_admin.
@@ -76,6 +112,7 @@ onMounted(load)
             <th>Name</th>
             <th>Email</th>
             <th class="role-col">Role</th>
+            <th v-if="canEditPages" class="pages-col">Page access</th>
           </tr>
         </thead>
         <tbody>
@@ -98,6 +135,20 @@ onMounted(load)
                 </option>
               </select>
               <span v-else class="role-badge" :class="u.role">{{ u.role.replace('_', ' ') }}</span>
+            </td>
+            <td v-if="canEditPages" class="pages-col">
+              <span v-if="ELEVATED_ROLES.includes(u.role)" class="role-badge">All pages</span>
+              <div v-else class="page-checks">
+                <label v-for="p in PAGES" :key="p.key" class="page-check">
+                  <input
+                    type="checkbox"
+                    :checked="u.pageAccess.includes(p.key)"
+                    :disabled="savingId === u.id"
+                    @change="togglePage(u, p.key, $event)"
+                  />
+                  {{ p.label }}
+                </label>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -149,4 +200,12 @@ onMounted(load)
   color: var(--text-dim);
 }
 .role-badge.super_admin { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.pages-col { min-width: 240px; }
+.page-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.page-check {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  color: var(--text); cursor: pointer; white-space: nowrap;
+}
+.page-check input { accent-color: var(--accent); cursor: pointer; }
+.page-check input:disabled { cursor: wait; }
 </style>

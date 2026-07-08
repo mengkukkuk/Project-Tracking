@@ -19,6 +19,13 @@ templates / users). It is plain data with no imports from ``models`` so it can
 be imported by ``models`` without a cycle.
 """
 
+# Side-nav pages. Every role holds all page.* capabilities by default; a
+# per-user override on User.page_access may SUBTRACT pages for members only
+# (see User.allowed_pages / User.has_permission in models.py). /users is
+# governed by roles.assign, not a page.* string.
+PAGE_KEYS = ("overview", "pipeline", "table", "bom", "dashboard", "summaries")
+PAGE_PERMISSIONS = frozenset(f"page.{k}" for k in PAGE_KEYS)
+
 # Capabilities every authenticated member holds. Update/delete are still
 # scope-narrowed to owned rows by require_owner_or_admin.
 _MEMBER = {
@@ -39,15 +46,17 @@ _MEMBER = {
     "bom_lists.update",
     "bom_lists.delete",
     "users.read",
-}
+} | PAGE_PERMISSIONS
 
 # Admin adds the organization-level capabilities on top of everything a member
 # can do. (roles.assign is further constrained in the endpoint: an admin may not
-# grant or modify the super_admin role — only a super_admin may.)
+# grant or modify the super_admin role — only a super_admin may. pages.assign
+# lets an admin manage a member's page.* override — see api/users.py.)
 _ADMIN = _MEMBER | {
     "sheets.sync",
     "templates.manage",
     "roles.assign",
+    "pages.assign",
 }
 
 # super_admin is the wildcard holder: "*" satisfies every has_permission check.

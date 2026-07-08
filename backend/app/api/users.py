@@ -4,7 +4,8 @@ from flask_jwt_extended import jwt_required
 
 from ..auth import current_user
 from ..extensions import Session
-from ..models import ROLES, User
+from ..models import ELEVATED_ROLES, ROLES, User
+from ..permissions import PAGE_KEYS
 from ..validation import ValidationError, require_dict, str_field
 from .helpers import require_permission
 
@@ -66,5 +67,59 @@ def set_user_role(uid):
         }, 403
 
     target.role = new_role
+    # Promotion to an elevated role invalidates any page restriction (elevated
+    # roles always see every page); clear it so a later demotion lands on the
+    # default (all pages) rather than silently re-applying a stale override.
+    if new_role in ELEVATED_ROLES:
+        target.page_access = None
+    Session.commit()
+    return target.to_dict()
+
+
+@bp.patch("/<int:uid>/pages")
+@jwt_required()
+def set_user_pages(uid):
+    """PATCH /api/users/<uid>/pages — set which side-nav pages a member may open.
+
+    Body: {pages: [<page key>, ...]}. Requires the ``pages.assign`` capability
+    (admin / super_admin). Members only: elevated targets are rejected — they
+    always hold every page. At least one page is required — a member must have
+    somewhere to land. Saving the full catalog clears the override (page_access
+    -> NULL = default all, so future new pages are automatically included).
+    No self-change guard is needed: any actor holding pages.assign is elevated,
+    and elevated targets are already rejected by the guard below.
+    """
+    actor = current_user()
+    denied = require_permission(actor, "pages.assign")
+    if denied:
+        return denied
+
+    data = require_dict(request.get_json(silent=True))
+    pages = data.get("pages")
+    if not isinstance(pages, list) or not all(isinstance(p, str) for p in pages):
+        raise ValidationError({"pages": "must be a list of page keys"})
+    keys = {p.strip() for p in pages}
+    invalid = keys - set(PAGE_KEYS)
+    if invalid:
+        raise ValidationError({"pages": f"unknown page keys: {', '.join(sorted(invalid))}"})
+    if not keys:
+        raise ValidationError({"pages": "at least one page is required"})
+
+    target = Session.get(User, uid)
+    if not target:
+        return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
+
+    if target.role in ELEVATED_ROLES:
+        return {
+            "error": {
+                "type": "http",
+                "code": 403,
+                "message": "Page access can only be set for members",
+            }
+        }, 403
+
+    target.page_access = None if keys == set(PAGE_KEYS) else ",".join(
+        k for k in PAGE_KEYS if k in keys
+    )
     Session.commit()
     return target.to_dict()

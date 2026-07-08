@@ -111,6 +111,8 @@ export const api = {
   listUsers: () => req('/users'),
   setUserRole: (id, role) =>
     req(`/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  setUserPages: (id, pages) =>
+    req(`/users/${id}/pages`, { method: 'PATCH', body: JSON.stringify({ pages }) }),
 
   // google sheets
   sheetsStatus: () => req('/sheets/status'),

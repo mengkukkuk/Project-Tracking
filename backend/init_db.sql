@@ -47,11 +47,18 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(255)  NOT NULL,
   password_hash VARCHAR(255)  NOT NULL,
   role          VARCHAR(16)   NOT NULL,       -- 'admin' | 'member' (app-enforced)
+  page_access   TEXT,
   created_at    TIMESTAMP,
   user_id       SERIAL        NOT NULL        -- internal employee / staff ID (not ORM-mapped; set via raw SQL, see seed.py)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email);
+
+-- Existing installs predating per-user page access: CREATE TABLE IF NOT EXISTS
+-- above is a no-op once the table exists, so add the column explicitly.
+-- CSV of allowed page keys (see backend/app/permissions.py PAGE_KEYS);
+-- NULL = default (all pages).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS page_access TEXT;
 
 -- ── tags ──────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tags (

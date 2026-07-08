@@ -9,6 +9,7 @@ import Modal from '@/components/Modal.vue'
 import ProjectForm from '@/components/ProjectForm.vue'
 import ProjectDetail from '@/components/ProjectDetail.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import { PAGES, pagePerm } from '@/constants/pages'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,16 +18,15 @@ const auth = useAuthStore()
 const ui = useUiStore()
 
 const nav = computed(() => {
-  const items = [
-    { to: '/', label: 'Overview', icon: 'overview' },
-    { to: '/pipeline', label: 'Pipeline', icon: 'pipelines' },
-    { to: '/table', label: 'Table', icon: 'table' },
-    { to: '/bom', label: 'BOM', icon: 'money' },
-    { to: '/dashboard', label: 'Dashboard', icon: 'target' },
-    { to: '/summaries', label: 'Summaries', icon: 'calculator' },
-  ]
-  // Role management is hidden unless the live role can assign roles. The
-  // backend still enforces this on every request — hiding is UX only.
+  // Each tab is hidden unless the live role/per-user override grants its
+  // page.* permission. The backend still enforces this on every request —
+  // hiding is UX only.
+  const items = PAGES.filter((p) => auth.hasPermission(pagePerm(p.key))).map((p) => ({
+    to: p.path,
+    label: p.label,
+    icon: p.icon,
+  }))
+  // Role management is hidden unless the live role can assign roles.
   if (auth.hasPermission('roles.assign')) {
     items.push({ to: '/users', label: 'Users', icon: 'users' })
   }
@@ -265,8 +265,9 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
   }
 
   .tabbar {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr) auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px;
     position: fixed;
@@ -289,6 +290,8 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     font-weight: 700;
     letter-spacing: .02em;
     border-radius: 8px;
+    flex: 1 1 calc(25% - 4px);
+    min-width: 0;
   }
   .tab-item.router-link-exact-active { color: var(--accent); }
   .tab-item.router-link-exact-active::before {
@@ -300,6 +303,7 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     display: grid; place-items: center;
     width: 46px; height: 46px; border-radius: 50%;
     margin-left: 6px;
+    flex: 0 0 auto;
     background: var(--accent); color: #fff;
     border: 0; cursor: pointer;
     box-shadow: 0 6px 18px rgba(20, 184, 166, .35);

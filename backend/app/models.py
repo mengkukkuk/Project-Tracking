@@ -22,7 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from .permissions import permissions_for, role_has_permission
+from .permissions import PAGE_KEYS, WILDCARD, permissions_for, role_has_permission
 
 Base = declarative_base()
 
@@ -87,6 +87,11 @@ class User(Base):
     email = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(16), nullable=False, default="member")
+    # Comma-separated allowed page keys (see permissions.PAGE_KEYS). NULL/empty
+    # = default: all pages. Only meaningful for members — elevated roles always
+    # get every page. Text (not JSON) keeps the schema SQLite/Postgres/MSSQL
+    # portable, matching the rest of this module.
+    page_access = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     def set_password(self, raw: str):
@@ -95,22 +100,42 @@ class User(Base):
     def check_password(self, raw: str) -> bool:
         return check_password_hash(self.password_hash, raw)
 
+    @property
+    def allowed_pages(self):
+        """Ordered list of page keys this user may open. Elevated roles and a
+        NULL/empty override both mean all pages. Unknown stored keys (e.g. a
+        page later removed from the catalog) are dropped defensively."""
+        if self.role in ELEVATED_ROLES or not self.page_access:
+            return list(PAGE_KEYS)
+        stored = {k.strip() for k in self.page_access.split(",")}
+        return [k for k in PAGE_KEYS if k in stored]
+
     def has_permission(self, perm: str) -> bool:
         """Authoritative capability check — resolved from the *live* DB role at
         request time, never from a (possibly stale) JWT claim. Wildcard-aware.
+        page.* is further narrowed by the per-user allowed_pages override.
         """
-        return role_has_permission(self.role, perm)
+        if not role_has_permission(self.role, perm):
+            return False
+        if perm.startswith("page."):
+            return perm[len("page.") :] in self.allowed_pages
+        return True
 
     def to_dict(self):
         # ``permissions`` is advisory: the SPA uses it to hide UI it can't act
         # on. It is NEVER the source of truth for a backend check — every guard
         # re-derives from the live role via has_permission().
+        perms = permissions_for(self.role)
+        if WILDCARD not in perms:
+            allowed = set(self.allowed_pages)
+            perms = {p for p in perms if not p.startswith("page.") or p[len("page.") :] in allowed}
         return {
             "id": self.id,
             "name": self.name,
             "email": self.email,
             "role": self.role,
-            "permissions": sorted(permissions_for(self.role)),
+            "permissions": sorted(perms),
+            "pageAccess": self.allowed_pages,
             "createdAt": _iso(self.created_at),
         }
 
