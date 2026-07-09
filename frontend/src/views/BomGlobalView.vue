@@ -263,8 +263,9 @@ async function onSave(payload) {
   saving.value = true
   try {
     if (isEditing.value) {
-      const { projectId: _drop, ...body } = payload
-      await store.updateRow(panel.value.id, body)
+      // Keep projectId in the payload so the edit can reparent the record to a
+      // different project (the BOM PATCH endpoint accepts projectId).
+      await store.updateRow(panel.value.id, payload)
       ui.success('BOM record updated')
     } else {
       const { projectId, ...body } = payload

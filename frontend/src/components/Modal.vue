@@ -5,6 +5,9 @@ import AppIcon from './AppIcon.vue'
 defineProps({
   title: String,
   wide: Boolean,
+  // Extra-wide variant for table-heavy modals (e.g. the BOM list picker):
+  // grows toward a large cap but never past the viewport.
+  xwide: Boolean,
 })
 const emit = defineEmits(['close'])
 
@@ -18,7 +21,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 <template>
   <Teleport to="body">
     <div class="overlay" @click.self="emit('close')">
-      <div class="modal lc-surface" :class="{ wide }">
+      <div class="modal lc-surface" :class="{ wide, xwide }">
         <header class="modal-head">
           <h2>{{ title }}</h2>
           <button class="icon-btn" @click="emit('close')" aria-label="Close">
@@ -50,6 +53,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   width: 100%; max-width: 540px; animation: pop .2s ease;
 }
 .modal.wide { max-width: 880px; }
+/* Grow to fit content up to a large cap, but never overflow the viewport. */
+.modal.xwide { max-width: min(1240px, calc(100vw - 32px)); }
 @keyframes pop { from { opacity: 0; transform: translateY(-10px) scale(.98); } to { opacity: 1; transform: none; } }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -62,15 +67,15 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   padding: 14px 20px; border-top: 1px solid var(--border);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 800px) {
   .overlay {
     z-index: 1000;
     align-items: flex-start;
     padding: 0;
   }
   .modal, .modal.wide {
-    width: 100%;
-    max-width: 100%;
+    width: 120%;
+    max-width: 120%;
     min-height: 100dvh;
     border-radius: 0;
     border: 0;

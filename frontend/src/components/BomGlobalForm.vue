@@ -2,8 +2,8 @@
 // Add/edit form for the global BOM page. Unlike the schema-driven RecordForm
 // (which posts under a fixed `/api/projects/<pid>/...` URL), this form also
 // carries a Project picker so the user chooses which project the new record
-// belongs to. On edit the picker is locked — moving a record between projects
-// isn't supported by the current PATCH /api/records/bom/<id> endpoint.
+// belongs to. On edit the picker stays enabled — changing it reparents the
+// record via PATCH /api/records/bom/<id> (the endpoint accepts projectId).
 import { reactive, computed, watch } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
 import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
@@ -68,8 +68,8 @@ function submit() {
   <form class="rform" @submit.prevent="submit">
     <div class="grid">
       <label class="field span2">
-        <span>Project<em v-if="!isEdit" class="req">*</em></span>
-        <select v-model="form.projectId" class="input" :disabled="isEdit">
+        <span>Project<em class="req">*</em></span>
+        <select v-model="form.projectId" class="input">
           <option :value="null" disabled>Select a project…</option>
           <option v-for="p in projectOptions" :key="p.id" :value="p.id">
             {{ p.name }}

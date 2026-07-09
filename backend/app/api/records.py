@@ -288,6 +288,15 @@ def update_record(resource, rid):
         return _not_found()
     data = require_dict(request.get_json(silent=True))
     _apply(record, spec, data, partial=True)
+    # BOM rows live in the cross-project global view, so editing one may reparent
+    # it to a different project. project_id is intentionally kept out of the
+    # generic field spec (other resources aren't movable); handle it here, and
+    # reject a target project that doesn't exist before writing the FK.
+    if resource == "bom" and "projectId" in data:
+        new_pid = int_field(data, "projectId")
+        if new_pid is None or not Session.get(Project, new_pid):
+            return _not_found()
+        record.project_id = new_pid
     Session.commit()
     # Toggling a ptrack checkbox can flip the whole process group's status;
     # refresh persisted status for the parent project so the DB stays in sync.

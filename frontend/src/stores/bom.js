@@ -50,8 +50,14 @@ export const useBomStore = defineStore('bom', {
     async updateRow(id, payload) {
       // PATCH returns a bare to_dict() WITHOUT projectName — merge into the
       // existing row so the join-derived Project column survives the edit.
+      // The edit may reparent the record, so re-resolve projectName from the
+      // (possibly new) projectId, mirroring createRow.
       const resp = await api.updateRecord('bom', id, payload)
-      this.rows = this.rows.map((r) => (r.id === id ? { ...r, ...resp } : r))
+      const projectsStore = useProjectsStore()
+      const proj = projectsStore.projects.find((p) => p.id === resp.projectId)
+      this.rows = this.rows.map((r) =>
+        r.id === id ? { ...r, ...resp, projectName: proj?.name ?? r.projectName } : r,
+      )
     },
 
     async deleteRow(id) {
