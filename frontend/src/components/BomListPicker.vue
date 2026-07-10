@@ -8,14 +8,14 @@ import { useBomStore } from '@/stores/bom'
 import { useBomListsStore } from '@/stores/bomLists'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
-import { exportBomListExcel, exportBomListPdf } from '@/utils/recordExport'
+import { exportBomListExcel } from '@/utils/recordExport'
 import Modal from './Modal.vue'
 
 const props = defineProps({
   // `null` when creating, a list summary object (with id) when editing.
   list: { type: Object, default: null },
 })
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(['close', 'saved', 'request-pdf-export'])
 
 const bomStore = useBomStore()
 const listsStore = useBomListsStore()
@@ -262,16 +262,21 @@ async function save({ thenExport } = {}) {
     else await listsStore.create(payload)
     ui.success(isEdit.value ? 'BOM list updated' : 'BOM list created')
 
-    if (thenExport) {
-      const rows = selectedRows()
-      const project = targetProject.value
+    if (thenExport === 'excel') {
       try {
-        if (thenExport === 'excel') await exportBomListExcel(project, payload.name, rows)
-        else exportBomListPdf(project, payload.name, rows)
-        ui.success(`Exported to ${thenExport === 'excel' ? 'Excel' : 'PDF'}`)
+        await exportBomListExcel(targetProject.value, payload.name, selectedRows())
+        ui.success('Exported to Excel')
       } catch (e) {
         ui.error(e.message)
       }
+    } else if (thenExport === 'pdf') {
+      // Hand off to the doc-picker modal (owned by BomGlobalView). Emit before
+      // closing so the view can open the modal over itself, not over the picker.
+      emit('request-pdf-export', {
+        project: targetProject.value,
+        listName: payload.name,
+        rows: selectedRows(),
+      })
     }
     emit('saved')
   } catch (e) {

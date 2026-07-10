@@ -149,6 +149,7 @@ The JWT still carries only `{role, name}`; `User.to_dict()` exposes a `permissio
 - CSV export exists **only** for the project list (`TableView` → `exportProjectsCsv`); records use Excel/PDF only.
 - BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
 - **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
+- **Saved-BOM-list PDF export can append project documents.** Both PDF triggers (`BomListsManager` per-row button, `BomListPicker` Save & Export PDF) emit `request-pdf-export` to `BomGlobalView`, which opens `BomExportDocsModal.vue` — checkboxes for quotation/tds/result append every matching document of the list's target project onto the BOM PDF. Merging uses `pdf-lib` (dynamically imported in `recordExport.js` so it stays out of other export bundles); `exportBomListPdf(project, listName, rows, { attachments })` is async and returns `{ failed }`. **Excel export is unchanged** (no popup, no documents).
 
 ### Document uploads (docstore)
 - Per-project PDF attachments, three types: `quotation` / `tds` (technical datasheet) / `result`. UI: "Documents" tab in the project detail drawer (`ProjectDocuments.vue`).

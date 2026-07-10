@@ -13,6 +13,7 @@ import Modal from '@/components/Modal.vue'
 import BomGlobalForm from '@/components/BomGlobalForm.vue'
 import BomListPicker from '@/components/BomListPicker.vue'
 import BomListsManager from '@/components/BomListsManager.vue'
+import BomExportDocsModal from '@/components/BomExportDocsModal.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
@@ -364,6 +365,8 @@ async function doExport(format) {
 // or a list summary object to open in edit mode.
 const pickerList = ref(null)
 const listsManagerOpen = ref(false)
+// Context for the PDF doc-picker modal ({ project, listName, rows }); null when closed.
+const docExportCtx = ref(null)
 
 function openListPicker(lst = null) {
   pickerList.value = lst ?? 'new'
@@ -542,12 +545,22 @@ onMounted(() => {
       :list="pickerList === 'new' ? null : pickerList"
       @close="pickerList = null"
       @saved="onPickerSaved"
+      @request-pdf-export="(ctx) => (docExportCtx = ctx)"
     />
 
     <BomListsManager
       v-if="listsManagerOpen"
       @close="listsManagerOpen = false"
       @open-list="onManagerOpenList"
+      @request-pdf-export="(ctx) => (docExportCtx = ctx)"
+    />
+
+    <BomExportDocsModal
+      v-if="docExportCtx"
+      :project="docExportCtx.project"
+      :list-name="docExportCtx.listName"
+      :rows="docExportCtx.rows"
+      @close="docExportCtx = null"
     />
 
     <ImportResultModal

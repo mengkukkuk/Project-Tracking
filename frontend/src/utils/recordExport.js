@@ -643,7 +643,32 @@ export async function exportBomListExcel(project, listName, rows, filename) {
   await writeAndDownload(wb, name)
 }
 
-export function exportBomListPdf(project, listName, rows, filename) {
+// Merge external PDF documents onto a base BOM PDF using pdf-lib. Loaded
+// dynamically so pdf-lib stays out of the export bundles that don't attach
+// documents. Each attachment is `{ name, bytes: ArrayBuffer }`; un-loadable
+// files are collected in `failed` and skipped rather than aborting the export.
+async function mergePdfAttachments(baseBytes, attachments) {
+  const { PDFDocument } = await import('pdf-lib')
+  const out = await PDFDocument.load(baseBytes)
+  const failed = []
+  for (const att of attachments) {
+    try {
+      const src = await PDFDocument.load(att.bytes, { ignoreEncryption: true })
+      const pages = await out.copyPages(src, src.getPageIndices())
+      pages.forEach((p) => out.addPage(p))
+    } catch {
+      failed.push(att.name)
+    }
+  }
+  return { bytes: await out.save(), failed }
+}
+
+export async function exportBomListPdf(
+  project,
+  listName,
+  rows,
+  { filename, attachments } = {},
+) {
   const doc = new jsPDF({ orientation: 'landscape', format: 'a4' })
   const font = registerThaiFont(doc)
   const title = `BOM List — ${listName || ''}`.trim() || 'BOM List'
@@ -747,12 +772,21 @@ export function exportBomListPdf(project, listName, rows, filename) {
       align: 'right',
     })
   }
-  doc.save(
+  const outName =
     filename ||
-      `${['bom-list', slug(listName), slug(project?.name), stamp()]
-        .filter(Boolean)
-        .join('-')}.pdf`,
-  )
+    `${['bom-list', slug(listName), slug(project?.name), stamp()]
+      .filter(Boolean)
+      .join('-')}.pdf`
+
+  if (!attachments || !attachments.length) {
+    doc.save(outName)
+    return { failed: [] }
+  }
+
+  const base = doc.output('arraybuffer')
+  const { bytes, failed } = await mergePdfAttachments(base, attachments)
+  triggerDownload(new Blob([bytes], { type: 'application/pdf' }), outName)
+  return { failed }
 }
 
 // ---------------------------------------------------------------------------

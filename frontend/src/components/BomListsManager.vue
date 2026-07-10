@@ -8,11 +8,11 @@ import { useBomListsStore } from '@/stores/bomLists'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
-import { exportBomListExcel, exportBomListPdf } from '@/utils/recordExport'
+import { exportBomListExcel } from '@/utils/recordExport'
 import { api } from '@/api'
 import Modal from './Modal.vue'
 
-const emit = defineEmits(['close', 'open-list'])
+const emit = defineEmits(['close', 'open-list', 'request-pdf-export'])
 
 const store = useBomListsStore()
 const projectsStore = useProjectsStore()
@@ -40,6 +40,7 @@ async function doExport(lst, format) {
     // Detail endpoint enriches each item with projectName already.
     const detail = await api.getBomList(lst.id)
     const project = projectsStore.projects.find((p) => p.id === lst.projectId) || {
+      id: lst.projectId,
       name: lst.projectName || '',
     }
     const rows = detail.items || []
@@ -47,9 +48,14 @@ async function doExport(lst, format) {
       ui.error('This list has no items to export.')
       return
     }
-    if (format === 'excel') await exportBomListExcel(project, lst.name, rows)
-    else exportBomListPdf(project, lst.name, rows)
-    ui.success(`Exported "${lst.name}" to ${format === 'excel' ? 'Excel' : 'PDF'}`)
+    if (format === 'excel') {
+      await exportBomListExcel(project, lst.name, rows)
+      ui.success(`Exported "${lst.name}" to Excel`)
+      return
+    }
+    // PDF: hand off to the doc-picker modal (owned by BomGlobalView); it owns
+    // the export + its own success/error toasts.
+    emit('request-pdf-export', { project, listName: lst.name, rows })
   } catch (e) {
     ui.error(e.message)
   } finally {
