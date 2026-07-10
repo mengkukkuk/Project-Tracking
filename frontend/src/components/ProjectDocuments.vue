@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { PDFViewer } from '@embedpdf/vue-pdf-viewer'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
@@ -18,10 +19,25 @@ const store = useProjectsStore()
 const ui = useUiStore()
 const { date } = useFormat()
 
+// --- Preview modal --- (declared before the watcher below, which calls
+// closePreview() on the initial/immediate run)
+const previewDoc = ref(null) // document row currently shown in the preview modal
+const previewUrl = ref(null) // blob: URL for the fetched PDF
+const previewLoading = ref(false)
+
+function closePreview() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+  previewDoc.value = null
+}
+
 watch(
   () => store.current?.id,
   () => {
     if (store.current && store.documents === null) store.fetchDocuments()
+    // A project switch while this tab stays mounted would otherwise leave a
+    // stale preview (and its blob: URL) pointing at the previous project's file.
+    closePreview()
   },
   { immediate: true },
 )
@@ -76,6 +92,27 @@ async function submitUpload() {
     uploading.value = false
   }
 }
+
+const previewConfig = computed(() => ({
+  src: previewUrl.value,
+  theme: { preference: ui.isDark ? 'dark' : 'light' },
+}))
+
+async function openPreview(doc) {
+  previewDoc.value = doc
+  previewLoading.value = true
+  try {
+    const blob = await api.downloadDocument(doc.id)
+    previewUrl.value = URL.createObjectURL(blob)
+  } catch (e) {
+    ui.error(e.message)
+    previewDoc.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+onBeforeUnmount(closePreview)
 
 // --- Row actions ---
 async function download(doc) {
@@ -145,6 +182,9 @@ function fmtSize(bytes) {
               <td>{{ doc.user?.name || '—' }}</td>
               <td>{{ date(doc.createdAt) }}</td>
               <td class="actions-col">
+                <button class="del" title="Preview" @click="openPreview(doc)">
+                  <AppIcon name="eye" :size="13" />
+                </button>
                 <button class="del" title="Download" @click="download(doc)">
                   <AppIcon name="download" :size="13" />
                 </button>
@@ -201,6 +241,13 @@ function fmtSize(bytes) {
           {{ uploading ? 'Uploading...' : `Upload ${selected.length} file(s)` }}
         </button>
       </template>
+    </Modal>
+
+    <Modal v-if="previewDoc" xwide :title="previewDoc.name" @close="closePreview">
+      <div class="preview-frame">
+        <div v-if="previewLoading" class="empty">Loading preview...</div>
+        <PDFViewer v-else-if="previewUrl" :config="previewConfig" style="width: 100%; height: 100%" />
+      </div>
     </Modal>
   </section>
 </template>
@@ -259,4 +306,15 @@ td.actions-col { display: flex; gap: 4px; justify-content: flex-end; }
 }
 .pk-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-size { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* Preview modal */
+.preview-frame {
+  height: 78vh;
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
 </style>
