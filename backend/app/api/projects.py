@@ -15,6 +15,7 @@ from ..validation import (
     require_dict,
     str_field,
 )
+from .documents import remove_project_docstore
 from .helpers import (
     log_activity,
     recompute_project_status,
@@ -328,6 +329,9 @@ def delete_project(pid):
         return denied
     Session.delete(p)
     Session.commit()
+    # DB rows (incl. project_documents) are cascade-deleted; the uploaded PDFs
+    # on disk are not, so sweep the project's docstore folder afterwards.
+    remove_project_docstore(pid)
     return "", 204
 
 

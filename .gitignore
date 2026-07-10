@@ -11,6 +11,9 @@ venv/
 *.sqlite
 *.sqlite3
 
+# Uploaded project documents
+backend/docstore/
+
 # Env / secrets
 .env
 .env.local

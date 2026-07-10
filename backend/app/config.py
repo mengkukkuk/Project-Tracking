@@ -61,6 +61,18 @@ class Config:
     # Empty string = same-origin only (safe default for production).
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "")
 
+    # --- Document store ---------------------------------------------------
+    # Folder for uploaded project documents (quotation / tds / result PDFs),
+    # laid out as <DOCSTORE_DIR>/<project_id>/<doc_type>/<uuid>.pdf.
+    DOCSTORE_DIR = os.getenv(
+        "DOCSTORE_DIR",
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docstore"
+        ),
+    )
+    # Werkzeug rejects request bodies above this with 413 (handled by errors.py).
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+
     # --- Misc -----------------------------------------------------------
     DEBUG = _bool("FLASK_DEBUG", False)
     SEED_ON_START = _bool("SEED_ON_START", False)

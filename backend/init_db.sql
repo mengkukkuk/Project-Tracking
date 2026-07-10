@@ -265,10 +265,26 @@ CREATE TABLE IF NOT EXISTS bom_list_items (
   PRIMARY KEY (list_id, bom_id)
 );
 
+-- ── project_documents (uploaded PDFs: quotation / tds / result) ─
+-- Disk files live at <DOCSTORE_DIR>/<project_id>/<doc_type>/<stored_name>;
+-- stored_name is server-generated (uuid + '.pdf'), original_name keeps the
+-- user's (possibly Thai) filename for display/download.
+CREATE TABLE IF NOT EXISTS project_documents (
+  id             SERIAL        PRIMARY KEY,
+  project_id     INTEGER       NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  user_id        INTEGER                REFERENCES users    (id) ON DELETE SET NULL,
+  doc_type       VARCHAR(16)   NOT NULL,   -- 'quotation' | 'tds' | 'result' (app-enforced)
+  original_name  VARCHAR(255)  NOT NULL,
+  stored_name    VARCHAR(64)   NOT NULL,
+  size_bytes     INTEGER       NOT NULL,
+  created_at     TIMESTAMP
+);
+
 -- =============================================================
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
 -- SET search_path TO pjtrk;
+-- DROP TABLE IF EXISTS project_documents     CASCADE;
 -- DROP TABLE IF EXISTS bom_list_items        CASCADE;
 -- DROP TABLE IF EXISTS bom_lists             CASCADE;
 -- DROP TABLE IF EXISTS exception_log         CASCADE;

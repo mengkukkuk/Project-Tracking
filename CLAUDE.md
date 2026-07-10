@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 61 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 73 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -29,7 +29,7 @@ npm run build      # production bundle → dist/
 |---|---|
 | `app/__init__.py` | App factory — wires DB, JWT, CORS, rate limiter, blueprints |
 | `app/config.py` | All config from env vars; `Config` (prod) and `TestConfig` |
-| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
+| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception), `ProjectDocument` (uploaded PDF metadata) |
 | `app/auth.py` | `/api/auth/*` — register, login, `/me`; rate-limited |
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
@@ -42,6 +42,7 @@ npm run build      # production bundle → dist/
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
 | `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
 | `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named subsets of BOM rows (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
+| `app/api/documents.py` | Per-project PDF uploads (quotation/tds/result) — multipart upload, list, authenticated download, owner-or-admin delete; files under `DOCSTORE_DIR/<pid>/<type>/` with uuid names (see Document uploads below) |
 | `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
 | `app/api/sheets.py` | Google Sheets export/import |
 | `app/api/stats.py` | Dashboard aggregations via SQL `GROUP BY` (no Python loops) |
@@ -71,6 +72,7 @@ npm run build      # production bundle → dist/
 | `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
 | `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
 | `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `components/ProjectDocuments.vue` | "Documents" drawer tab — three sections (Quotation/Technical Datasheet/Result) with multi-file PDF upload modal, blob download, delete |
 | `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
 | `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
 | `utils/summaryCalc.js` | Pure-JS math for the Summaries pipeline: input seeding (`seedTeamSize`/`seedComplexity`/`derivedDurationWeeks`), `computeMetrics`/`computeResults`/`gradeFor`. No store/API access, so the view can recompute on every keystroke |
@@ -148,6 +150,14 @@ The JWT still carries only `{role, name}`; `User.to_dict()` exposes a `permissio
 - BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
 - **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
 
+### Document uploads (docstore)
+- Per-project PDF attachments, three types: `quotation` / `tds` (technical datasheet) / `result`. UI: "Documents" tab in the project detail drawer (`ProjectDocuments.vue`).
+- **Files never keep the user's filename on disk.** Stored as `uuid4().hex + ".pdf"` under `DOCSTORE_DIR/<project_id>/<doc_type>/`; the original (possibly Thai) name lives in `project_documents.original_name` and is used as the download filename via `send_file(download_name=...)`. Do NOT introduce `secure_filename` here — it strips non-ASCII and would blank Thai names.
+- Config: `DOCSTORE_DIR` (default `backend/docstore`, gitignored) and `MAX_UPLOAD_MB` (default 50 → Flask `MAX_CONTENT_LENGTH`; oversize → standard 413 envelope via `errors.py`). Tests point `DOCSTORE_DIR` at a per-test temp dir in `conftest.py`.
+- Upload validates **all** files before writing any (`.pdf` extension + `%PDF-` magic bytes + non-empty) — a multi-file request is all-or-nothing. Authz mirrors records: any authenticated user may upload/list/download; delete is owner-or-admin. `documents.*` permission strings are UI-advisory only (like `records.*`).
+- Deleting a document removes the disk file only after the DB commit (best-effort); deleting a project rmtree's its whole `docstore/<pid>/` folder after commit. Downloads go through `api.downloadDocument()` → blob → programmatic link, because a plain `<a href>` can't carry the JWT.
+- The `project_documents` table is a NEW table, so `Base.metadata.create_all()` creates it automatically on restart — no ALTER migration needed (DDL also mirrored in `backend/init_db.sql`).
+
 ## Testing
 
 ```bash
@@ -155,7 +165,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 61 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
+- 73 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (`test_documents.py` — upload/list/download/delete incl. Thai filenames, magic-byte validation, all-or-nothing multi-file, delete authz, project-delete disk cleanup, 413 cap), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts

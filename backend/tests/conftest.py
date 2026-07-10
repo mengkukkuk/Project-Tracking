@@ -1,4 +1,7 @@
 """Shared pytest fixtures: a fresh in-memory app + authenticated client."""
+import shutil
+import tempfile
+
 import pytest
 
 from app import create_app
@@ -9,6 +12,9 @@ from app.models import Base
 
 @pytest.fixture()
 def app():
+    # Point the document store at a per-test temp dir so uploads never touch
+    # the real backend/docstore folder.
+    TestConfig.DOCSTORE_DIR = tempfile.mkdtemp(prefix="docstore-")
     app = create_app(TestConfig)
     yield app
     # Tear the schema down between tests so each gets a clean slate.
@@ -16,6 +22,7 @@ def app():
 
     Session.remove()
     Base.metadata.drop_all(engine)
+    shutil.rmtree(TestConfig.DOCSTORE_DIR, ignore_errors=True)
 
 
 @pytest.fixture()

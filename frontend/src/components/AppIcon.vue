@@ -134,6 +134,10 @@ defineProps({
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </template>
+    <template v-else-if="name === 'doc'">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+    </template>
     <template v-else-if="name === 'calculator'">
       <rect x="4" y="2" width="16" height="20" rx="2" />
       <path d="M8 6h8" />

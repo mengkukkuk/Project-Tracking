@@ -32,7 +32,10 @@ function buildError(status, body) {
 }
 
 async function req(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  // FormData bodies must NOT get a JSON content-type — the browser sets the
+  // multipart boundary itself.
+  const isForm = opts.body instanceof FormData
+  const headers = { ...(isForm ? {} : { 'Content-Type': 'application/json' }), ...(opts.headers || {}) }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -53,6 +56,29 @@ async function req(path, opts = {}) {
   const body = await res.json().catch(() => null)
   if (!res.ok) throw buildError(res.status, body)
   return body
+}
+
+// Like req() but resolves to a Blob — for authenticated file downloads
+// (a plain <a href> can't carry the JWT header).
+async function reqBlob(path) {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  let res
+  try {
+    res = await fetch(`${BASE}/api${path}`, { headers })
+  } catch {
+    throw new Error('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+  }
+
+  if (res.status === 401) {
+    setToken(null)
+    if (location.pathname !== '/login') location.assign('/login')
+    throw buildError(401, await res.json().catch(() => null))
+  }
+  if (!res.ok) throw buildError(res.status, await res.json().catch(() => null))
+  return res.blob()
 }
 
 const qs = (params) => {
@@ -105,6 +131,16 @@ export const api = {
     req(`/records/${resource}/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
   deleteRecord: (resource, id) =>
     req(`/records/${resource}/${id}`, { method: 'DELETE' }),
+
+  // per-project document uploads (quotation / tds / result PDFs)
+  listDocuments: (pid) => req(`/projects/${pid}/documents`),
+  uploadDocuments: (pid, docType, files) => {
+    const fd = new FormData()
+    for (const f of files) fd.append('files', f, f.name)
+    return req(`/projects/${pid}/documents/${docType}`, { method: 'POST', body: fd })
+  },
+  deleteDocument: (id) => req(`/documents/${id}`, { method: 'DELETE' }),
+  downloadDocument: (id) => reqBlob(`/documents/${id}/download`),
 
   // misc
   stats: () => req('/stats'),

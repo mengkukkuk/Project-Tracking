@@ -554,6 +554,42 @@ class ExceptionLog(Base):
         }
 
 
+class ProjectDocument(Base):
+    """Uploaded PDF attached to a project (quotation / tds / result).
+
+    The disk file lives at <DOCSTORE_DIR>/<project_id>/<doc_type>/<stored_name>.
+    ``stored_name`` is server-generated (uuid + ".pdf") so user filenames —
+    which may be Thai/unicode or collide — never reach the filesystem; the
+    original name is kept here for display and as the download filename.
+    """
+
+    __tablename__ = "project_documents"
+
+    id = Column(Integer, primary_key=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    doc_type = Column(String(16), nullable=False)        # quotation | tds | result
+    original_name = Column(String(255), nullable=False)
+    stored_name = Column(String(64), nullable=False)
+    size_bytes = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "projectId": self.project_id,
+            "docType": self.doc_type,
+            "name": self.original_name,
+            "size": self.size_bytes,
+            "user": {"id": self.user.id, "name": self.user.name} if self.user else None,
+            "createdAt": _iso(self.created_at),
+        }
+
+
 class BomList(Base):
     """Saved, named selection of bom_and_costing rows for a target project.
 

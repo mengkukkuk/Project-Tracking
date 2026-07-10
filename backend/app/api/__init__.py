@@ -1,6 +1,7 @@
 """API package: aggregates all resource blueprints under /api."""
 from .bom_lists import bp as bom_lists_bp
 from .comments import bp as comments_bp
+from .documents import bp as documents_bp
 from .projects import bp as projects_bp
 from .ptemplate import bp as ptemplate_bp
 from .records import bp as records_bp
@@ -19,4 +20,5 @@ blueprints = [
     records_bp,
     ptemplate_bp,
     bom_lists_bp,
+    documents_bp,
 ]

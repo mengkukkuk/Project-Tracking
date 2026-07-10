@@ -9,6 +9,7 @@ import ProgressBar from './ProgressBar.vue'
 import AppIcon from './AppIcon.vue'
 import RecordList from './RecordList.vue'
 import ProcessChecklist from './ProcessChecklist.vue'
+import ProjectDocuments from './ProjectDocuments.vue'
 import { RECORD_SCHEMAS, RECORD_ORDER } from '@/schemas/records'
 
 const emit = defineEmits(['close', 'edit'])
@@ -25,6 +26,7 @@ const tabs = [
   ['summary', 'Summary', 'overview'],
   ['tasks', 'Tasks', 'check'],
   ...RECORD_ORDER.map((r) => [r, RECORD_SCHEMAS[r].label, RECORD_SCHEMAS[r].icon]),
+  ['documents', 'Documents', 'doc'],
   ['comments', 'Comments', 'comment'],
   ['activity', 'Activity', 'activity'],
 ]
@@ -198,6 +200,7 @@ function dueClass(iso) {
 
             <ProcessChecklist v-if="tab === 'ptrack'" :key="'ptrack'" />
             <RecordList v-else-if="recordTabs.has(tab)" :key="tab" :resource="tab" />
+            <ProjectDocuments v-else-if="tab === 'documents'" />
 
             <section v-if="tab === 'comments'" class="panel">
               <form class="add comment-add" @submit.prevent="addComment">

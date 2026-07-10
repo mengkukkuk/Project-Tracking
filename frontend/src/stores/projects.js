@@ -34,6 +34,9 @@ export const useProjectsStore = defineStore('projects', {
     // per-project auxiliary records, keyed by resource name
     records: {},
     recordsLoading: false,
+    // per-project uploaded documents (null = not yet loaded for this project)
+    documents: null,
+    documentsLoading: false,
   }),
 
   getters: {
@@ -197,6 +200,7 @@ export const useProjectsStore = defineStore('projects', {
       this.detailLoading = true
       this.current = null
       this.records = {}
+      this.documents = null
       try {
         this.current = await api.getProject(id)
       } catch (e) {
@@ -209,6 +213,7 @@ export const useProjectsStore = defineStore('projects', {
     closeDetail() {
       this.current = null
       this.records = {}
+      this.documents = null
     },
 
     // --- Per-project auxiliary records ---
@@ -243,6 +248,31 @@ export const useProjectsStore = defineStore('projects', {
       await api.deleteRecord(resource, id)
       const list = (this.records[resource] || []).filter((r) => r.id !== id)
       this.records = { ...this.records, [resource]: list }
+    },
+
+    // --- Per-project uploaded documents (quotation / tds / result PDFs) ---
+    async fetchDocuments() {
+      if (!this.current) return
+      this.documentsLoading = true
+      try {
+        const res = await api.listDocuments(this.current.id)
+        this.documents = res.items
+      } catch (e) {
+        useUiStore().error(e.message)
+      } finally {
+        this.documentsLoading = false
+      }
+    },
+
+    async uploadDocuments(docType, files) {
+      const res = await api.uploadDocuments(this.current.id, docType, files)
+      this.documents = [...(this.documents || []), ...res.items]
+      return res.items
+    },
+
+    async removeDocument(id) {
+      await api.deleteDocument(id)
+      this.documents = (this.documents || []).filter((d) => d.id !== id)
     },
 
     // --- Process checklist (ptrack) ---
