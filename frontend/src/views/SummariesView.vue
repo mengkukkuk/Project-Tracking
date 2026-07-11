@@ -514,4 +514,7 @@ const compareRows = computed(() =>
   .detail-grid { grid-template-columns: 1fr; }
   .selector-grid { grid-template-columns: repeat(2, 1fr); }
 }
+@media (max-width: 380px) {
+  .ring-grid { grid-template-columns: 1fr; }
+}
 </style>

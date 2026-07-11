@@ -479,7 +479,7 @@ onMounted(() => {
       <span class="of">of {{ store.rows.length }} on record</span>
     </div>
 
-    <div class="ledger" :style="{ '--row-h': rowHeight + 'px' }">
+    <div v-if="!isMobile" class="ledger" :style="{ '--row-h': rowHeight + 'px' }">
       <AgGridVue
         class="grid"
         :theme="gridTheme"
@@ -495,6 +495,43 @@ onMounted(() => {
         @grid-ready="onGridReady"
         @cell-clicked="onCellClicked"
       />
+    </div>
+
+    <!-- Mobile: stacked cards instead of the wide grid --------------------- -->
+    <div v-else class="card-list">
+      <button
+        v-for="(r, i) in filtered"
+        :key="r.id"
+        type="button"
+        class="bom-card card"
+        @click="detailCard = r"
+      >
+        <div class="bc-top">
+          <span class="bc-folio mono">{{ String(i + 1).padStart(2, '0') }}</span>
+          <strong class="bc-name">{{ r.deviceName || '—' }}</strong>
+          <span class="bc-actions">
+            <button class="mini icon-btn" type="button" title="Edit" aria-label="Edit" @click.stop="openEdit(r)">
+              <AppIcon name="edit" :size="15" />
+            </button>
+            <button class="mini icon-btn danger" type="button" title="Delete" aria-label="Delete" @click.stop="remove(r)">
+              <AppIcon name="trash" :size="15" />
+            </button>
+          </span>
+        </div>
+        <div class="bc-chips">
+          <span v-if="r.projectName" class="bc-chip lc-chip">{{ r.projectName }}</span>
+          <span v-if="r.category" class="bc-chip lc-chip">{{ r.category }}</span>
+          <span v-if="r.supplier" class="bc-chip lc-chip">{{ r.supplier }}</span>
+        </div>
+        <div class="bc-figures">
+          <span><em>Qty</em> {{ num(r.quantity) }}{{ r.unit ? ' ' + r.unit : '' }}</span>
+          <span><em>Unit</em> {{ num(r.unitPrice) }}</span>
+          <span class="bc-total"><em>Total</em> {{ num(r.totalPrice) }}</span>
+        </div>
+      </button>
+      <div v-if="!filtered.length" class="bc-empty">
+        <span class="empty-mark">—</span>No BOM records match the current view.
+      </div>
     </div>
 
     <Modal
@@ -769,6 +806,52 @@ onMounted(() => {
   border-bottom: 1.5px solid var(--rule);
 }
 .grid { width: 100%; }
+
+/* ---- Mobile card list (replaces the grid ≤760px) ---- */
+.card-list { display: flex; flex-direction: column; gap: 10px; }
+.bom-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.bom-card:active { transform: translateY(1px); }
+.bc-top { display: flex; align-items: center; gap: 9px; }
+.bc-folio {
+  font-size: 11px; font-weight: 700;
+  color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+  flex-shrink: 0;
+}
+.bc-name {
+  font-family: var(--serif);
+  font-weight: 600; font-size: 15px; line-height: 1.25;
+  min-width: 0; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.bc-actions .mini { width: 34px; height: 34px; }
+.bc-actions .danger:hover { color: var(--danger); border-color: var(--danger); }
+.bc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bc-chip {
+  padding: 3px 9px; font-size: 11px; font-weight: 600;
+  color: var(--text-dim);
+}
+.bc-figures {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.bc-figures em { font-style: normal; color: var(--text-dim); font-size: 11px; margin-right: 3px; }
+.bc-total { font-weight: 700; }
+.bc-empty {
+  text-align: center; color: var(--text-dim);
+  padding: 40px 12px; font-family: var(--serif); font-style: italic; font-size: 15px;
+}
+.bc-empty .empty-mark { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
 
 /* Desktop: the ledger takes the remaining column height; min-height:0 lets the
    flex item shrink so the grid (not the page) provides the scroll. */

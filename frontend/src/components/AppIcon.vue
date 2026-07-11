@@ -155,6 +155,11 @@ defineProps({
       <path d="M12 18h.01" />
       <path d="M16 18h.01" />
     </template>
+    <template v-else-if="name === 'menu'">
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </template>
     <template v-else>
       <circle cx="12" cy="12" r="9" />
     </template>

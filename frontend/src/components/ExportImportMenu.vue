@@ -97,4 +97,9 @@ onUnmounted(() => document.removeEventListener('click', closeMenu))
 }
 .export-menu button:hover { background: var(--bg-sunken); color: var(--accent); }
 .hidden-file { display: none; }
+
+/* Keep the dropdown pinned inside the viewport on small screens. */
+@media (max-width: 640px) {
+  .export-menu { right: 0; left: auto; max-width: calc(100vw - 28px); }
+}
 </style>

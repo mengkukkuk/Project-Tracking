@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { BarChart } from 'echarts/charts'
@@ -15,6 +15,14 @@ const props = defineProps({ breakdown: { type: Array, default: () => [] } })
 const { fy } = useFormat()
 const theme = useChartTheme()
 
+// On narrow screens the 5 legend entries wrap to two rows; reserve extra
+// bottom clearance so they don't collide with the x-axis tick labels.
+const mq = window.matchMedia('(max-width: 760px)')
+const isMobile = ref(mq.matches)
+const onMq = (e) => { isMobile.value = e.matches }
+mq.addEventListener('change', onMq)
+onUnmounted(() => mq.removeEventListener('change', onMq))
+
 const option = computed(() => ({
   tooltip: {
     trigger: 'axis', axisPointer: { type: 'shadow' },
@@ -23,7 +31,7 @@ const option = computed(() => ({
     textStyle: { color: theme.value.text },
   },
   legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 11, color: theme.value.text } },
-  grid: { left: 70, right: 16, top: 16, bottom: 44 },
+  grid: { left: 70, right: 16, top: 16, bottom: isMobile.value ? 74 : 44 },
   xAxis: {
     type: 'value',
     axisLabel: { color: theme.value.text },

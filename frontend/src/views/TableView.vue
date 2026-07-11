@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, computed, h, defineComponent } from 'vue'
+import { ref, shallowRef, computed, h, defineComponent, onUnmounted } from 'vue'
 import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useProjectsStore, taskProgress } from '@/stores/projects'
@@ -24,6 +24,19 @@ const { baht, date } = useFormat()
 
 const density = ref('comfortable')
 const gridApi = shallowRef(null)
+
+// Below 760px (App.vue's mobile-shell breakpoint) the wide ag-grid is unusable,
+// so swap it for a stacked card list. Mirrors BomGlobalView's matchMedia guard.
+const mq = window.matchMedia('(max-width: 760px)')
+const isMobile = ref(mq.matches)
+const onMq = (e) => { isMobile.value = e.matches }
+mq.addEventListener('change', onMq)
+onUnmounted(() => mq.removeEventListener('change', onMq))
+
+// Card list mirrors the grid's default due-date-ascending sort.
+const mobileRows = computed(() =>
+  [...store.projects].sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || ''))),
+)
 
 const today = new Date()
   .toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -214,7 +227,7 @@ async function doExport(format) {
     </div>
 
     <!-- The ledger --------------------------------------------------------- -->
-    <div class="ledger" :class="density" :style="{ '--row-h': rowHeight + 'px' }">
+    <div v-if="!isMobile" class="ledger" :class="density" :style="{ '--row-h': rowHeight + 'px' }">
       <AgGridVue
         class="grid"
         :theme="gridTheme"
@@ -229,6 +242,37 @@ async function doExport(format) {
         @grid-ready="onGridReady"
         @row-clicked="onRowClicked"
       />
+    </div>
+
+    <!-- Mobile: stacked cards instead of the wide grid --------------------- -->
+    <div v-else class="card-list">
+      <button
+        v-for="(p, i) in mobileRows"
+        :key="p.id"
+        type="button"
+        class="proj-card card"
+        @click="store.openDetail(p.id)"
+      >
+        <div class="pc-top">
+          <span class="pc-folio mono">{{ String(i + 1).padStart(2, '0') }}</span>
+          <strong class="pc-name">{{ p.name }}</strong>
+        </div>
+        <div class="pc-badges">
+          <StatusBadge :status="p.status" />
+          <PriorityBadge :priority="p.priority" />
+        </div>
+        <div class="pc-meta">
+          <span>{{ p.pm || 'No PM' }} · {{ p.customer || 'No customer' }}</span>
+        </div>
+        <div class="pc-figures">
+          <span class="pc-value mono">{{ baht(p.value) }}</span>
+          <span class="pc-due mono">{{ date(p.dueDate) }}</span>
+        </div>
+        <ProgressBar :value="taskProgress(p)" showLabel />
+      </button>
+      <div v-if="!mobileRows.length" class="pc-empty">
+        <span class="empty-mark">—</span>No entries match the current view.
+      </div>
     </div>
   </div>
 </template>
@@ -437,4 +481,44 @@ async function doExport(format) {
   .actions { width: 100%; justify-content: space-between; }
   .empty { padding: 32px 12px; }
 }
+
+/* ---- Mobile card list (replaces the grid ≤760px) ---- */
+.card-list { display: flex; flex-direction: column; gap: 10px; }
+.proj-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.proj-card:active { transform: translateY(1px); }
+.pc-top { display: flex; align-items: baseline; gap: 9px; }
+.pc-folio {
+  font-size: 11px; font-weight: 700;
+  color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+  flex-shrink: 0;
+}
+.pc-name {
+  font-family: var(--serif);
+  font-weight: 600; font-size: 16px; line-height: 1.25;
+  letter-spacing: -.005em;
+  min-width: 0;
+}
+.pc-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.pc-meta { color: var(--text-dim); font-size: 12px; }
+.pc-figures {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; font-size: 13px;
+}
+.pc-value { font-weight: 700; color: var(--text); }
+.pc-due { color: var(--text-dim); }
+.pc-empty {
+  text-align: center; color: var(--text-dim);
+  padding: 40px 12px; font-family: var(--serif); font-style: italic; font-size: 15px;
+}
+.pc-empty .empty-mark { display: block; font-size: 22px; color: var(--border); margin-bottom: 6px; }
 </style>

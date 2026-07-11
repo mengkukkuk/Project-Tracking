@@ -291,27 +291,25 @@ function dueLabel(iso) {
   .section-head { display: grid; }
   .risk-strip { justify-content: flex-start; }
 
-  /* Attention list — restructure as a stacked card */
+  /* Attention list — restructure as a stacked card.
+     Status + priority get their own columns so the pills sit side by side
+     instead of stacking in a single shared grid cell (which overlapped). */
   .attention-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto auto 1fr;
     grid-template-areas:
-      "reason  money"
-      "project project"
-      "badges  due";
+      "reason   reason   money"
+      "project  project  project"
+      "status   priority due";
     align-items: start;
     gap: 8px 10px;
     padding: 12px;
   }
-  .attention-row .reason { grid-area: reason; }
+  .attention-row .reason { grid-area: reason; justify-self: start; }
   .attention-row .project { grid-area: project; }
-  .attention-row > :nth-child(3),
-  .attention-row > :nth-child(4) {
-    grid-area: badges;
-    display: inline-flex;
-    align-self: center;
-  }
+  .attention-row > :nth-child(3) { grid-area: status; align-self: center; justify-self: start; }
+  .attention-row > :nth-child(4) { grid-area: priority; align-self: center; justify-self: start; }
   .attention-row .money { grid-area: money; justify-self: end; font-weight: 700; color: var(--text); }
-  .attention-row .due { grid-area: due; justify-self: end; }
+  .attention-row .due { grid-area: due; justify-self: end; align-self: center; }
 }
 @media (max-width: 520px) {
   .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }

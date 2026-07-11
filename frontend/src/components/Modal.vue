@@ -73,9 +73,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     align-items: flex-start;
     padding: 0;
   }
-  .modal, .modal.wide {
-    width: 120%;
-    max-width: 120%;
+  .modal, .modal.wide, .modal.xwide {
+    width: 100%;
+    max-width: 100%;
     min-height: 100dvh;
     border-radius: 0;
     border: 0;

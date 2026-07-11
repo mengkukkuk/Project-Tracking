@@ -35,6 +35,14 @@ const nav = computed(() => {
 
 const isPublic = computed(() => route.meta.public)
 
+// Mobile bottom nav: show the first 4 pages as tabs, collapse the rest into a
+// "More" bottom sheet so the bar stays a single tidy row on phones.
+const primaryNav = computed(() => nav.value.slice(0, 4))
+const overflowNav = computed(() => nav.value.slice(4))
+const moreOpen = ref(false)
+const overflowActive = computed(() => overflowNav.value.some((n) => n.to === route.path))
+watch(() => route.path, () => { moreOpen.value = false })
+
 // form modal: undefined = closed, null = create, object = edit
 const formProject = ref(undefined)
 const submitting = ref(false)
@@ -144,14 +152,42 @@ watch(
     </main>
 
     <nav class="tabbar" aria-label="Mobile navigation">
-      <RouterLink v-for="n in nav" :key="n.to" :to="n.to" class="tab-item">
+      <RouterLink v-for="n in primaryNav" :key="n.to" :to="n.to" class="tab-item">
         <AppIcon :name="n.icon" :size="18" />
         <span>{{ n.label }}</span>
       </RouterLink>
+      <button
+        v-if="overflowNav.length"
+        class="tab-item tab-more"
+        :class="{ 'is-active': overflowActive || moreOpen }"
+        @click="moreOpen = true"
+        aria-label="More pages"
+        :aria-expanded="moreOpen"
+      >
+        <AppIcon name="menu" :size="18" />
+        <span>More</span>
+      </button>
       <button class="tab-fab" @click="openCreate" aria-label="New project">
         <AppIcon name="plus" :size="20" />
       </button>
     </nav>
+
+    <Teleport to="body">
+      <div v-if="moreOpen" class="more-backdrop" @click="moreOpen = false">
+        <div class="more-sheet" role="dialog" aria-label="More pages" @click.stop>
+          <div class="more-grip" aria-hidden="true"></div>
+          <RouterLink
+            v-for="n in overflowNav"
+            :key="n.to"
+            :to="n.to"
+            class="more-row"
+          >
+            <AppIcon :name="n.icon" :size="18" />
+            <span>{{ n.label }}</span>
+          </RouterLink>
+        </div>
+      </div>
+    </Teleport>
 
     <Modal
       v-if="formProject !== undefined"
@@ -279,6 +315,7 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     box-shadow: 0 -8px 24px rgba(15, 23, 42, .08);
   }
   .tab-item {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -290,13 +327,21 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     font-weight: 700;
     letter-spacing: .02em;
     border-radius: 8px;
-    flex: 1 1 calc(25% - 4px);
+    flex: 1 1 0;
     min-width: 0;
   }
-  .tab-item.router-link-exact-active { color: var(--accent); }
-  .tab-item.router-link-exact-active::before {
+  .tab-more {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .tab-item.router-link-exact-active,
+  .tab-more.is-active { color: var(--accent); }
+  .tab-item.router-link-exact-active::before,
+  .tab-more.is-active::before {
     content: ''; display: block; position: absolute;
-    margin-top: -8px; width: 22px; height: 2px;
+    top: 2px; width: 22px; height: 2px;
     background: var(--accent); border-radius: 2px;
   }
   .tab-fab {
@@ -308,5 +353,42 @@ nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     border: 0; cursor: pointer;
     box-shadow: 0 6px 18px rgba(20, 184, 166, .35);
   }
+}
+
+/* Mobile "More" bottom sheet (only ever opened from the mobile tab bar). */
+.more-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(15, 23, 42, .5);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-end;
+  animation: more-fade .18s ease;
+}
+.more-sheet {
+  width: 100%;
+  background: var(--surface);
+  border-top-left-radius: 18px; border-top-right-radius: 18px;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -12px 40px rgba(15, 23, 42, .22);
+  padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
+  animation: more-rise .22s cubic-bezier(.2, .7, .2, 1);
+}
+.more-grip {
+  width: 38px; height: 4px; border-radius: 2px;
+  background: var(--border);
+  margin: 6px auto 10px;
+}
+.more-row {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 48px; padding: 8px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text); font-size: 14px; font-weight: 600;
+}
+.more-row:hover { background: var(--bg-sunken); }
+.more-row.router-link-exact-active { color: var(--accent); background: var(--accent-soft); }
+@keyframes more-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes more-rise { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .more-backdrop, .more-sheet { animation: none; }
 }
 </style>

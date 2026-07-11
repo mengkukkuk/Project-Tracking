@@ -573,12 +573,12 @@ const docSummaries = computed(() => [
                   </td>
                 </tr>
                 <tr v-for="r in g.items" :key="r.id" :class="['step-row', statusKey(r._status)]">
-                  <td class="mono dim">{{ weekLabel(g) }}</td>
-                  <td>{{ r.task || '—' }}</td>
-                  <td>{{ r.pm || '—' }}</td>
-                  <td class="mono">{{ g.startDate ? date(g.startDate) : '—' }}</td>
-                  <td class="mono">{{ g.dueDate ? date(g.dueDate) : '—' }}</td>
-                  <td>
+                  <td class="mono dim wk-cell">{{ weekLabel(g) }}</td>
+                  <td data-label="SOP">{{ r.task || '—' }}</td>
+                  <td data-label="Responsible">{{ r.pm || '—' }}</td>
+                  <td class="mono" data-label="Start">{{ g.startDate ? date(g.startDate) : '—' }}</td>
+                  <td class="mono" data-label="Due">{{ g.dueDate ? date(g.dueDate) : '—' }}</td>
+                  <td data-label="Status">
                     <span class="status-pill" :class="statusKey(r._status)">
                       <span class="dot" /> {{ statusEmoji(r._status) }} {{ r._status }}
                     </span>
@@ -742,4 +742,44 @@ const docSummaries = computed(() => [
 }
 .matrix-empty { padding: 20px; }
 .empty { padding: 32px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+/* ── Section 4 matrix — mobile card reflow (≤760px) ───────────────── */
+@media (max-width: 760px) {
+  /* Drop the horizontal scroll cage; cards flow vertically instead. */
+  .matrix-wrap { overflow-x: visible; border: 0; border-radius: 0; }
+  .matrix { min-width: 0; display: block; font-size: 13px; }
+  .matrix thead { display: none; }
+  .matrix tbody { display: block; }
+  .matrix tbody tr + tr { border-top: 0; }
+
+  /* Week/process band → full-width section heading. */
+  .group-row { display: block; margin: 14px 0 8px; }
+  .group-row:first-child { margin-top: 0; }
+  .group-row td {
+    display: block; padding: 8px 12px;
+    border-radius: 8px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  }
+
+  /* Each step → its own bordered card of labelled rows. */
+  .step-row {
+    display: block; margin-bottom: 10px; padding: 4px 0;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface, transparent);
+  }
+  .step-row td {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 14px; text-align: right;
+  }
+  .step-row td + td { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+  .step-row td::before {
+    content: attr(data-label); flex: 0 0 auto;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-dim); text-align: left;
+  }
+  /* Week is already shown in the group band above — hide the per-row echo. */
+  .step-row td.wk-cell { display: none; }
+  /* SOP name reads as the card title: full width, no label. */
+  .step-row td[data-label="SOP"] { display: block; text-align: left; font-weight: 700; }
+  .step-row td[data-label="SOP"]::before { display: none; }
+}
 </style>
