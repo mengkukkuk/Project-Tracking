@@ -74,6 +74,7 @@ npm run build      # production bundle → dist/
 | `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
 | `components/ProjectDocuments.vue` | "Documents" drawer tab — three sections (Quotation/Technical Datasheet/Result) with multi-file PDF upload modal, in-place preview (`@embedpdf/vue-pdf-viewer`), blob download, delete |
 | `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
+| `components/SkeletonBlock.vue` / `RouteSkeleton.vue` | Loading-skeleton system. `SkeletonBlock` is a configurable shimmer block; `RouteSkeleton` composes it into route-aware layouts (`overview`/`table`/`bom`/`dashboard`/`summaries`/`board`/`generic`) that mirror each view's geometry. Wired into the three loading gates (`App.vue`, `DashboardView.vue`, `ProjectDetail.vue`). See "Skeleton loading" in Key Decisions + LIQCRYS.md §6 |
 | `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
 | `utils/summaryCalc.js` | Pure-JS math for the Summaries pipeline: input seeding (`seedTeamSize`/`seedComplexity`/`derivedDurationWeeks`), `computeMetrics`/`computeResults`/`gradeFor`. No store/API access, so the view can recompute on every keystroke |
 
@@ -84,6 +85,12 @@ npm run build      # production bundle → dist/
 - Defined once as the `--font` CSS variable in `frontend/src/assets/main.css` and loaded via Google Fonts there.
 - **Always use `font-family: var(--font)`** (or `inherit`) in new components. Do NOT introduce additional font families (no serif display faces, no monospace).
 - The `.mono` helper class is kept for figures/labels but now maps to `var(--font)` with `font-variant-numeric: tabular-nums` for column alignment — it is no longer a monospaced face.
+
+### Skeleton loading (Liquid Crystal at rest)
+- Loading placeholders reuse the LC surface recipe instead of a bare "Loading…" string — a teal-tinted shimmer that reads as the same material warming up. Design rules live in `frontend/LIQCRYS.md` §6.
+- **Foundation (`frontend/src/assets/main.css`):** tokens `--sk-base`/`--sk-sheen` (both `color-mix`ed from `--accent`, with a `:root[data-theme='dark']` override), keyframes `lc-shimmer` (sweep) + `sk-rise` (reveal), and classes `.skeleton`/`.skeleton-{text,title,chip,circle}`/`.sk-card`/`.sk-reveal`. The `prefers-reduced-motion` block disables both the shimmer and the reveal (static fill).
+- **Components:** `SkeletonBlock.vue` (atomic shimmer block, props `w`/`h`/`radius`/`variant`) → composed by `RouteSkeleton.vue` into 7 route-aware layouts that mirror each view's geometry so content lands with **no reflow jump**.
+- **Three gates wired, no store changes:** `App.vue` maps `route.path → skeletonVariant` and renders `<RouteSkeleton>` while `store.loading && !store.projects.length`; `DashboardView.vue` uses `variant="dashboard"` on its local `loading`; `ProjectDetail.vue` renders an inline drawer skeleton on `store.detailLoading` (the drawer is a flex column, so its content is **not** wrapped — `sk-reveal` goes on `.hero`). Real content gets `.sk-reveal` to lift into place.
 
 ### Authorization model
 Three roles (`app/models.py:ROLES`, ordered most-privileged first): `super_admin`, `admin`, `member`.

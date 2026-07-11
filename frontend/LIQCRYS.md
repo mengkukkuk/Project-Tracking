@@ -138,6 +138,35 @@ scrolled content bleeds through it:
 }
 ```
 
+### 6. Skeleton loading (LC at rest)
+
+Loading placeholders reuse the surface recipe so a loading screen reads as the
+same material *warming up* rather than a generic grey shimmer. Defined globally
+in [`src/assets/main.css`](src/assets/main.css) and composed by
+[`SkeletonBlock.vue`](src/components/SkeletonBlock.vue) (atomic block) +
+[`RouteSkeleton.vue`](src/components/RouteSkeleton.vue) (route-aware layouts).
+
+- **Teal-tinted shimmer.** `--sk-base` / `--sk-sheen` are `color-mix`ed from
+  `--accent`, so the sweep is the accent warming up, not a neutral grey.
+- **Placeholders are `.card`s.** Skeleton groups sit inside `.sk-card` (the LC
+  `.card` recipe) so the frosted surface + rim-light matches loaded content.
+- **Mirror the real geometry.** Each `RouteSkeleton` variant reproduces its
+  view's layout (KPI grid, ledger rows, ring gauges, …) so content lands in the
+  same positions — no reflow jump when data arrives.
+- **Reveal, don't pop.** Real content gets `.sk-reveal` (`sk-rise` — a 6px lift),
+  echoing the app's `.view { animation: fade }` entrance.
+- **Reduced motion.** `@media (prefers-reduced-motion: reduce)` disables the
+  shimmer sweep and the reveal (static `--sk-base` fill).
+
+```css
+.skeleton { position: relative; overflow: hidden; background: var(--sk-base); border-radius: 8px; }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--sk-sheen), transparent);
+  animation: lc-shimmer 1.4s ease-in-out infinite;
+}
+```
+
 ## Gotchas
 
 - **Stacking order.** Put the glow/sheen in the element's `background` (paints
