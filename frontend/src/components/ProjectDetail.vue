@@ -10,6 +10,7 @@ import AppIcon from './AppIcon.vue'
 import RecordList from './RecordList.vue'
 import ProcessChecklist from './ProcessChecklist.vue'
 import ProjectDocuments from './ProjectDocuments.vue'
+import SkeletonBlock from './SkeletonBlock.vue'
 import { RECORD_SCHEMAS, RECORD_ORDER } from '@/schemas/records'
 
 const emit = defineEmits(['close', 'edit'])
@@ -104,10 +105,26 @@ function dueClass(iso) {
           </button>
         </header>
 
-        <div v-if="store.detailLoading" class="loading">Loading project details...</div>
+        <div v-if="store.detailLoading" class="drawer-skeleton">
+          <div class="dsk-hero">
+            <SkeletonBlock w="90px" h="24px" variant="chip" />
+            <SkeletonBlock w="70px" h="24px" variant="chip" />
+            <SkeletonBlock w="110px" h="20px" variant="title" />
+          </div>
+          <div class="dsk-quick card">
+            <SkeletonBlock w="60%" h="34px" radius="8px" />
+            <SkeletonBlock w="100%" h="10px" variant="text" />
+          </div>
+          <div class="dsk-tabs">
+            <SkeletonBlock v-for="i in 6" :key="i" w="72px" h="26px" variant="chip" />
+          </div>
+          <div class="dsk-body">
+            <SkeletonBlock v-for="i in 5" :key="i" :w="`${90 - i * 6}%`" h="14px" variant="text" />
+          </div>
+        </div>
 
         <template v-else-if="store.current">
-          <section class="hero">
+          <section class="hero sk-reveal">
             <div class="badges">
               <StatusBadge :status="store.current.status" />
               <PriorityBadge :priority="store.current.priority" />
@@ -292,6 +309,17 @@ function dueClass(iso) {
   color: var(--text-dim);
   text-align: center;
 }
+.drawer-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+}
+.dsk-hero { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dsk-quick { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+.dsk-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.dsk-body { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
 .hero {
   display: flex;
   align-items: center;

@@ -14,6 +14,7 @@ import {
 } from '@/utils/recordExport'
 import ExportImportMenu from '@/components/ExportImportMenu.vue'
 import ImportResultModal from '@/components/ImportResultModal.vue'
+import RouteSkeleton from '@/components/RouteSkeleton.vue'
 
 // Local state on purpose: calling store.openDetail/fetchRecords would mutate
 // store.current and pop the global ProjectDetail drawer (App.vue).
@@ -393,9 +394,9 @@ const docSummaries = computed(() => [
       </button>
     </div>
 
-    <div v-if="loading" class="empty">Loading…</div>
+    <RouteSkeleton v-if="loading" variant="dashboard" />
 
-    <template v-else-if="project">
+    <div v-else-if="project" class="sk-reveal">
       <!-- ── Section 1 — Executive Summary & Project Health ───────────────── -->
       <section class="card section">
         <div class="section-head">
@@ -593,7 +594,7 @@ const docSummaries = computed(() => [
           — ยังไม่มี ptrack สำหรับโครงการนี้ · No process checklist for this project yet
         </div>
       </section>
-    </template>
+    </div>
 
     <div v-else class="empty">เลือกโครงการเพื่อดูข้อมูล · Select a project to view details</div>
 

@@ -9,6 +9,7 @@ import Modal from '@/components/Modal.vue'
 import ProjectForm from '@/components/ProjectForm.vue'
 import ProjectDetail from '@/components/ProjectDetail.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import RouteSkeleton from '@/components/RouteSkeleton.vue'
 import { PAGES, pagePerm } from '@/constants/pages'
 
 const route = useRoute()
@@ -34,6 +35,18 @@ const nav = computed(() => {
 })
 
 const isPublic = computed(() => route.meta.public)
+
+// Map the active route to the loading-skeleton layout that mirrors its content.
+const SKELETON_VARIANTS = {
+  '/': 'overview',
+  '/pipeline': 'board',
+  '/pm-cards': 'board',
+  '/table': 'table',
+  '/bom': 'bom',
+  '/dashboard': 'dashboard',
+  '/summaries': 'summaries',
+}
+const skeletonVariant = computed(() => SKELETON_VARIANTS[route.path] || 'generic')
 
 // Mobile bottom nav: show the first 4 pages as tabs, collapse the rest into a
 // "More" bottom sheet so the bar stays a single tidy row on phones.
@@ -143,12 +156,12 @@ watch(
     </header>
 
     <main class="main">
-      <div v-if="store.loading && !store.projects.length" class="state">Loading projects...</div>
+      <RouteSkeleton v-if="store.loading && !store.projects.length" :variant="skeletonVariant" />
       <div v-else-if="store.error" class="state err">
         {{ store.error }}
         <button class="btn ghost sm" @click="store.fetchAll">Try again</button>
       </div>
-      <RouterView v-else />
+      <div v-else class="sk-reveal"><RouterView /></div>
     </main>
 
     <nav class="tabbar" aria-label="Mobile navigation">

@@ -240,7 +240,60 @@ label.field > span { display: block; font-size: 12px; font-weight: 600; color: v
   .lc-surface, .card, .btn, .icon-btn { transition: none; }
   .lc-surface:hover, .lc-lift:hover, .card:hover { transform: none; }
   .btn:active, .icon-btn:active { transform: none; }
+  .skeleton::after { animation: none; }
+  .sk-reveal { animation: none; opacity: 1; transform: none; }
 }
+
+/* ───── Skeleton loading (Liquid Crystal, teal-tinted shimmer) ─────
+   Placeholders reuse the LC surface recipe so loading reads as the same
+   material warming up rather than a generic grey shimmer. See the
+   skeleton-loading plan. */
+:root {
+  --sk-base: color-mix(in srgb, var(--accent) 5%, var(--bg-sunken));
+  --sk-sheen: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+:root[data-theme='dark'] {
+  --sk-base: color-mix(in srgb, var(--accent) 8%, var(--bg-sunken));
+  --sk-sheen: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+
+@keyframes lc-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes sk-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--sk-base);
+  border-radius: 8px;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--sk-sheen), transparent);
+  animation: lc-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-text { height: 12px; border-radius: 6px; }
+.skeleton-title { height: 20px; border-radius: 7px; }
+.skeleton-chip { height: 22px; border-radius: 999px; }
+.skeleton-circle { border-radius: 50%; }
+
+/* Placeholder card — the LC .card recipe with skeleton padding. */
+.sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+/* Real content reveal — lift into place instead of popping. */
+.sk-reveal { animation: sk-rise .35s ease both; }
 
 /* Fallback: without backdrop-filter, use a fully opaque surface so text stays
    readable (the frost is purely decorative). */
