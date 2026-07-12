@@ -1,7 +1,8 @@
 <script setup>
 import AppIcon from './AppIcon.vue'
+import { useCountUp } from '@/composables/useCountUp'
 
-defineProps({
+const props = defineProps({
   label: String,
   value: [String, Number],
   sub: String,
@@ -11,6 +12,9 @@ defineProps({
 })
 
 defineEmits(['click'])
+
+// Numeric values count up on mount/change; string values pass through unchanged.
+const shown = useCountUp(() => props.value)
 </script>
 
 <template>
@@ -25,7 +29,7 @@ defineEmits(['click'])
     </span>
     <span class="kpi-body">
       <span class="kpi-label">{{ label }}</span>
-      <span class="kpi-value mono readout">{{ value }}</span>
+      <span class="kpi-value mono readout">{{ shown }}</span>
       <span v-if="sub" class="kpi-sub">{{ sub }}</span>
     </span>
   </button>
@@ -35,7 +39,7 @@ defineEmits(['click'])
     </div>
     <div class="kpi-body">
       <div class="kpi-label">{{ label }}</div>
-      <div class="kpi-value mono readout">{{ value }}</div>
+      <div class="kpi-value mono readout">{{ shown }}</div>
       <div v-if="sub" class="kpi-sub">{{ sub }}</div>
     </div>
   </div>

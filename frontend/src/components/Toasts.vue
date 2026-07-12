@@ -15,6 +15,11 @@ const ui = useUiStore()
       >
         <span class="ico">{{ t.type === 'error' ? '⚠' : '✓' }}</span>
         <span>{{ t.message }}</span>
+        <span
+          v-if="t.timeout"
+          class="toast-bar"
+          :style="{ animationDuration: t.timeout + 'ms' }"
+        />
       </div>
     </TransitionGroup>
   </div>
@@ -26,6 +31,8 @@ const ui = useUiStore()
   display: flex; flex-direction: column; gap: 9px; max-width: 360px;
 }
 .toast {
+  position: relative;
+  overflow: hidden;
   display: flex; align-items: center; gap: 10px;
   padding: 12px 15px; border-radius: 10px; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border);
@@ -33,6 +40,22 @@ const ui = useUiStore()
   border-left: 3px solid var(--accent);
 }
 .toast.error { border-left-color: var(--danger); }
+.toast-bar {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 100%; height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: toast-drain linear forwards;
+}
+.toast.error .toast-bar { background: var(--danger); }
+@keyframes toast-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-bar { animation: none; display: none; }
+}
 .ico {
   display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0;
   border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px;

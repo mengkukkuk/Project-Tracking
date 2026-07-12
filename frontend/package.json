@@ -12,6 +12,7 @@
     "@embedpdf/vue-pdf-viewer": "^2.14.4",
     "@fontsource/ibm-plex-sans-thai": "^5.2.8",
     "@tanstack/vue-table": "^8.20.5",
+    "@vueuse/motion": "^3.0.3",
     "ag-grid-community": "^36.0.0",
     "ag-grid-vue3": "^36.0.0",
     "echarts": "^6.1.0",

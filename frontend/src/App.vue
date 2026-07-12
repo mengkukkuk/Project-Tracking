@@ -161,7 +161,13 @@ watch(
         {{ store.error }}
         <button class="btn ghost sm" @click="store.fetchAll">Try again</button>
       </div>
-      <div v-else class="sk-reveal"><RouterView /></div>
+      <div v-else class="sk-reveal">
+        <RouterView v-slot="{ Component }">
+          <Transition name="route" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
+      </div>
     </main>
 
     <nav class="tabbar" aria-label="Mobile navigation">

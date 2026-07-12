@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { useProjectsStore, STAGES, taskProgress } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
@@ -32,6 +32,19 @@ const tabs = [
   ['activity', 'Activity', 'activity'],
 ]
 const recordTabs = new Set(RECORD_ORDER)
+
+// Sliding tab underline: measure the active button and glide a bar to it.
+const tabBtns = ref([])
+const underline = ref({ left: 0, width: 0 })
+function setTabRef(el, i) { if (el) tabBtns.value[i] = el }
+function measureTab() {
+  const idx = tabs.findIndex((t) => t[0] === tab.value)
+  const el = tabBtns.value[idx]
+  if (el) underline.value = { left: el.offsetLeft, width: el.offsetWidth }
+}
+watch(tab, () => nextTick(measureTab))
+watch(() => store.current?.id, () => nextTick(measureTab))
+onMounted(() => nextTick(measureTab))
 
 async function addTask() {
   const title = newTask.value.trim()
@@ -158,8 +171,9 @@ function dueClass(iso) {
 
           <nav class="tabs" aria-label="Project detail sections">
             <button
-              v-for="[id, label, icon] in tabs"
+              v-for="([id, label, icon], i) in tabs"
               :key="id"
+              :ref="(el) => setTabRef(el, i)"
               type="button"
               :class="{ active: tab === id }"
               @click="tab = id"
@@ -167,6 +181,7 @@ function dueClass(iso) {
               <AppIcon :name="icon" :size="14" />
               {{ label }}
             </button>
+            <span class="tab-underline" :style="{ transform: `translateX(${underline.left}px)`, width: underline.width + 'px' }" />
           </nav>
 
           <div class="drawer-body">
@@ -375,6 +390,7 @@ function dueClass(iso) {
   font-size: 18px;
 }
 .tabs {
+  position: relative;
   display: flex;
   gap: 6px;
   padding: 14px 20px 0;
@@ -394,10 +410,24 @@ function dueClass(iso) {
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  transition: color .2s ease;
 }
 .tabs button.active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+}
+.tab-underline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: transform .25s cubic-bezier(.2, .7, .2, 1), width .25s cubic-bezier(.2, .7, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabs button { transition: none; }
+  .tab-underline { transition: none; }
 }
 .drawer-body {
   flex: 1;

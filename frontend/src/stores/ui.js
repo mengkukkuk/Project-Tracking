@@ -33,7 +33,7 @@ export const useUiStore = defineStore('ui', {
 
     toast(message, type = 'success', timeout = 3200) {
       const id = ++toastId
-      this.toasts.push({ id, message, type })
+      this.toasts.push({ id, message, type, timeout })
       if (timeout) setTimeout(() => this.dismiss(id), timeout)
       return id
     },
