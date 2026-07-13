@@ -66,6 +66,14 @@ ul.meth li:before{content:"▸";position:absolute;left:6px;color:var(--acc2);fon
 .dot.on{background:var(--acc2);transform:scale(1.4)}
 .foot{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);color:var(--pa);font-size:.78rem;z-index:5}
 @media(max-width:820px){.cards,.comp{grid-template-columns:1fr 1fr}.frow{grid-template-columns:1fr;gap:6px}.fthb{text-align:left}}
+
+.refwrap{display:grid;grid-template-columns:1fr 1fr;gap:22px 40px;margin-top:24px;max-height:66vh;overflow:auto;padding-right:8px}
+.refgroup{animation:sl .5s backwards}
+.refh{color:var(--acc2);font-weight:600;font-size:.95rem;margin-bottom:10px;border-bottom:1px solid rgba(72,184,208,.3);padding-bottom:6px}
+.reflist{list-style:none;display:flex;flex-direction:column;gap:9px}
+.reflist li{font-size:.9rem;line-height:1.4;animation:sl .5s backwards;animation-delay:var(--d)}
+.reflist a{color:#d6e4f0;text-decoration:none;border-left:2px solid rgba(201,162,39,.6);padding-left:10px;display:block;transition:.2s}
+.reflist a:hover{color:#fff;border-color:var(--gold);transform:translateX(3px)}
 </style></head><body>
 <div class="deck">
 
@@ -236,6 +244,13 @@ ul.meth li:before{content:"▸";position:absolute;left:6px;color:var(--acc2);fon
 </section>
 
 <section class="slide">
+  <div class="kick">แหล่งอ้างอิงราคา · Reference Links</div>
+  <h2>ที่มาของตัวเลขเทียบราคา</h2>
+  <p class="sub" style="margin-top:6px">ราคา SaaS = per-user/เดือน billed annually · แปลง 35 บาท/USD · เทียบที่ 20 users</p>
+  <div class="refwrap"><div class="refgroup"><div class="refh">SaaS pricing (หน้าเว็บทางการ)</div><ul class="reflist"><li style="--d:0.05s"><a href="https://monday.com/pricing" target="_blank">Monday.com — pricing (Standard $12/seat/เดือน, ขั้นต่ำ 3 seats)</a></li><li style="--d:0.1s"><a href="https://support.monday.com/hc/en-us/articles/4405633151634-Plans-and-pricing-for-monday-com" target="_blank">Monday.com Support — Plans and pricing</a></li><li style="--d:0.15000000000000002s"><a href="https://www.atlassian.com/software/jira/pricing" target="_blank">Atlassian Jira — pricing (Standard $7.91 / Premium $14.54 ต่อ user/เดือน)</a></li><li style="--d:0.2s"><a href="https://asana.com/pricing" target="_blank">Asana — pricing (Starter $10.99 / Advanced $24.99 ต่อ user/เดือน)</a></li><li style="--d:0.25s"><a href="https://help.asana.com/s/article/pricing-and-purchases?language=en_US" target="_blank">Asana Help — pricing and purchases explained</a></li></ul></div><div class="refgroup"><div class="refh">เรตพัฒนา / man-day ตลาดไทย</div><ul class="reflist"><li style="--d:0.05s"><a href="https://www.secondtalent.com/developer-rate-card/thailand/" target="_blank">Second Talent — Thailand Developer Rate Card 2026</a></li><li style="--d:0.1s"><a href="https://th.jobsdb.com/career-advice/role/software-developer/salary" target="_blank">JobsDB — เงินเดือน Software Developer ไทย</a></li><li style="--d:0.15000000000000002s"><a href="https://lemon.io/rate-calculator/thailand/" target="_blank">Lemon.io — Thailand developer hourly rate</a></li><li style="--d:0.2s"><a href="https://www.ismtech.net/it-salary-report/" target="_blank">ISM Tech — รายงานอัตราเงินเดือนสายไอที</a></li><li style="--d:0.25s"><a href="https://www.talance.tech/blog/ค่าตอบแทน-income-per-hours/" target="_blank">Talance — วิธีคิดค่าตอบแทนรายชั่วโมง (man-hour)</a></li></ul></div><div class="refgroup"><div class="refh">แหล่งเทียบราคา SaaS (secondary / ไขว้ตรวจ)</div><ul class="reflist"><li style="--d:0.05s"><a href="https://costbench.com/software/project-management/jira/" target="_blank">Costbench — Jira pricing 2026</a></li><li style="--d:0.1s"><a href="https://costbench.com/software/project-management/monday/" target="_blank">Costbench — Monday.com pricing 2026</a></li><li style="--d:0.15000000000000002s"><a href="https://saascrmreview.com/asana-pricing/" target="_blank">SaaSCRMReview — Asana pricing 2026</a></li><li style="--d:0.2s"><a href="https://monday.com/blog/rnd/asana-or-jira-which-is-right-for-your-team/" target="_blank">Monday blog — Asana vs Jira 2026</a></li></ul></div></div>
+</section>
+
+<section class="slide">
   <div class="kick">สรุป</div>
   <h1>ราคาแนะนำ <span class="grad">฿1,945,800</span></h1>
   <p class="sub">Feature-based · 188 man-days · เรตตลาดไทย 9,000 บาท/วัน · รวม PM 15%<br>
@@ -246,7 +261,7 @@ ul.meth li:before{content:"▸";position:absolute;left:6px;color:var(--acc2);fon
 
 </div>
 <div class="nav"><button onclick="go(-1)">‹</button><button onclick="go(1)">›</button></div>
-<div class="pg"><span id="cur">1</span> / 6</div>
+<div class="pg"><span id="cur">1</span> / 7</div>
 <div class="dots" id="dots"></div>
 <div class="foot">ใช้ ← → เลื่อนสไลด์ · SCADA Project-Tracking · ประเมิน ก.ค. 2026</div>
 <script>

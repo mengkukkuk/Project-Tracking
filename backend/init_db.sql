@@ -280,6 +280,27 @@ CREATE TABLE IF NOT EXISTS project_documents (
   created_at     TIMESTAMP
 );
 
+CREATE TABLE lookup_type (
+     lookup_type_id SERIAL        PRIMARY KEY,
+     code text UNIQUE NOT NULL,
+     name text NOT NULL,
+     description text,
+     is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE lookup_value (
+      lookup_value_id SERIAL        PRIMARY KEY,
+      lookup_type_id INT NOT NULL,
+      code text NOT NULL,
+      display_name text NOT NULL,
+      sort_order INT DEFAULT 0,
+      is_default BOOLEAN DEFAULT false,
+      is_active BOOLEAN DEFAULT true,
+
+      FOREIGN KEY (lookup_type_id)
+          REFERENCES lookup_type(lookup_type_id)
+);
+
 -- =============================================================
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
