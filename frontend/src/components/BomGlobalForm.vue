@@ -6,6 +6,7 @@
 // record via PATCH /api/records/bom/<id> (the endpoint accepts projectId).
 import { reactive, computed, watch } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
+import { useLookupsStore } from '@/stores/lookups'
 import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
 
 const props = defineProps({
@@ -15,8 +16,13 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'cancel'])
 
 const projectsStore = useProjectsStore()
+const lookupsStore = useLookupsStore()
 const schema = RECORD_SCHEMAS.bom
 const isEdit = computed(() => !!props.record)
+
+// The BOM view loads the taxonomy on mount; guard in case the form is ever
+// opened without it (e.g. a direct standalone mount).
+if (!lookupsStore.types.length) lookupsStore.fetchAll().catch(() => {})
 
 const projectOptions = computed(() =>
   [...projectsStore.projects].sort((a, b) =>
@@ -25,13 +31,34 @@ const projectOptions = computed(() =>
 )
 
 const base = emptyRecord('bom')
-const form = reactive({ projectId: props.record?.projectId ?? null, ...base })
+// Category/Type are lookup-taxonomy references stored as ids. The legacy
+// free-text `category` schema field is not rendered/submitted here (see
+// formFields + submit below) — the dropdowns replace it.
+const form = reactive({
+  projectId: props.record?.projectId ?? null,
+  categoryId: props.record?.categoryId ?? null,
+  typeId: props.record?.typeId ?? null,
+  ...base,
+})
 if (props.record) {
   for (const f of schema.fields) {
     const v = props.record[f.key]
     if (v != null) form[f.key] = f.type === 'date' ? String(v).slice(0, 10) : v
   }
 }
+
+// Category options are the lookup types; Type options cascade from the selected
+// Category (its lookup values). Both dropdowns bind the numeric FK id.
+const categoryOptions = computed(() => lookupsStore.types)
+const typeOptions = computed(() => lookupsStore.typeById(form.categoryId)?.values || [])
+
+// The Category slot is handled by the dropdowns; drop it from the generic field
+// loop so it isn't also rendered as a free-text input.
+const formFields = computed(() => schema.fields.filter((f) => f.key !== 'category'))
+
+// Changing the Category invalidates any previously-chosen Type. Registered after
+// the reactive init, so it never clears a Type seeded on edit.
+watch(() => form.categoryId, () => { form.typeId = null })
 
 // totalPrice is derived: quantity × unitPrice. The field is read-only; this
 // watcher (immediate) also corrects any stale persisted total on edit, so the
@@ -50,8 +77,13 @@ const invalid = computed(() => !form.projectId)
 
 function submit() {
   if (invalid.value) return
-  const out = { projectId: form.projectId }
+  const out = {
+    projectId: form.projectId,
+    categoryId: form.categoryId ?? null,
+    typeId: form.typeId ?? null,
+  }
   for (const f of schema.fields) {
+    if (f.key === 'category') continue // replaced by the Category/Type dropdowns
     let v = form[f.key]
     if (f.type === 'number') v = v === '' || v == null ? null : Number(v)
     else if (f.type === 'date') v = v || null
@@ -77,8 +109,28 @@ function submit() {
         </select>
       </label>
 
+      <label class="field">
+        <span>Category</span>
+        <select v-model="form.categoryId" class="input">
+          <option :value="null">—</option>
+          <option v-for="t in categoryOptions" :key="t.id" :value="t.id">
+            {{ t.description || t.name }}
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Type</span>
+        <select v-model="form.typeId" class="input" :disabled="!form.categoryId">
+          <option :value="null">—</option>
+          <option v-for="v in typeOptions" :key="v.id" :value="v.id">
+            {{ v.displayName }}
+          </option>
+        </select>
+      </label>
+
       <label
-        v-for="f in schema.fields"
+        v-for="f in formFields"
         :key="f.key"
         class="field"
         :class="{ span2: f.type === 'textarea', check: f.type === 'checkbox' }"

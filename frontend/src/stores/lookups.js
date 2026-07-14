@@ -13,6 +13,9 @@ export const useLookupsStore = defineStore('lookups', {
 
   getters: {
     typeByCode: (state) => (code) => state.types.find((t) => t.code === code) || null,
+    // Resolve a Category by its numeric id — the BOM form's dropdowns bind the
+    // FK id (t.id/v.id), not the code the filters use.
+    typeById: (state) => (id) => state.types.find((t) => t.id === id) || null,
   },
 
   actions: {

@@ -538,7 +538,16 @@ export function exportProjectsCsv(projects, filename) {
 // ---------------------------------------------------------------------------
 const BOM_INVENTORY_COLUMNS = [
   { key: 'projectName', label: 'Project', type: 'text' },
-  ...RECORD_SCHEMAS.bom.fields.map((f) => ({ key: f.key, label: f.label, type: f.type })),
+  // Split the single `category` schema field into the resolved Category + Type
+  // columns the API now returns (both carry human labels, not the raw ids).
+  ...RECORD_SCHEMAS.bom.fields.flatMap((f) =>
+    f.key === 'category'
+      ? [
+          { key: 'category', label: 'Category', type: 'text' },
+          { key: 'type', label: 'Type', type: 'text' },
+        ]
+      : [{ key: f.key, label: f.label, type: f.type }],
+  ),
 ]
 
 export async function exportBomInventoryExcel(rows, filename) {

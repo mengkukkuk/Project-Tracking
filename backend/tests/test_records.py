@@ -1,6 +1,6 @@
 """Per-project records CRUD + ptemplate->ptrack bulk insert."""
 from app.extensions import Session
-from app.models import ProcessTag, PTemplate
+from app.models import LookupType, LookupValue, ProcessTag, PTemplate
 
 
 def _project(client, auth, **over):
@@ -77,6 +77,49 @@ def test_record_crud_bom(client, auth):
     assert len(items) == 1
 
     assert client.delete(f"/api/records/bom/{rid}", headers=auth).status_code == 204
+
+
+def test_bom_category_type_ids_resolve_to_labels(client, auth):
+    pid = _project(client, auth)
+
+    # Seed one taxonomy Category (lookup_type) + child Type (lookup_value), then
+    # capture the ids as plain ints — a later client request removes the scoped
+    # Session (teardown), detaching these ORM objects.
+    camera = LookupType(code="CAMERA", name="Camera", description="Camera")
+    Session.add(camera)
+    Session.flush()
+    industrial = LookupValue(
+        lookup_type_id=camera.id, code="INDUSTRIAL_CAM", display_name="Industrial camera"
+    )
+    Session.add(industrial)
+    Session.commit()
+    camera_id, industrial_id = camera.id, industrial.id
+
+    # A row that references the taxonomy by id resolves category->description
+    # and type->display_name in to_dict.
+    res = client.post(
+        f"/api/projects/{pid}/records/bom",
+        json={"deviceName": "Cam A", "categoryId": camera_id, "typeId": industrial_id},
+        headers=auth,
+    )
+    assert res.status_code == 201, res.get_json()
+    rec = res.get_json()
+    assert rec["categoryId"] == camera_id
+    assert rec["typeId"] == industrial_id
+    assert rec["category"] == "Camera"          # resolved from lookup_type.description
+    assert rec["type"] == "Industrial camera"   # resolved from lookup_value.display_name
+
+    # A row without ids keeps its raw free-text category and a null type.
+    res = client.post(
+        f"/api/projects/{pid}/records/bom",
+        json={"deviceName": "Legacy", "category": "mch"},
+        headers=auth,
+    )
+    legacy = res.get_json()
+    assert legacy["category"] == "mch"
+    assert legacy["categoryId"] is None
+    assert legacy["type"] is None
+    assert legacy["typeId"] is None
 
 
 def test_list_all_bom_across_projects(client, auth):

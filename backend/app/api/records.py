@@ -108,6 +108,8 @@ RECORD_TYPES = {
         "fields": [
             ("dateApprove", "date_approve", _date),
             ("category", "category", _text),
+            ("categoryId", "category_id", _int),
+            ("typeId", "type_id", _int),
             ("deviceName", "device_name", _text),
             ("version", "version", _text),
             ("spec", "spec", _text),

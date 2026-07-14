@@ -461,7 +461,11 @@ class BomAndCosting(Base):
         Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
     date_approve = Column(Date)
-    category = Column(Text)
+    category = Column(Text)                 # legacy free text; kept as display fallback
+    # Canonical taxonomy references (BOM Category -> Type). FK targets use the
+    # literal DB PK column names, since those models map ``id`` onto them.
+    category_id = Column(Integer, ForeignKey("lookup_type.lookup_type_id"))
+    type_id = Column(Integer, ForeignKey("lookup_value.lookup_value_id"))
     device_name = Column(Text)
     version = Column(Text)
     spec = Column(Text)
@@ -473,12 +477,23 @@ class BomAndCosting(Base):
     lead_time = Column(Integer)
     supplier = Column(Text)
 
+    # Eager (joined) so the global /bom/all listing resolves labels without N+1.
+    category_ref = relationship("LookupType", lazy="joined")
+    type_ref = relationship("LookupValue", lazy="joined")
+
     def to_dict(self):
         return {
             "id": self.id,
             "projectId": self.project_id,
             "dateApprove": _iso(self.date_approve),
-            "category": self.category,
+            # Resolve the id to its human label when set; fall back to the legacy
+            # free text for rows that predate the taxonomy (or Excel imports).
+            "category": (self.category_ref.description or self.category_ref.name)
+            if self.category_ref
+            else self.category,
+            "categoryId": self.category_id,
+            "type": self.type_ref.display_name if self.type_ref else None,
+            "typeId": self.type_id,
             "deviceName": self.device_name,
             "version": self.version,
             "spec": self.spec,

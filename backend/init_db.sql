@@ -207,7 +207,9 @@ CREATE TABLE IF NOT EXISTS bom_and_costing (
   id            SERIAL      PRIMARY KEY,
   project_id    INTEGER     NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
   date_approve  DATE,
-  category      TEXT,
+  category      TEXT,                    -- legacy free text; kept as display fallback
+  category_id   INTEGER,                 -- -> lookup_type.lookup_type_id (FK enforced by ORM)
+  type_id       INTEGER,                 -- -> lookup_value.lookup_value_id (FK enforced by ORM)
   device_name   TEXT,
   version       TEXT,
   spec          TEXT,
@@ -219,6 +221,13 @@ CREATE TABLE IF NOT EXISTS bom_and_costing (
   lead_time     INTEGER,
   supplier      TEXT
 );
+
+-- Existing installs predating the Category/Type taxonomy references: CREATE
+-- TABLE IF NOT EXISTS above is a no-op once the table exists, so add the columns
+-- explicitly (plain INTEGER; the lookup_* tables are defined lower in this file,
+-- so an inline FK here would forward-reference — the FK is ORM-enforced).
+ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS category_id INTEGER;
+ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS type_id     INTEGER;
 
 -- ── internal_verification ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS internal_verification (

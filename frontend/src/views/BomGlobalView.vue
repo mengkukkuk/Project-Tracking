@@ -99,15 +99,24 @@ function onCategoryChange(value) {
 const filtered = computed(() => {
   const { q, category, type, supplier, projectId } = store.filters
   const needle = q.trim().toLowerCase()
+  // Resolve the selected filter codes to their lookup rows so we can match on
+  // the stored FK ids (new rows) as well as on text (legacy/imported rows).
+  const selType = category ? lookupsStore.typeByCode(category) : null
+  const selValue = selType && type ? selType.values?.find((v) => v.code === type) : null
   const catSet = category ? categoryMatchSet(category) : null
   const typeSet = category && type ? typeMatchSet(category, type) : null
   return store.rows.filter((r) => {
-    if (catSet && !catSet.has(norm(r.category))) return false
-    if (typeSet && !typeSet.has(norm(r.category))) return false
+    // A row matches a selected Category/Type when its stored id matches OR its
+    // resolved/legacy text matches — the id path is what lets newly-saved rows
+    // (and the Type filter) resolve, while text keeps legacy rows working.
+    if (category && !((selType && r.categoryId === selType.id) || (catSet && catSet.has(norm(r.category)))))
+      return false
+    if (type && !((selValue && r.typeId === selValue.id) || (typeSet && typeSet.has(norm(r.type)))))
+      return false
     if (supplier && r.supplier !== supplier) return false
     if (projectId && String(r.projectId) !== String(projectId)) return false
     if (!needle) return true
-    return ['deviceName', 'spec', 'category', 'supplier', 'projectName'].some((k) =>
+    return ['deviceName', 'spec', 'category', 'type', 'supplier', 'projectName'].some((k) =>
       String(r[k] || '').toLowerCase().includes(needle),
     )
   })
@@ -241,6 +250,7 @@ const columnDefs = [
   { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
   { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
   { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
+  { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
   { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 120, valueFormatter: dash },
   { field: 'position', headerName: 'Position', minWidth: 80, maxWidth: 100, valueFormatter: dash },
   { field: 'supplier', headerName: 'Supplier', width: 112, valueFormatter: dash },
@@ -581,6 +591,7 @@ onMounted(() => {
         <div class="bc-chips">
           <span v-if="r.projectName" class="bc-chip lc-chip">{{ r.projectName }}</span>
           <span v-if="r.category" class="bc-chip lc-chip">{{ r.category }}</span>
+          <span v-if="r.type" class="bc-chip lc-chip">{{ r.type }}</span>
           <span v-if="r.supplier" class="bc-chip lc-chip">{{ r.supplier }}</span>
         </div>
         <div class="bc-figures">
