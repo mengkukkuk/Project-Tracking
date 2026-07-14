@@ -10,7 +10,7 @@ export const useBomStore = defineStore('bom', {
     rows: [],
     loading: false,
     error: null,
-    filters: { q: '', category: '', supplier: '', projectId: '' },
+    filters: { q: '', category: '', type: '', supplier: '', projectId: '' },
   }),
 
   actions: {
@@ -33,7 +33,7 @@ export const useBomStore = defineStore('bom', {
     },
 
     clearFilters() {
-      this.filters = { q: '', category: '', supplier: '', projectId: '' }
+      this.filters = { q: '', category: '', type: '', supplier: '', projectId: '' }
     },
 
     async createRow(projectId, payload) {

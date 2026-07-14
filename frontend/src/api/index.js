@@ -118,6 +118,9 @@ export const api = {
   // global BOM list across all projects (each row enriched with projectName)
   listBomAll: () => req('/bom/all'),
 
+  // lookup_type/lookup_value taxonomy (BOM Category -> Type filter)
+  listLookups: () => req('/lookups'),
+
   // saved BOM lists (named curated subsets for a target project)
   listBomLists: () => req('/bom-lists'),
   getBomList: (id) => req(`/bom-lists/${id}`),

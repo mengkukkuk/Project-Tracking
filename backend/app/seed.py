@@ -13,6 +13,8 @@ from .extensions import Session
 from .models import (
     Base,
     Comment,
+    LookupType,
+    LookupValue,
     ProcessTag,
     Project,
     PTemplate,
@@ -112,6 +114,68 @@ DEMO_TAGS = {
     "R&D":           "#8b5cf6",
 }
 
+# BOM category taxonomy — powers the BOM page's Category -> Type filter.
+# Snapshot of the dev/prod reference data so a reseed doesn't lose it (see
+# CLAUDE.md "Summaries pipeline" note on Base.metadata not adding columns —
+# same concern applies here: drop_all/create_all wipes these rows).
+# Format: (code, name, description)
+DEMO_LOOKUP_TYPES = [
+    ("PC",              "PC",               "PC"),
+    ("PLC",             "PLC",              "PLC"),
+    ("CAMERA",          "Camera",           "Camera"),
+    ("LENS",            "Lens",             "Lens"),
+    ("SENSOR",          "Sensor",           "Sensor"),
+    ("CABLE",           "Cable",            "Cable"),
+    ("LIGHTING",        "Lighting",         "Lighting"),
+    ("SERVER",          "Server",           "Server"),
+    ("FIREWALL",        "Firewall",         "Firewall"),
+    ("UPS",             "UPS",              "UPS"),
+    ("ETHERNET_SWITCH", "Ethernet switch",  "Ethernet switch"),
+    ("MONITOR_SCREEN",  "Monitor screen",   "Monitor screen"),
+    ("ACCESSORY",       "Accessory",        "Accessory"),
+    ("ETC",             "etc.",             "etc."),
+]
+
+# Format: (type_code, value_code, display_name, sort_order)
+DEMO_LOOKUP_VALUES = [
+    ("PC", "I3", "i3", 1),
+    ("PC", "I5", "i5", 1),
+    ("PC", "I7", "i7", 1),
+    ("PC", "I9", "i9", 1),
+    ("PLC", "IQF", "iQ-F", 2),
+    ("PLC", "IQR", "iQ-R", 2),
+    ("CAMERA", "INDUSTRIAL_CAM", "Industrial camera", 3),
+    ("CAMERA", "READER_CAM", "Reader camera", 3),
+    ("CAMERA", "SMART_CAM", "Smart camera", 3),
+    ("LENS", "AMOUNT", "A-mount", 4),
+    ("LENS", "CMOUNT", "C-mount", 4),
+    ("LENS", "FMOUNT", "F-mount", 4),
+    ("LENS", "NORM_MOUNT", "Normal-mount", 4),
+    ("SENSOR", "CAPACITIVE_PROXIMITY", "Capacitive prox.", 5),
+    ("SENSOR", "DIFFUSE", "Diffuse sensor", 5),
+    ("SENSOR", "INDUCTIVE_PROXIMITY", "Inductive prox.", 5),
+    ("SENSOR", "L_DISPLACEMENT", "Laser displacement (Range)", 5),
+    ("SENSOR", "PHOTOELECTRIC", "Photoelectric sensor", 5),
+    ("SENSOR", "TEMP", "Temp. sensor", 5),
+    ("SENSOR", "THROUGH_BEAM", "Through-beam sensor", 5),
+    ("SENSOR", "TORQUE", "Torque", 5),
+    ("CABLE", "COM", "Com", 6),
+    ("CABLE", "IO_POWER", "I/O,Power", 6),
+    ("LIGHTING", "ฺBAR", "Bar-light", 7),
+    ("LIGHTING", "DOME", "Dome-light", 7),
+    ("LIGHTING", "RING", "Ring-light", 7),
+    ("LIGHTING", "UV", "UV-light", 7),
+    ("SERVER", "FIREWALL", "Firewall", 8),
+    ("FIREWALL", "10K", "10K", 9),
+    ("FIREWALL", "3K", "3K", 9),
+    ("FIREWALL", "6K", "6K", 9),
+    ("UPS", "16P", "16 Ports", 10),
+    ("UPS", "24P", "24 Ports", 10),
+    ("UPS", "8P", "8 Ports", 10),
+    ("ETHERNET_SWITCH", "MONITOR", "Display/Monitoring", 11),
+    ("ETHERNET_SWITCH", "HMI", "HMI screen", 11),
+]
+
 
 def seed():
     engine = extensions.engine
@@ -121,6 +185,22 @@ def seed():
     Base.metadata.create_all(engine)
 
     s = Session()
+
+    # Lookup taxonomy (BOM Category -> Type filter). Types first so values can
+    # resolve their parent's freshly-assigned id.
+    lookup_types = {}
+    for code, name, description in DEMO_LOOKUP_TYPES:
+        lt = LookupType(code=code, name=name, description=description)
+        s.add(lt)
+        lookup_types[code] = lt
+    s.flush()
+    for type_code, value_code, display_name, sort_order in DEMO_LOOKUP_VALUES:
+        s.add(LookupValue(
+            lookup_type_id=lookup_types[type_code].id,
+            code=value_code,
+            display_name=display_name,
+            sort_order=sort_order,
+        ))
 
     # Process tags (canonical stage order + day budgets).
     seen_processids = set()

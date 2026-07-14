@@ -2,6 +2,7 @@
 from .bom_lists import bp as bom_lists_bp
 from .comments import bp as comments_bp
 from .documents import bp as documents_bp
+from .lookups import bp as lookups_bp
 from .projects import bp as projects_bp
 from .ptemplate import bp as ptemplate_bp
 from .records import bp as records_bp
@@ -21,4 +22,5 @@ blueprints = [
     ptemplate_bp,
     bom_lists_bp,
     documents_bp,
+    lookups_bp,
 ]

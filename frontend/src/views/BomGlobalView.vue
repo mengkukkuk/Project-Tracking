@@ -4,6 +4,7 @@ import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useBomStore } from '@/stores/bom'
 import { useProjectsStore } from '@/stores/projects'
+import { useLookupsStore } from '@/stores/lookups'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
 import AppIcon from '@/components/AppIcon.vue'
@@ -28,6 +29,7 @@ ModuleRegistry.registerModules([AllCommunityModule])
 
 const store = useBomStore()
 const projectsStore = useProjectsStore()
+const lookupsStore = useLookupsStore()
 const ui = useUiStore()
 const { date } = useFormat()
 
@@ -53,12 +55,15 @@ const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
 const dash = (p) => (p.value == null || p.value === '' ? '—' : p.value)
 
 // --- Filters -----------------------------------------------------------------
-// Facet options are derived from the loaded rows (category/supplier) or the
-// projects store (project); mirrors ProjectFilters.vue's search+selects+active
-// chips pattern, but filtering here is purely client-side (no server round-trip).
-const categoryOptions = computed(() =>
-  [...new Set(store.rows.map((r) => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-)
+// Category/Type options come from the lookup_type/lookup_value taxonomy
+// (lookupsStore), not from row values — the taxonomy is the source of truth
+// even though most legacy `category` text is free-form. Supplier/project still
+// derive from loaded rows / the projects store. Mirrors ProjectFilters.vue's
+// search+selects+active chips pattern; filtering here is purely client-side.
+const norm = (s) => String(s || '').trim().toLowerCase()
+
+const categoryOptions = computed(() => lookupsStore.types)
+const typeOptions = computed(() => lookupsStore.typeByCode(store.filters.category)?.values || [])
 const supplierOptions = computed(() =>
   [...new Set(store.rows.map((r) => r.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
 )
@@ -66,11 +71,39 @@ const projectFilterOptions = computed(() =>
   [...projectsStore.projects].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
 )
 
+// A row's free-text `category` matches a selected taxonomy Category when it
+// case-insensitively equals the type's own code/name/description, or any of
+// that type's value codes/display names (legacy rows only ever carry a
+// type-level value, never a value-level one — see plan notes).
+function categoryMatchSet(typeCode) {
+  const t = lookupsStore.typeByCode(typeCode)
+  if (!t) return null
+  const set = new Set([t.code, t.name, t.description].filter(Boolean).map(norm))
+  for (const v of t.values || []) {
+    if (v.code) set.add(norm(v.code))
+    if (v.displayName) set.add(norm(v.displayName))
+  }
+  return set
+}
+
+function typeMatchSet(typeCode, valueCode) {
+  const v = lookupsStore.typeByCode(typeCode)?.values?.find((x) => x.code === valueCode)
+  if (!v) return null
+  return new Set([v.code, v.displayName].filter(Boolean).map(norm))
+}
+
+function onCategoryChange(value) {
+  store.setFilter({ category: value, type: '' })
+}
+
 const filtered = computed(() => {
-  const { q, category, supplier, projectId } = store.filters
+  const { q, category, type, supplier, projectId } = store.filters
   const needle = q.trim().toLowerCase()
+  const catSet = category ? categoryMatchSet(category) : null
+  const typeSet = category && type ? typeMatchSet(category, type) : null
   return store.rows.filter((r) => {
-    if (category && r.category !== category) return false
+    if (catSet && !catSet.has(norm(r.category))) return false
+    if (typeSet && !typeSet.has(norm(r.category))) return false
     if (supplier && r.supplier !== supplier) return false
     if (projectId && String(r.projectId) !== String(projectId)) return false
     if (!needle) return true
@@ -100,7 +133,16 @@ function onSearch(value) {
 const activeFilters = computed(() => {
   const items = []
   if (store.filters.q) items.push(['q', `Search: ${store.filters.q}`])
-  if (store.filters.category) items.push(['category', store.filters.category])
+  if (store.filters.category) {
+    const t = lookupsStore.typeByCode(store.filters.category)
+    items.push(['category', t?.description || t?.name || store.filters.category])
+  }
+  if (store.filters.type) {
+    const v = lookupsStore
+      .typeByCode(store.filters.category)
+      ?.values?.find((x) => x.code === store.filters.type)
+    items.push(['type', v?.displayName || store.filters.type])
+  }
   if (store.filters.supplier) items.push(['supplier', store.filters.supplier])
   if (store.filters.projectId) {
     const proj = projectsStore.projects.find((p) => String(p.id) === String(store.filters.projectId))
@@ -110,7 +152,9 @@ const activeFilters = computed(() => {
 })
 
 function clearOne(key) {
-  store.setFilter({ [key]: '' })
+  // Type is meaningless without a Category, so clearing Category also clears Type.
+  if (key === 'category') store.setFilter({ category: '', type: '' })
+  else store.setFilter({ [key]: '' })
 }
 
 // Every colour is a live var() into assets/main.css, so dark mode / accent
@@ -386,6 +430,9 @@ onMounted(() => {
   if (!projectsStore.projects.length) {
     projectsStore.fetchAll().catch((e) => ui.error(e.message))
   }
+  if (!lookupsStore.types.length) {
+    lookupsStore.fetchAll().catch((e) => ui.error(e.message))
+  }
 })
 </script>
 
@@ -442,9 +489,22 @@ onMounted(() => {
       <div class="selects">
         <label class="selects">
           <span>Category</span>
-          <select :value="store.filters.category" @change="store.setFilter({ category: $event.target.value })">
+          <select :value="store.filters.category" @change="onCategoryChange($event.target.value)">
             <option value="">Any category</option>
-            <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
+            <option v-for="t in categoryOptions" :key="t.code" :value="t.code">
+              {{ t.description || t.name }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>Type</span>
+          <select
+            :value="store.filters.type"
+            :disabled="!store.filters.category"
+            @change="store.setFilter({ type: $event.target.value })"
+          >
+            <option value="">Any type</option>
+            <option v-for="v in typeOptions" :key="v.code" :value="v.code">{{ v.displayName }}</option>
           </select>
         </label>
         <label>

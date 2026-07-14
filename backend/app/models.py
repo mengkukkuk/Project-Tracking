@@ -648,3 +648,49 @@ class BomListItem(Base):
 
     parent = relationship("BomList", back_populates="items")
     bom = relationship("BomAndCosting", lazy="joined")
+
+
+class LookupType(Base):
+    """Coarse device class (e.g. PC, Camera, Sensor) — powers the BOM Category filter."""
+
+    __tablename__ = "lookup_type"
+
+    id = Column("lookup_type_id", Integer, primary_key=True)
+    code = Column(Text, unique=True, nullable=False)
+    name = Column(Text, nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "name": self.name,
+            "description": self.description,
+            "isActive": self.is_active,
+        }
+
+
+class LookupValue(Base):
+    """Specific variant within a lookup_type (e.g. Camera -> Industrial camera)."""
+
+    __tablename__ = "lookup_value"
+
+    id = Column("lookup_value_id", Integer, primary_key=True)
+    lookup_type_id = Column(
+        Integer, ForeignKey("lookup_type.lookup_type_id"), nullable=False
+    )
+    code = Column(Text, nullable=False)
+    display_name = Column(Text, nullable=False)
+    sort_order = Column(Integer, default=0)
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "typeId": self.lookup_type_id,
+            "code": self.code,
+            "displayName": self.display_name,
+            "sortOrder": self.sort_order,
+        }
