@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 87 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 94 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -42,7 +42,7 @@ npm run build      # production bundle → dist/
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
 | `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
 | `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named selections of **`inventory` catalogue entries + a per-item quantity** (by FK reference, no snapshot), scoped to a target project; `totalPrice` is derived (qty × unitPrice), never stored; owner-or-admin gated on update/delete |
-| `app/api/inventory.py` | `GET /api/inventory` — read-only device catalogue (price book) that saved BOM lists draw from. Deliberately no write endpoints: entries are SQL/seed-managed |
+| `app/api/inventory.py` | Inventory catalogue (price book) that saved BOM lists draw from and the BOM page's INVENTORY toggle manages. `GET /api/inventory` (any authed user) + capability-gated writes: `POST` needs `inventory.create` (member-level), `PATCH`/`DELETE /api/inventory/:id` need `inventory.update`/`inventory.delete` (admin+). `deviceName` is the only required field; delete cascades out of `bom_list_items` |
 | `app/api/documents.py` | Per-project PDF uploads (quotation/tds/result) — multipart upload, list, authenticated download, owner-or-admin delete; files under `DOCSTORE_DIR/<pid>/<type>/` with uuid names (see Document uploads below) |
 | `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
 | `app/api/sheets.py` | Google Sheets export/import |
@@ -62,7 +62,7 @@ npm run build      # production bundle → dist/
 | `views/PipelineView.vue` | Read-only Kanban-style board grouping projects by delivery stage (`/pipeline`); per-column value + overdue/critical risk counts |
 | `views/PmCardsView.vue` | Read-only board grouping projects by PM (`/pm-cards`, `store.byPm`), incl. an "unassigned" column |
 | `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
-| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
+| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker`. **INVENTORY toggle** in the filters area glows when on and swaps the grid to the inventory catalogue (own column set, Project filter hidden, import disabled, catalogue-shaped exports; Edit/Delete shown only with `inventory.update`/`inventory.delete`). **Add New is inventory-first**: only Device name required; every submit creates a catalogue entry, and picking the optional Project additionally creates an independent `bom_and_costing` copy (sequenced, not atomic — partial-success toast) |
 | `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
 | `views/SummariesView.vue` | 4-step "Summaries" pipeline (`/summaries`): Project → editable Inputs (budget/team size/duration/complexity) → derived Calculations → Final Results (grade, ring gauges, charts) per project, plus an all-projects comparison chart. Math lives in `utils/summaryCalc.js` |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
@@ -99,6 +99,8 @@ Three roles (`app/models.py:ROLES`, ordered most-privileged first): `super_admin
 - **admin**: org-scoped full access — all member capabilities plus `sheets.sync`, `templates.manage`, `roles.assign` (but **cannot** grant `super_admin`).
 - **member**: own-record CRUD only (scope narrowed by ownership, not by missing capability).
 - **First user to register is `admin`** (unchanged — register does not mint super_admin). A `super_admin` is reachable only via `seed.py` (`admin@scada.local` is seeded as super_admin), a direct DB edit, or promotion by an existing super_admin through the role endpoint. This is deliberate: with first-user-as-admin + "admin can't grant super_admin", there is no self-service path to the top role.
+
+**Inventory catalogue writes** are a genuine capability gate (the `inventory` table has no owner column, so owner-or-admin scope cannot apply): `inventory.create` is member-level, `inventory.update`/`inventory.delete` are admin+ only. Frontend hides the inventory Edit/Delete actions via `auth.hasPermission()`; the backend re-checks.
 
 **Two orthogonal axes** — do not conflate them:
 - **Capability** = "may this role do X at all?" → permission strings in `app/permissions.py` (`ROLE_PERMISSIONS`), checked via `User.has_permission(perm)` / `require_permission(user, perm)` in `app/api/helpers.py`. Resolved from the **live DB role at request time**, never from the JWT — so role changes take effect immediately.
@@ -178,7 +180,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 87 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists (`test_bom_lists.py` — quantity defaulting/validation/dedupe, derived `totalPrice`, catalogue-delete cascade, and `test_patch_preserves_item_quantities`), the inventory catalogue (`test_inventory.py` — read-only shape, taxonomy label resolution, authz), per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (`test_documents.py` — upload/list/download/delete incl. Thai filenames, magic-byte validation, all-or-nothing multi-file, delete authz, project-delete disk cleanup, 413 cap), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
+- 94 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists (`test_bom_lists.py` — quantity defaulting/validation/dedupe, derived `totalPrice`, catalogue-delete cascade, and `test_patch_preserves_item_quantities`), the inventory catalogue (`test_inventory.py` — list shape, taxonomy label resolution, and the capability-gated writes: member create, deviceName-required 422s, member 403 on PATCH/DELETE, admin partial PATCH/delete, delete cascading out of saved lists), per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (`test_documents.py` — upload/list/download/delete incl. Thai filenames, magic-byte validation, all-or-nothing multi-file, delete authz, project-delete disk cleanup, 413 cap), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts

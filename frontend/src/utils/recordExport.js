@@ -661,6 +661,69 @@ export function exportBomInventoryPdf(rows, filename) {
 }
 
 // ---------------------------------------------------------------------------
+// Inventory catalogue exports (BomGlobalView.vue, INVENTORY toggle mode)
+// Catalogue entries are project-independent and quantity-free, so neither
+// BOM_INVENTORY_COLUMNS (Project/Qty/Total/Position/Approved-on would be
+// permanently blank) nor BOM_LIST_COLUMNS (Quantity/Total come from a list,
+// not the entry) fit — same reasoning as the BOM_LIST_COLUMNS note above.
+// ---------------------------------------------------------------------------
+const INVENTORY_CATALOGUE_COLUMNS = [
+  { key: 'category', label: 'Category', type: 'text' },
+  { key: 'type', label: 'Type', type: 'text' },
+  { key: 'deviceName', label: 'Device name', type: 'text' },
+  { key: 'version', label: 'Version', type: 'text' },
+  { key: 'spec', label: 'Spec', type: 'text' },
+  { key: 'unit', label: 'Unit', type: 'text' },
+  { key: 'unitPrice', label: 'Unit price', type: 'number' },
+  { key: 'supplier', label: 'Supplier', type: 'text' },
+  { key: 'leadTime', label: 'Lead time (days)', type: 'number' },
+]
+
+export async function exportInventoryCatalogueExcel(rows, filename) {
+  const wb = new ExcelJS.Workbook()
+  addColumnSheet(wb, INVENTORY_CATALOGUE_COLUMNS, rows, 'Inventory')
+  await writeAndDownload(wb, filename || `inventory-catalogue-${stamp()}.xlsx`)
+}
+
+export function exportInventoryCataloguePdf(rows, filename) {
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' })
+  const font = registerThaiFont(doc)
+  const title = 'Inventory Catalogue'
+  const printed = new Date().toLocaleString('en-GB')
+  const head = [INVENTORY_CATALOGUE_COLUMNS.map((c) => c.label)]
+  const body = rows.map((row) =>
+    INVENTORY_CATALOGUE_COLUMNS.map((c) => displayValue(c, row[c.key])),
+  )
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 56,
+    margin: { top: 56, bottom: 28, left: 20, right: 20 },
+    styles: { font, fontStyle: 'normal', fontSize: 8, overflow: 'linebreak', cellPadding: 3 },
+    headStyles: { font, fillColor: [79, 129, 189], textColor: 255, fontSize: 8 },
+    didDrawPage: () => {
+      doc.setFont(font)
+      doc.setFontSize(13)
+      doc.text(title, 20, 34)
+      doc.setFontSize(8)
+      doc.text(`Generated ${printed}`, 20, 46)
+    },
+  })
+
+  const total = doc.internal.getNumberOfPages()
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i)
+    doc.setFont(font)
+    doc.setFontSize(8)
+    doc.text(`Page ${i} of ${total}`, w - 20, h - 14, { align: 'right' })
+  }
+  doc.save(filename || `inventory-catalogue-${stamp()}.pdf`)
+}
+
+// ---------------------------------------------------------------------------
 // Saved BOM list exports (BomListsManager.vue / BomListPicker.vue)
 // A "BOM list" is a named, project-scoped selection of bom_and_costing rows.
 // The Excel form is one workbook with the project summary cover sheet + a

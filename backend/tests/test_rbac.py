@@ -37,6 +37,12 @@ def test_role_permission_mapping():
     assert not role_has_permission("member", "sheets.sync")
     # member keeps capability-level CRUD (scope is narrowed elsewhere)
     assert role_has_permission("member", "projects.update")
+    # inventory catalogue: create is member-level, update/delete elevated-only
+    assert role_has_permission("member", "inventory.create")
+    assert not role_has_permission("member", "inventory.update")
+    assert not role_has_permission("member", "inventory.delete")
+    assert role_has_permission("admin", "inventory.update")
+    assert role_has_permission("admin", "inventory.delete")
     assert "*" in permissions_for("super_admin")
 
 

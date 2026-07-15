@@ -121,8 +121,12 @@ export const api = {
   // lookup_type/lookup_value taxonomy (BOM Category -> Type filter)
   listLookups: () => req('/lookups'),
 
-  // inventory catalogue (price book) that saved BOM lists draw from; read-only
+  // inventory catalogue (price book) that saved BOM lists draw from.
+  // Create is member-level; update/delete are admin-gated on the backend.
   listInventory: () => req('/inventory'),
+  createInventory: (d) => req('/inventory', { method: 'POST', body: JSON.stringify(d) }),
+  updateInventory: (id, d) => req(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteInventory: (id) => req(`/inventory/${id}`, { method: 'DELETE' }),
 
   // saved BOM lists (named selections of catalogue entries + quantities)
   listBomLists: () => req('/bom-lists'),

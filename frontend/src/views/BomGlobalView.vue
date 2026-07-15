@@ -3,9 +3,11 @@ import { ref, shallowRef, h, computed, defineComponent, watch, onMounted, onUnmo
 import { AgGridVue } from 'ag-grid-vue3'
 import { ModuleRegistry, AllCommunityModule, themeMaterial } from 'ag-grid-community'
 import { useBomStore } from '@/stores/bom'
+import { useInventoryStore } from '@/stores/inventory'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 import { useFormat } from '@/composables/useFormat'
 import AppIcon from '@/components/AppIcon.vue'
 import ExportImportMenu from '@/components/ExportImportMenu.vue'
@@ -18,6 +20,8 @@ import BomExportDocsModal from '@/components/BomExportDocsModal.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
+  exportInventoryCatalogueExcel,
+  exportInventoryCataloguePdf,
   parseBomInventoryExcel,
 } from '@/utils/recordExport'
 import { RECORD_SCHEMAS } from '@/schemas/records'
@@ -28,10 +32,34 @@ import { api } from '@/api'
 ModuleRegistry.registerModules([AllCommunityModule])
 
 const store = useBomStore()
+const invStore = useInventoryStore()
 const projectsStore = useProjectsStore()
 const lookupsStore = useLookupsStore()
 const ui = useUiStore()
+const auth = useAuthStore()
 const { date } = useFormat()
+
+// --- INVENTORY toggle --------------------------------------------------------
+// OFF: the grid shows bom_and_costing rows (per-project BOM records, default).
+// ON: it shows the shared inventory catalogue instead. Same filters/search,
+// minus the Project filter (a catalogue entry is project-independent).
+const inventoryMode = ref(false)
+// Backend gates writes on inventory.update / inventory.delete; hiding here is
+// UI-advisory only.
+const canEditInventory = computed(
+  () => auth.hasPermission('inventory.update') || auth.hasPermission('inventory.delete'),
+)
+
+function toggleInventory() {
+  inventoryMode.value = !inventoryMode.value
+  if (inventoryMode.value) {
+    // Refetch on every switch-on: cheap, and keeps the catalogue fresh.
+    invStore.fetchAll().catch((e) => ui.error(e.message))
+    // A project filter is meaningless on catalogue rows — clear it so no
+    // invisible filter (or orphaned chip) lingers while the select is hidden.
+    if (store.filters.projectId) store.setFilter({ projectId: '' })
+  }
+}
 
 const gridApi = shallowRef(null)
 
@@ -62,10 +90,15 @@ const dash = (p) => (p.value == null || p.value === '' ? '—' : p.value)
 // search+selects+active chips pattern; filtering here is purely client-side.
 const norm = (s) => String(s || '').trim().toLowerCase()
 
+// Rows behind the grid — bom records or the inventory catalogue per the toggle.
+const activeRows = computed(() => (inventoryMode.value ? invStore.rows : store.rows))
+
 const categoryOptions = computed(() => lookupsStore.types)
 const typeOptions = computed(() => lookupsStore.typeByCode(store.filters.category)?.values || [])
 const supplierOptions = computed(() =>
-  [...new Set(store.rows.map((r) => r.supplier).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  [...new Set(activeRows.value.map((r) => r.supplier).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  ),
 )
 const projectFilterOptions = computed(() =>
   [...projectsStore.projects].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
@@ -105,7 +138,11 @@ const filtered = computed(() => {
   const selValue = selType && type ? selType.values?.find((v) => v.code === type) : null
   const catSet = category ? categoryMatchSet(category) : null
   const typeSet = category && type ? typeMatchSet(category, type) : null
-  return store.rows.filter((r) => {
+  // Catalogue rows have no projectName; bom rows search it too.
+  const searchKeys = inventoryMode.value
+    ? ['deviceName', 'spec', 'category', 'type', 'supplier']
+    : ['deviceName', 'spec', 'category', 'type', 'supplier', 'projectName']
+  return activeRows.value.filter((r) => {
     // A row matches a selected Category/Type when its stored id matches OR its
     // resolved/legacy text matches — the id path is what lets newly-saved rows
     // (and the Type filter) resolve, while text keeps legacy rows working.
@@ -114,11 +151,10 @@ const filtered = computed(() => {
     if (type && !((selValue && r.typeId === selValue.id) || (typeSet && typeSet.has(norm(r.type)))))
       return false
     if (supplier && r.supplier !== supplier) return false
-    if (projectId && String(r.projectId) !== String(projectId)) return false
+    if (!inventoryMode.value && projectId && String(r.projectId) !== String(projectId))
+      return false
     if (!needle) return true
-    return ['deviceName', 'spec', 'category', 'type', 'supplier', 'projectName'].some((k) =>
-      String(r[k] || '').toLowerCase().includes(needle),
-    )
+    return searchKeys.some((k) => String(r[k] || '').toLowerCase().includes(needle))
   })
 })
 
@@ -225,53 +261,82 @@ const ActionsCell = defineComponent({
         },
         [h(AppIcon, { name: icon, size: 15 })],
       )
-    return h('div', { class: 'row-actions' }, [
-      iconBtn('edit', 'Edit', openEdit),
-      iconBtn('copy', 'Duplicate', duplicate),
-      iconBtn('trash', 'Delete', remove, 'danger'),
-    ])
+    // Inventory mode: no Duplicate (a catalogue entry is already the shared
+    // master copy); the whole column is omitted for users without the
+    // inventory.* permissions, so no per-button gate is needed here.
+    const buttons = inventoryMode.value
+      ? [iconBtn('edit', 'Edit', openEdit), iconBtn('trash', 'Delete', remove, 'danger')]
+      : [
+          iconBtn('edit', 'Edit', openEdit),
+          iconBtn('copy', 'Duplicate', duplicate),
+          iconBtn('trash', 'Delete', remove, 'danger'),
+        ]
+    return h('div', { class: 'row-actions' }, buttons)
   },
 })
 
 const defaultColDef = { sortable: true, resizable: true, suppressMovable: true }
 
-const columnDefs = [
-  {
-    colId: 'folio', headerName: '№', width: 64, pinned: 'left',
-    sortable: false, resizable: false,
-    valueGetter: (p) => p.node.rowIndex + 1,
-    valueFormatter: (p) => String(p.value).padStart(2, '0'),
-    cellClass: 'folio-col mono', headerClass: 'folio-col',
-  },
-  { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
-  { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
-  { field: 'quantity', headerName: 'Qty', minWidth: 65, maxWidth: 75, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
-  { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
-  { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
-  { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
-  { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
-  { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
-  { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 120, valueFormatter: dash },
-  { field: 'position', headerName: 'Position', minWidth: 80, maxWidth: 100, valueFormatter: dash },
-  { field: 'supplier', headerName: 'Supplier', width: 112, valueFormatter: dash },
-  { field: 'leadTime', headerName: 'Lead time', width: 96, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
-  { field: 'dateApprove', headerName: 'Approved on', width: 108, valueFormatter: (p) => date(p.value) },
-  { colId: 'actions', headerName: '', width: 118, pinned: 'right', sortable: false, resizable: false, cellRenderer: ActionsCell, cellClass: 'actions-cell' },
-]
+const folioCol = {
+  colId: 'folio', headerName: '№', width: 64, pinned: 'left',
+  sortable: false, resizable: false,
+  valueGetter: (p) => p.node.rowIndex + 1,
+  valueFormatter: (p) => String(p.value).padStart(2, '0'),
+  cellClass: 'folio-col mono', headerClass: 'folio-col',
+}
+const actionsCol = { colId: 'actions', headerName: '', width: 118, pinned: 'right', sortable: false, resizable: false, cellRenderer: ActionsCell, cellClass: 'actions-cell' }
+
+// Computed so ag-grid swaps column sets when the INVENTORY toggle flips.
+// Catalogue entries have no quantity/total/project/position/dateApprove.
+const columnDefs = computed(() =>
+  inventoryMode.value
+    ? [
+        folioCol,
+        { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
+        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
+        { field: 'category', headerName: 'Category', width: 110, valueFormatter: dash },
+        { field: 'type', headerName: 'Type', flex: 1, minWidth: 130, valueFormatter: dash },
+        { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
+        { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'supplier', headerName: 'Supplier', width: 130, valueFormatter: dash },
+        { field: 'leadTime', headerName: 'Lead time', width: 96, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        ...(canEditInventory.value ? [{ ...actionsCol, width: 88 }] : []),
+      ]
+    : [
+        folioCol,
+        { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
+        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
+        { field: 'quantity', headerName: 'Qty', minWidth: 65, maxWidth: 75, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
+        { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
+        { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
+        { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
+        { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 120, valueFormatter: dash },
+        { field: 'position', headerName: 'Position', minWidth: 80, maxWidth: 100, valueFormatter: dash },
+        { field: 'supplier', headerName: 'Supplier', width: 112, valueFormatter: dash },
+        { field: 'leadTime', headerName: 'Lead time', width: 96, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'dateApprove', headerName: 'Approved on', width: 108, valueFormatter: (p) => date(p.value) },
+        actionsCol,
+      ],
+)
 //
 const shownCount = computed(() => filtered.value.length)
-const noRowsTemplate = '<div class="empty"><span class="empty-mark">—</span>No BOM records match the current view.</div>'
+const noRowsTemplate = '<div class="empty"><span class="empty-mark">—</span>No records match the current view.</div>'
 const loadingTemplate = '<div class="empty">Loading…</div>'
+
+const gridLoading = computed(() => (inventoryMode.value ? invStore.loading : store.loading))
 
 function onGridReady(e) {
   gridApi.value = e.api
-  if (store.loading) e.api.showLoadingOverlay()
+  if (gridLoading.value) e.api.showLoadingOverlay()
 }
 
-// ag-grid owns overlay display; keep it in sync with the store's loading flag
-// and the filtered set (autoHeight grids don't auto-toggle the no-rows overlay).
+// ag-grid owns overlay display; keep it in sync with the active store's loading
+// flag and the filtered set (autoHeight grids don't auto-toggle the no-rows
+// overlay).
 watch(
-  () => [store.loading, filtered.value.length],
+  () => [gridLoading.value, filtered.value.length],
   ([loading, count]) => {
     if (!gridApi.value) return
     if (loading) gridApi.value.showLoadingOverlay()
@@ -314,20 +379,48 @@ function openEdit(row) {
   panel.value = row
 }
 
+// The subset of the flat form payload that maps onto a catalogue entry —
+// project-only keys (quantity/position/dateApprove/totalPrice/projectId) are
+// stripped before hitting /api/inventory.
+const INVENTORY_KEYS = [
+  'categoryId', 'typeId', 'deviceName', 'version', 'spec',
+  'unit', 'unitPrice', 'supplier', 'leadTime',
+]
+const pickInventory = (payload) =>
+  Object.fromEntries(INVENTORY_KEYS.map((k) => [k, payload[k] ?? null]))
+
 async function onSave(payload) {
   saving.value = true
   try {
     if (isEditing.value) {
-      // Keep projectId in the payload so the edit can reparent the record to a
-      // different project (the BOM PATCH endpoint accepts projectId).
-      await store.updateRow(panel.value.id, payload)
-      ui.success('BOM record updated')
+      if (inventoryMode.value) {
+        await invStore.updateRow(panel.value.id, pickInventory(payload))
+        ui.success('Inventory entry updated')
+      } else {
+        // Keep projectId in the payload so the edit can reparent the record to
+        // a different project (the BOM PATCH endpoint accepts projectId).
+        await store.updateRow(panel.value.id, payload)
+        ui.success('BOM record updated')
+      }
+      panel.value = null
     } else {
-      const { projectId, ...body } = payload
-      await store.createRow(projectId, body)
-      ui.success('BOM record added')
+      // Inventory-first, sequenced (not atomic): the catalogue entry is the
+      // system of record; the optional project copy is best-effort on top.
+      await invStore.createRow(pickInventory(payload))
+      ui.success('Added to inventory')
+      if (payload.projectId) {
+        try {
+          const { projectId, ...body } = payload
+          await store.createRow(projectId, body)
+          ui.success('BOM row added to the project')
+        } catch (e) {
+          ui.error(`Inventory saved, but the project BOM copy failed: ${e.message}`)
+        }
+      }
+      // Close even on partial success — resubmitting would duplicate the
+      // catalogue entry.
+      panel.value = null
     }
-    panel.value = null
   } catch (e) {
     ui.error(e.message)
   } finally {
@@ -336,6 +429,19 @@ async function onSave(payload) {
 }
 
 async function remove(row) {
+  if (inventoryMode.value) {
+    const msg =
+      `Delete "${row.deviceName || 'this entry'}" from the inventory catalogue? ` +
+      'It will also be removed from any saved BOM lists that reference it.'
+    if (!window.confirm(msg)) return
+    try {
+      await invStore.deleteRow(row.id)
+      ui.success('Inventory entry deleted')
+    } catch (e) {
+      ui.error(e.message)
+    }
+    return
+  }
   if (!window.confirm(`Delete "${row.deviceName || 'this record'}"?`)) return
   try {
     await store.deleteRow(row.id)
@@ -406,8 +512,14 @@ async function doExport(format) {
   const rows = sortedRows()
   if (!rows.length) return
   try {
-    if (format === 'excel') await exportBomInventoryExcel(rows)
-    else exportBomInventoryPdf(rows)
+    if (inventoryMode.value) {
+      if (format === 'excel') await exportInventoryCatalogueExcel(rows)
+      else exportInventoryCataloguePdf(rows)
+    } else if (format === 'excel') {
+      await exportBomInventoryExcel(rows)
+    } else {
+      exportBomInventoryPdf(rows)
+    }
     ui.success(`Exported ${rows.length} record(s) to ${format === 'excel' ? 'Excel' : 'PDF'}`)
   } catch (e) {
     ui.error(e.message)
@@ -473,7 +585,7 @@ onMounted(() => {
           <ExportImportMenu
             :formats="['excel', 'pdf']"
             :rows="shownCount"
-            import-enabled
+            :import-enabled="!inventoryMode"
             @export="doExport"
             @import-file="onImportFile"
           />
@@ -524,7 +636,7 @@ onMounted(() => {
             <option v-for="s in supplierOptions" :key="s" :value="s">{{ s }}</option>
           </select>
         </label>
-        <label>
+        <label v-if="!inventoryMode">
           <span>Project</span>
           <select :value="store.filters.projectId" @change="store.setFilter({ projectId: $event.target.value })">
             <option value="">Any project</option>
@@ -532,6 +644,17 @@ onMounted(() => {
           </select>
         </label>
       </div>
+
+      <button
+        type="button"
+        class="inv-toggle"
+        :class="{ 'is-on': inventoryMode }"
+        :aria-pressed="inventoryMode"
+        title="Toggle between BOM records and the inventory catalogue"
+        @click="toggleInventory"
+      >
+        <AppIcon name="table" :size="13" /> INVENTORY
+      </button>
 
       <div v-if="activeFilters.length" class="active">
         <span class="active-label"><AppIcon name="filter" :size="14" /> Active</span>
@@ -545,8 +668,8 @@ onMounted(() => {
 
     <div class="byline mono">
       <span class="folio">{{ String(shownCount).padStart(2, '0') }}</span>
-      record{{ shownCount === 1 ? '' : 's' }} in view
-      <span class="of">of {{ store.rows.length }} on record</span>
+      {{ inventoryMode ? 'inventory item' : 'record' }}{{ shownCount === 1 ? '' : 's' }} in view
+      <span class="of">of {{ activeRows.length }} on record</span>
     </div>
 
     <div v-if="!isMobile" class="ledger" :style="{ '--row-h': rowHeight + 'px' }">
@@ -579,7 +702,7 @@ onMounted(() => {
         <div class="bc-top">
           <span class="bc-folio mono">{{ String(i + 1).padStart(2, '0') }}</span>
           <strong class="bc-name">{{ r.deviceName || '—' }}</strong>
-          <span class="bc-actions">
+          <span v-if="!inventoryMode || canEditInventory" class="bc-actions">
             <button class="mini icon-btn" type="button" title="Edit" aria-label="Edit" @click.stop="openEdit(r)">
               <AppIcon name="edit" :size="15" />
             </button>
@@ -589,30 +712,36 @@ onMounted(() => {
           </span>
         </div>
         <div class="bc-chips">
-          <span v-if="r.projectName" class="bc-chip lc-chip">{{ r.projectName }}</span>
+          <span v-if="!inventoryMode && r.projectName" class="bc-chip lc-chip">{{ r.projectName }}</span>
           <span v-if="r.category" class="bc-chip lc-chip">{{ r.category }}</span>
           <span v-if="r.type" class="bc-chip lc-chip">{{ r.type }}</span>
           <span v-if="r.supplier" class="bc-chip lc-chip">{{ r.supplier }}</span>
         </div>
         <div class="bc-figures">
-          <span><em>Qty</em> {{ num(r.quantity) }}{{ r.unit ? ' ' + r.unit : '' }}</span>
+          <span v-if="!inventoryMode"><em>Qty</em> {{ num(r.quantity) }}{{ r.unit ? ' ' + r.unit : '' }}</span>
           <span><em>Unit</em> {{ num(r.unitPrice) }}</span>
-          <span class="bc-total"><em>Total</em> {{ num(r.totalPrice) }}</span>
+          <span v-if="!inventoryMode" class="bc-total"><em>Total</em> {{ num(r.totalPrice) }}</span>
         </div>
       </button>
       <div v-if="!filtered.length" class="bc-empty">
-        <span class="empty-mark">—</span>No BOM records match the current view.
+        <span class="empty-mark">—</span>
+        No {{ inventoryMode ? 'inventory items' : 'BOM records' }} match the current view.
       </div>
     </div>
 
     <Modal
       v-if="panel"
-      :title="isEditing ? `Edit BOM — ${panel.deviceName || ''}` : 'Add BOM record'"
+      :title="
+        isEditing
+          ? `${inventoryMode ? 'Edit Inventory' : 'Edit BOM'} — ${panel.deviceName || ''}`
+          : 'Add new item'
+      "
       wide
       @close="panel = null"
     >
       <BomGlobalForm
         :record="isEditing ? panel : null"
+        :target="isEditing && inventoryMode ? 'inventory' : 'bom'"
         :submitting="saving"
         @submit="onSave"
         @cancel="panel = null"
@@ -810,6 +939,38 @@ onMounted(() => {
   font-size: 12px;
 }
 
+/* INVENTORY toggle — sits with the filter selects; glows while the grid shows
+   the inventory catalogue instead of BOM records. */
+.inv-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background-color .15s, box-shadow .15s;
+}
+.inv-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* State class is `is-on`, not `active` — this component already uses `.active`
+   for the active-filter chips row (flex-basis: 100%), which must not hit the
+   toggle. */
+.inv-toggle.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+
 .active { padding-top: 2px; }
 .active-label {
   display: inline-flex;
@@ -856,6 +1017,7 @@ onMounted(() => {
   .selects select { min-width: 0; width: 100%; height: 36px; font-size: 13px; }
   .active { flex: 0 0 auto; gap: 6px; }
   .active-chip { font-size: 11px; padding: 4px 8px; min-height: 26px; }
+  .inv-toggle { width: 100%; justify-content: center; height: 38px; }
 }
 
 .byline {

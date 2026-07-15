@@ -14,9 +14,9 @@ Two axes, kept separate on purpose:
       member holds the capability, and ownership narrows the scope.
 
 This module deliberately defines only permissions the app's endpoints actually
-exercise (projects / tasks / comments / records / bom_lists / sheets /
-templates / users). It is plain data with no imports from ``models`` so it can
-be imported by ``models`` without a cycle.
+exercise (projects / tasks / comments / records / bom_lists / inventory /
+sheets / templates / users). It is plain data with no imports from ``models``
+so it can be imported by ``models`` without a cycle.
 """
 
 # Side-nav pages. Every role holds all page.* capabilities by default; a
@@ -48,6 +48,7 @@ _MEMBER = {
     "bom_lists.create",
     "bom_lists.update",
     "bom_lists.delete",
+    "inventory.create",
     "users.read",
 } | PAGE_PERMISSIONS
 
@@ -60,6 +61,8 @@ _ADMIN = _MEMBER | {
     "templates.manage",
     "roles.assign",
     "pages.assign",
+    "inventory.update",
+    "inventory.delete",
 }
 
 # super_admin is the wildcard holder: "*" satisfies every has_permission check.

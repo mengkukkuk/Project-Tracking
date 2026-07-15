@@ -1,9 +1,11 @@
 <script setup>
-// Add/edit form for the global BOM page. Unlike the schema-driven RecordForm
-// (which posts under a fixed `/api/projects/<pid>/...` URL), this form also
-// carries a Project picker so the user chooses which project the new record
-// belongs to. On edit the picker stays enabled — changing it reparents the
-// record via PATCH /api/records/bom/<id> (the endpoint accepts projectId).
+// Add/edit form for the global BOM page. Create mode is inventory-first:
+// only Device name is required, every submit adds a catalogue entry, and the
+// optional Project picker additionally creates a bom_and_costing copy for
+// that project (the view splits the flat payload). `target` says which kind
+// of row is being edited: 'bom' keeps today's behavior (Project required,
+// reparenting works via PATCH /api/records/bom/<id>), 'inventory' edits a
+// catalogue entry (no project, no project-only fields).
 import { reactive, computed, watch } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
@@ -11,6 +13,7 @@ import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
 
 const props = defineProps({
   record: { type: Object, default: null },
+  target: { type: String, default: 'bom' }, // 'bom' | 'inventory'
   submitting: Boolean,
 })
 const emit = defineEmits(['submit', 'cancel'])
@@ -52,9 +55,21 @@ if (props.record) {
 const categoryOptions = computed(() => lookupsStore.types)
 const typeOptions = computed(() => lookupsStore.typeById(form.categoryId)?.values || [])
 
+// Fields that only exist on a bom_and_costing row, not a catalogue entry.
+// Hidden when editing an inventory row, and in create mode until a project is
+// picked (they'd be silently dropped from the inventory payload anyway).
+const PROJECT_ONLY = new Set(['dateApprove', 'quantity', 'position', 'totalPrice'])
+
 // The Category slot is handled by the dropdowns; drop it from the generic field
 // loop so it isn't also rendered as a free-text input.
-const formFields = computed(() => schema.fields.filter((f) => f.key !== 'category'))
+const formFields = computed(() =>
+  schema.fields.filter((f) => {
+    if (f.key === 'category') return false
+    if (!PROJECT_ONLY.has(f.key)) return true
+    if (props.target === 'inventory') return false
+    return isEdit.value || !!form.projectId
+  }),
+)
 
 // Changing the Category invalidates any previously-chosen Type. Registered after
 // the reactive init, so it never clears a Type seeded on edit.
@@ -73,7 +88,13 @@ watch(
   { immediate: true },
 )
 
-const invalid = computed(() => !form.projectId)
+// Device name is the one universally required field. A project is only
+// mandatory when editing an existing bom row (it must stay parented).
+const invalid = computed(
+  () =>
+    !String(form.deviceName || '').trim() ||
+    (isEdit.value && props.target === 'bom' && !form.projectId),
+)
 
 function submit() {
   if (invalid.value) return
@@ -99,10 +120,13 @@ function submit() {
 <template>
   <form class="rform" @submit.prevent="submit">
     <div class="grid">
-      <label class="field span2">
-        <span>Project<em class="req">*</em></span>
+      <label v-if="target !== 'inventory'" class="field span2">
+        <span v-if="isEdit">Project<em class="req">*</em></span>
+        <span v-else>Project — optional; also adds a BOM row to that project</span>
         <select v-model="form.projectId" class="input">
-          <option :value="null" disabled>Select a project…</option>
+          <option :value="null" :disabled="isEdit">
+            {{ isEdit ? 'Select a project…' : 'No project — inventory only' }}
+          </option>
           <option v-for="p in projectOptions" :key="p.id" :value="p.id">
             {{ p.name }}
           </option>
@@ -135,7 +159,7 @@ function submit() {
         class="field"
         :class="{ span2: f.type === 'textarea', check: f.type === 'checkbox' }"
       >
-        <span>{{ f.label }}</span>
+        <span>{{ f.label }}<em v-if="f.key === 'deviceName'" class="req">*</em></span>
         <textarea
           v-if="f.type === 'textarea'"
           v-model="form[f.key]"
