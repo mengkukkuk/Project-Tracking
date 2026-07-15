@@ -133,11 +133,30 @@ Authz is unchanged: read for any authenticated user, owner-or-admin on PATCH/DEL
 |---|---|
 | `stores/inventory.js` (new) | Mirrors `stores/bom.js`: `rows`, `loading`, `fetchAll()`. The `bom` store is untouched and still serves `/bom`. |
 | `api/index.js` | Add `listInventory()`. |
+| `components/BomListsManager.vue` | No functional change — `doExport` passes `detail.items` straight through to the export helpers. **But its line-40 comment ("Detail endpoint enriches each item with projectName already") becomes false** and must be corrected, since `projectName` is being removed from items. |
 | `components/BomListPicker.vue` | Pool ← inventory store. Selection becomes `Map<inventoryId, quantity>` (was `Set<id>`). **Remove** "Filter by source project" + Project column, and Position filter + column — neither exists on a catalog item. **Qty** becomes a `number` input (min 1, default 1, enabled when ticked). **Total price** renders live as `qty × unitPrice`. Category/Type filters *simplify*: inventory has real FK ids and no free-text `category` column, so the `categoryMatchSet`/`typeMatchSet` free-text fallbacks are deleted and matching is a direct id compare. `COL_COUNT` and `DEVICE_COL` shift accordingly. |
 | `utils/recordExport.js` | BOM-list Excel/PDF column set drops Project and Position; Total = `qty × unitPrice`. |
 | `views/BomGlobalView.vue` | `/bom` itself unchanged. Only the `request-pdf-export` row shape changes, absorbed by `recordExport`. |
 
 `BomExportDocsModal` and the PDF document-attachment flow are **untouched** — they key off the list's *target* project, which still exists.
+
+#### ⚠ Edit-mode must round-trip quantities (data-loss risk)
+
+`save()` always resends the **full** selection, and the backend `_replace_items` **clears and rebuilds every row**. So the edit-mode seed is load-bearing. Today it is (`BomListPicker.vue:294`):
+
+```js
+selectedIds.value = new Set((detail.items || []).map((it) => it.id))
+```
+
+If that becomes a `Set`, or a `Map` that defaults quantity to 1, then **a user who opens an existing list merely to rename it and hits Save silently overwrites every quantity with 1** — destroying the 63 hand-entered qty 2/3/4/6 rows this migration exists to preserve.
+
+**Requirement:** edit mode MUST seed quantity from the detail payload, and save MUST round-trip it unchanged:
+
+```js
+selected.value = new Map((detail.items || []).map((it) => [it.id, it.quantity ?? 1]))
+```
+
+This is guarded by a mandatory round-trip test (below). The read-only Postgres verification **cannot** catch this, because it never saves.
 
 ### 5. DDL mirror — `backend/init_db.sql`
 
@@ -215,9 +234,14 @@ Restart Flask manually — **it does not auto-reload** (`FLASK_DEBUG=false`). Th
 `cd backend && .venv/Scripts/python -m pytest tests/ -v`
 
 - `test_bom_lists.py`: fixtures insert `Inventory` via `Session.add()` (the catalog has no POST endpoint). Rewrite `itemIds` → `items`. Cover quantity defaulting to 1, quantity < 1 → 422, unknown `inventoryId` → 422, duplicate ids deduped, `totalPrice` math, and the existing cascade tests re-pointed at `inventory`.
+- **`test_bom_lists.py::test_patch_preserves_item_quantities` (mandatory).** Create a list with mixed quantities (e.g. 1/2/6), `PATCH` **only** the `name`, then re-fetch and assert every per-item quantity is unchanged (this pins the `if "items" in data` guard — an absent `items` key must never touch rows). Then re-send the same `items` payload and assert quantities still survive the `_replace_items` clear-and-rebuild.
+
+  **What this does *not* cover:** it proves the API preserves what it is *sent*. The actual data-loss path is the **frontend** seeding `quantity: 1` and faithfully sending it — which the backend would then correctly honour. See *Known gaps*.
 - `test_inventory.py` (new): `GET /api/inventory` authz + payload shape.
 
 ## Known gaps (accepted)
+
+- **The edit-mode quantity seed has no automated guard.** The project has **no frontend test framework** (no vitest/test script in `frontend/package.json`), so the `BomListPicker` seed — the one line that could reset 63 quantities to 1 — is protected only by the explicit requirement above and code review. The backend round-trip test cannot catch it (the API would be faithfully honouring a wrong payload), and read-only verification cannot either (it never saves). **Mitigation:** the first real edit after implementation should be done on a throwaway list, or by opening an existing list, saving without changes, and confirming quantities survive — this is the one place where the read-only-verification decision leaves real exposure, and it may be worth revisiting for this path alone.
 
 - **Postgres write-path behaviour is unverified** by automation. Composite-PK conflict handling and `ON DELETE CASCADE` differ between SQLite and Postgres; per decision 6 verification is read-only, so the first real save exercises this. Automated Postgres coverage would need a **disposable** database (throwaway schema or container) — its own scope.
 - **`search_path=pjtrk` resolution is untested** — the suite is SQLite-only. Already flagged in the Render/Supabase plan.
@@ -234,6 +258,6 @@ Restart Flask manually — **it does not auto-reload** (`FLASK_DEBUG=false`). Th
 
 **Backend:** `app/models.py`, `app/api/inventory.py` (new), `app/api/bom_lists.py`, `app/__init__.py`, `init_db.sql`, `tests/test_bom_lists.py`, `tests/test_inventory.py` (new)
 
-**Frontend:** `src/stores/inventory.js` (new), `src/api/index.js`, `src/components/BomListPicker.vue`, `src/utils/recordExport.js`
+**Frontend:** `src/stores/inventory.js` (new), `src/api/index.js`, `src/components/BomListPicker.vue`, `src/components/BomListsManager.vue` (stale comment only), `src/utils/recordExport.js`
 
 **Docs:** `CLAUDE.md` (records API table + Key Decisions), this spec
