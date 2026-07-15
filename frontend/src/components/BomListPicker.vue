@@ -363,55 +363,58 @@ watch(
 <template>
   <Modal :title="title" xwide @close="emit('close')">
     <div class="picker">
-      <!-- Header form: name + target project + filters --------------------- -->
-      <div class="grid">
-        <label class="field">
-          <span>List name<em class="req">*</em></span>
-          <input v-model="form.name" class="input" placeholder="e.g. Procurement Q3" />
-        </label>
-        <label class="field">
-          <span>Target project<em class="req">*</em></span>
-          <select v-model="form.projectId" class="input">
-            <option :value="null" disabled>Select a project…</option>
-            <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
+      <!-- Left rail: name + target project + filters ------------------------ -->
+      <div class="filters-col">
+        <div class="grid">
+          <label class="field">
+            <span>List name<em class="req">*</em></span>
+            <input v-model="form.name" class="input" placeholder="e.g. Procurement Q3" />
+          </label>
+          <label class="field">
+            <span>Target project<em class="req">*</em></span>
+            <select v-model="form.projectId" class="input">
+              <option :value="null" disabled>Select a project…</option>
+              <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </label>
 
-        <label class="field">
-          <span>Category</span>
-          <select v-model="categoryFilter" class="input">
-            <option value="">— any category —</option>
-            <option v-for="t in categoryOptions" :key="t.code" :value="t.code">
-              {{ t.description || t.name }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Type</span>
-          <select v-model="typeFilter" class="input" :disabled="!categoryFilter">
-            <option value="">— any type —</option>
-            <option v-for="v in typeOptions" :key="v.code" :value="v.code">{{ v.displayName }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Search</span>
-          <input v-model="q" class="input" type="search" placeholder="device, spec, supplier…" />
-        </label>
+          <label class="field">
+            <span>Category</span>
+            <select v-model="categoryFilter" class="input">
+              <option value="">— any category —</option>
+              <option v-for="t in categoryOptions" :key="t.code" :value="t.code">
+                {{ t.description || t.name }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Type</span>
+            <select v-model="typeFilter" class="input" :disabled="!categoryFilter">
+              <option value="">— any type —</option>
+              <option v-for="v in typeOptions" :key="v.code" :value="v.code">{{ v.displayName }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Search</span>
+            <input v-model="q" class="input" type="search" placeholder="device, spec, supplier…" />
+          </label>
+        </div>
       </div>
 
-      <div class="toolbar">
-        <label class="check">
-          <input v-model="showSelectedOnly" type="checkbox" />
-          <span>Show selected only</span>
-        </label>
-        <span class="count">
-          <strong>{{ selectedCount }}</strong> selected
-          <span class="of">of {{ filtered.length }} visible</span>
-        </span>
-      </div>
+      <!-- Right column: toolbar + pickable table ----------------------------- -->
+      <div class="table-col">
+        <div class="toolbar">
+          <label class="check">
+            <input v-model="showSelectedOnly" type="checkbox" />
+            <span>Show selected only</span>
+          </label>
+          <span class="count">
+            <strong>{{ selectedCount }}</strong> selected
+            <span class="of">of {{ filtered.length }} visible</span>
+          </span>
+        </div>
 
-      <!-- Pickable table --------------------------------------------------- -->
-      <div class="ledger">
+        <div class="ledger">
         <table ref="tableEl" :style="{ tableLayout: layoutFixed ? 'fixed' : 'auto' }">
           <colgroup>
             <col
@@ -522,6 +525,7 @@ watch(
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
@@ -556,8 +560,18 @@ watch(
 </template>
 
 <style scoped>
-.picker { display: grid; gap: 14px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* Left rail (filters, 40%) / right column (table, 60%). Narrower left column
+   means .input/.select (width:100% of their parent, see main.css) naturally
+   shrink to fit instead of stretching across half the xwide modal. */
+.picker {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 20px;
+  align-items: start;
+}
+.filters-col { display: grid; gap: 14px; }
+.table-col { display: grid; gap: 14px; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .field { display: grid; gap: 5px; }
 .field > span {
   color: var(--text-dim);
@@ -584,7 +598,7 @@ select.input { appearance: auto; }
 .count strong { color: var(--accent); font-weight: 700; }
 .count .of { color: color-mix(in srgb, var(--text-dim) 70%, transparent); margin-left: 4px; }
 
-.ledger { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.ledger { max-height: 60vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
 /* auto layout lets columns size to their content first (full device names show
    when the xwide modal has room); the drag grips then switch to fixed layout. */
 table { width: 100%; border-collapse: collapse; table-layout: auto; }
@@ -681,8 +695,13 @@ tbody tr:last-child td { border-bottom: none; }
 .empty { text-align: center; padding: 32px; color: var(--text-dim); font-style: italic; }
 .empty-mark { display: block; font-size: 20px; color: var(--border); margin-bottom: 4px; }
 
+/* Collapse the left/right split back to a single stacked column before the
+   modal itself goes full-bleed (Modal.vue's .xwide breakpoint is 800px). */
+@media (max-width: 900px) {
+  .picker { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
-  .grid { grid-template-columns: 1fr; }
   .ledger { max-height: 60vh; }
 }
 </style>
