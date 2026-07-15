@@ -7,7 +7,7 @@ Development guide for Claude Code. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 73 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 87 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -41,7 +41,8 @@ npm run build      # production bundle → dist/
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
 | `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
-| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named subsets of BOM rows (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
+| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named selections of **`inventory` catalogue entries + a per-item quantity** (by FK reference, no snapshot), scoped to a target project; `totalPrice` is derived (qty × unitPrice), never stored; owner-or-admin gated on update/delete |
+| `app/api/inventory.py` | `GET /api/inventory` — read-only device catalogue (price book) that saved BOM lists draw from. Deliberately no write endpoints: entries are SQL/seed-managed |
 | `app/api/documents.py` | Per-project PDF uploads (quotation/tds/result) — multipart upload, list, authenticated download, owner-or-admin delete; files under `DOCSTORE_DIR/<pid>/<type>/` with uuid names (see Document uploads below) |
 | `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
 | `app/api/sheets.py` | Google Sheets export/import |
@@ -71,7 +72,7 @@ npm run build      # production bundle → dist/
 | `components/RecordList.vue` / `RecordForm.vue` | Generic CRUD table + modal for the auxiliary record resources |
 | `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
 | `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
-| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the **inventory catalogue store** (not the BOM store) with an inline per-row qty input, target-project picker. Selection is a `Map<inventoryId, quantity>`; **edit mode seeds quantities from `detail.items[].quantity`** (see Saved BOM lists below) |
 | `components/ProjectDocuments.vue` | "Documents" drawer tab — three sections (Quotation/Technical Datasheet/Result) with multi-file PDF upload modal, in-place preview (`@embedpdf/vue-pdf-viewer`), blob download, delete |
 | `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
 | `components/SkeletonBlock.vue` / `RouteSkeleton.vue` | Loading-skeleton system. `SkeletonBlock` is a configurable shimmer block; `RouteSkeleton` composes it into route-aware layouts (`overview`/`table`/`bom`/`dashboard`/`summaries`/`board`/`generic`) that mirror each view's geometry. Wired into the three loading gates (`App.vue`, `DashboardView.vue`, `ProjectDetail.vue`). See "Skeleton loading" in Key Decisions + LIQCRYS.md §6 |
@@ -155,7 +156,10 @@ The JWT still carries only `{role, name}`; `User.to_dict()` exposes a `permissio
 - Excel export uses `ExcelJS` (styled header, frozen pane, auto-filter, auto-fit columns, `dd/mm/yyyy` dates); PDF export uses `jsPDF` + `jspdf-autotable` with an embedded Thai font. Both are client-side only — no backend export endpoint.
 - CSV export exists **only** for the project list (`TableView` → `exportProjectsCsv`); records use Excel/PDF only.
 - BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
-- **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
+- **BOM lists** (`/api/bom-lists`) store a reusable, named selection of **`inventory` catalogue entries + a per-item quantity**, **by FK reference** (not a snapshot) — repricing/deleting a referenced catalogue entry changes what the list shows. They do **not** reference `bom_and_costing`: the catalogue is project-independent (no `projectId`/`position`/`quantity`), and `/bom` + the per-project BOM are a separate concern, unchanged.
+  - Payload is `items: [{inventoryId, quantity}]` (quantity defaults to 1, must be ≥ 1). `totalPrice` is **derived** (`qty × unitPrice`) server-side and never stored; an unpriced entry yields `null`, not 0.
+  - ⚠ **`save()` always resends the full selection and the server clears-and-rebuilds every row.** So `BomListPicker`'s edit-mode seed *must* read quantities back (`new Map(items.map(it => [it.id, it.quantity ?? 1]))`) — defaulting to 1 there would let a plain rename silently wipe every stored quantity. A PATCH with **no** `items` key leaves rows untouched (`test_patch_preserves_item_quantities` pins both halves). There is no frontend test framework, so this seed is guarded by review only.
+  - Exports use a dedicated `BOM_LIST_COLUMNS` in `recordExport.js` — **not** `RECORD_SCHEMAS.bom`, which carries `dateApprove`/`position` (blank on a catalogue entry) and omits `type`. Both column-driven BOM exports share `addColumnSheet()`.
 - **Saved-BOM-list PDF export can append project documents.** Both PDF triggers (`BomListsManager` per-row button, `BomListPicker` Save & Export PDF) emit `request-pdf-export` to `BomGlobalView`, which opens `BomExportDocsModal.vue` — checkboxes for quotation/tds/result append every matching document of the list's target project onto the BOM PDF. Merging uses `pdf-lib` (dynamically imported in `recordExport.js` so it stays out of other export bundles); `exportBomListPdf(project, listName, rows, { attachments })` is async and returns `{ failed }`. **Excel export is unchanged** (no popup, no documents).
 
 ### Document uploads (docstore)
@@ -174,7 +178,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 73 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (`test_documents.py` — upload/list/download/delete incl. Thai filenames, magic-byte validation, all-or-nothing multi-file, delete authz, project-delete disk cleanup, 413 cap), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
+- 87 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists (`test_bom_lists.py` — quantity defaulting/validation/dedupe, derived `totalPrice`, catalogue-delete cascade, and `test_patch_preserves_item_quantities`), the inventory catalogue (`test_inventory.py` — read-only shape, taxonomy label resolution, authz), per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (`test_documents.py` — upload/list/download/delete incl. Thai filenames, magic-byte validation, all-or-nothing multi-file, delete authz, project-delete disk cleanup, 413 cap), and RBAC (`test_rbac.py` — permission catalog, `/me` permissions, role-assignment endpoint authz incl. super_admin guardrails, refactored capability gates, per-user page access endpoint authz/validation/normalization/promotion-clearing)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts

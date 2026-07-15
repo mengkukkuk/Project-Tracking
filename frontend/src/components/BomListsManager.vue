@@ -37,7 +37,8 @@ function openList(lst) {
 async function doExport(lst, format) {
   exportingId.value = `${lst.id}:${format}`
   try {
-    // Detail endpoint enriches each item with projectName already.
+    // Detail endpoint returns each catalogue entry with its quantity and
+    // derived totalPrice — exactly the shape the export columns expect.
     const detail = await api.getBomList(lst.id)
     const project = projectsStore.projects.find((p) => p.id === lst.projectId) || {
       id: lst.projectId,

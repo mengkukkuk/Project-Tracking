@@ -121,7 +121,10 @@ export const api = {
   // lookup_type/lookup_value taxonomy (BOM Category -> Type filter)
   listLookups: () => req('/lookups'),
 
-  // saved BOM lists (named curated subsets for a target project)
+  // inventory catalogue (price book) that saved BOM lists draw from; read-only
+  listInventory: () => req('/inventory'),
+
+  // saved BOM lists (named selections of catalogue entries + quantities)
   listBomLists: () => req('/bom-lists'),
   getBomList: (id) => req(`/bom-lists/${id}`),
   createBomList: (d) => req('/bom-lists', { method: 'POST', body: JSON.stringify(d) }),

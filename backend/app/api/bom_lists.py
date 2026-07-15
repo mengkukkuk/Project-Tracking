@@ -1,9 +1,11 @@
-"""Saved BOM lists — named subsets of bom_and_costing rows for a target project.
+"""Saved BOM lists — named selections of inventory catalogue entries.
 
 A BomList is owned by its creator, scoped to a single target project, and
-references existing bom_and_costing rows by FK (no snapshotting). Cross-project
-items are allowed: a list for Project Alpha may include rows originally entered
-under Project Beta.
+references ``inventory`` entries by FK (no snapshotting) together with a
+per-item quantity. Because the catalogue is project-independent, any list may
+draw on any entry; repricing an entry flows through to every list on next read.
+
+``totalPrice`` is derived (quantity x unitPrice) and never stored.
 
 Authz:
     GET     — any authenticated user
@@ -16,7 +18,7 @@ from flask_jwt_extended import jwt_required
 
 from ..auth import current_user
 from ..extensions import Session
-from ..models import BomAndCosting, BomList, BomListItem, Project
+from ..models import BomList, BomListItem, Inventory, Project
 from ..validation import require_dict, str_field
 from .helpers import log_activity, require_owner_or_admin
 
@@ -29,26 +31,22 @@ def _serialize_summary(lst, project_name):
 
 
 def _serialize_detail(lst, project_name):
-    """Detail form: include items[] with each underlying BOM row + its source
-    project name (mirrors the /api/bom/all enrichment).
-    """
-    # Bulk-resolve project names for every item's source project in one query.
-    src_project_ids = {it.bom.project_id for it in lst.items if it.bom is not None}
-    src_names = {}
-    if src_project_ids:
-        for pid, pname in (
-            Session.query(Project.id, Project.name)
-            .filter(Project.id.in_(src_project_ids))
-            .all()
-        ):
-            src_names[pid] = pname
+    """Detail form: include items[] with each catalogue entry + qty and total.
 
+    No project enrichment here (unlike /api/bom/all): a catalogue entry is
+    project-independent, so the only project in play is the list's own target.
+    """
     items = []
     for it in lst.items:
-        bom = it.bom
-        if bom is None:
+        inv = it.inventory
+        if inv is None:
             continue
-        items.append({**bom.to_dict(), "projectName": src_names.get(bom.project_id)})
+        qty = it.quantity
+        unit_price = inv.unit_price
+        # Derived, never stored. An unpriced entry yields no total rather than
+        # a misleading zero.
+        total = None if unit_price is None or qty is None else qty * unit_price
+        items.append({**inv.to_dict(), "quantity": qty, "totalPrice": total})
     return {**_serialize_summary(lst, project_name), "items": items}
 
 
@@ -59,46 +57,70 @@ def _resolve_project(pid):
     return project
 
 
-def _validate_item_ids(raw):
-    """Coerce body["itemIds"] -> a deduped list of ints. Returns (ids, error_msg)."""
+def _validate_items(raw):
+    """Coerce body["items"] -> a deduped [(inventory_id, quantity)].
+
+    Each entry is ``{"inventoryId": int, "quantity": int >= 1}``; quantity is
+    optional and defaults to 1. Duplicate inventoryIds collapse (last quantity
+    wins) since (list_id, inventory_id) is the composite PK.
+
+    Returns (pairs, error_msg).
+    """
     if raw is None:
         return [], None
     if not isinstance(raw, list):
-        return None, "itemIds must be a list of integers"
-    ids = []
-    seen = set()
-    for v in raw:
+        return None, "items must be a list of {inventoryId, quantity} objects"
+
+    by_id = {}
+    order = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            return None, "items must contain only {inventoryId, quantity} objects"
         try:
-            i = int(v)
+            inv_id = int(entry["inventoryId"])
+        except (KeyError, TypeError, ValueError):
+            return None, "each item needs an integer inventoryId"
+
+        qty_raw = entry.get("quantity", 1)
+        if qty_raw is None:
+            qty_raw = 1
+        try:
+            qty = int(qty_raw)
         except (TypeError, ValueError):
-            return None, "itemIds must contain only integers"
-        if i in seen:
-            continue
-        seen.add(i)
-        ids.append(i)
-    return ids, None
+            return None, "quantity must be an integer"
+        if qty < 1:
+            return None, "quantity must be at least 1"
+
+        if inv_id not in by_id:
+            order.append(inv_id)
+        by_id[inv_id] = qty
+
+    return [(i, by_id[i]) for i in order], None
 
 
-def _ensure_boms_exist(ids):
-    """Return (missing_ids, ok). 422 if any id has no matching bom_and_costing."""
-    if not ids:
+def _ensure_inventory_exists(pairs):
+    """Return (missing_ids, ok). 422 if any id has no matching inventory row."""
+    if not pairs:
         return [], True
+    ids = [i for i, _ in pairs]
     found = {
         row[0]
-        for row in Session.query(BomAndCosting.id)
-        .filter(BomAndCosting.id.in_(ids))
-        .all()
+        for row in Session.query(Inventory.id).filter(Inventory.id.in_(ids)).all()
     }
     missing = [i for i in ids if i not in found]
     return missing, not missing
 
 
-def _replace_items(lst, ids):
-    """Replace the list's items with the given ordered bom_ids (in order)."""
+def _replace_items(lst, pairs):
+    """Replace the list's items with the given (inventory_id, quantity) pairs.
+
+    Callers must send the FULL desired set: this clears and rebuilds, so a
+    partial payload silently drops the omitted items.
+    """
     lst.items.clear()
     Session.flush()
-    for bid in ids:
-        lst.items.append(BomListItem(bom_id=bid))
+    for inv_id, qty in pairs:
+        lst.items.append(BomListItem(inventory_id=inv_id, quantity=qty))
 
 
 # --- Endpoints -------------------------------------------------------------
@@ -143,15 +165,15 @@ def create_bom_list():
             "error": {"type": "validation", "fields": {"projectId": "unknown project"}}
         }, 422
 
-    ids, err = _validate_item_ids(data.get("itemIds"))
+    pairs, err = _validate_items(data.get("items"))
     if err:
-        return {"error": {"type": "validation", "fields": {"itemIds": err}}}, 422
-    missing, ok = _ensure_boms_exist(ids)
+        return {"error": {"type": "validation", "fields": {"items": err}}}, 422
+    missing, ok = _ensure_inventory_exists(pairs)
     if not ok:
         return {
             "error": {
                 "type": "validation",
-                "fields": {"itemIds": f"unknown bom id(s): {missing}"},
+                "fields": {"items": f"unknown inventory id(s): {missing}"},
             }
         }, 422
 
@@ -161,9 +183,9 @@ def create_bom_list():
     )
     Session.add(lst)
     Session.flush()  # assign lst.id before adding items
-    _replace_items(lst, ids)
+    _replace_items(lst, pairs)
     log_activity(
-        project_id, "task", f"Created BOM list '{name}' ({len(ids)} item(s))", user
+        project_id, "task", f"Created BOM list '{name}' ({len(pairs)} item(s))", user
     )
     Session.commit()
     return _serialize_summary(lst, project.name), 201
@@ -201,19 +223,21 @@ def update_bom_list(lid):
             }, 422
         lst.project_id = new_pid
 
-    if "itemIds" in data:
-        ids, err = _validate_item_ids(data["itemIds"])
+    # An absent "items" key leaves the existing rows (and their quantities)
+    # untouched -- a rename must never disturb the list's contents.
+    if "items" in data:
+        pairs, err = _validate_items(data["items"])
         if err:
-            return {"error": {"type": "validation", "fields": {"itemIds": err}}}, 422
-        missing, ok = _ensure_boms_exist(ids)
+            return {"error": {"type": "validation", "fields": {"items": err}}}, 422
+        missing, ok = _ensure_inventory_exists(pairs)
         if not ok:
             return {
                 "error": {
                     "type": "validation",
-                    "fields": {"itemIds": f"unknown bom id(s): {missing}"},
+                    "fields": {"items": f"unknown inventory id(s): {missing}"},
                 }
             }, 422
-        _replace_items(lst, ids)
+        _replace_items(lst, pairs)
 
     log_activity(lst.project_id, "task", f"Updated BOM list '{lst.name}'", user)
     Session.commit()

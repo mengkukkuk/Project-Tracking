@@ -1,10 +1,10 @@
 <script setup>
-// Pick BOM rows for a saved list — used in both create and edit modes.
-// Reuses the global BOM store as the source pool (no extra fetch). Selection
-// state is local: a Set<bom_id>. Save persists to the bom-lists endpoint;
-// Save & Export downloads after a successful save.
+// Pick catalogue entries (+ a quantity each) for a saved list — used in both
+// create and edit modes. The pool is the read-only inventory catalogue.
+// Selection state is local: a Map<inventoryId, quantity>. Save persists to the
+// bom-lists endpoint; Save & Export downloads after a successful save.
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useBomStore } from '@/stores/bom'
+import { useInventoryStore } from '@/stores/inventory'
 import { useBomListsStore } from '@/stores/bomLists'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
@@ -18,7 +18,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'saved', 'request-pdf-export'])
 
-const bomStore = useBomStore()
+const inventoryStore = useInventoryStore()
 const listsStore = useBomListsStore()
 const projectsStore = useProjectsStore()
 const lookupsStore = useLookupsStore()
@@ -33,11 +33,10 @@ const form = ref({
   name: props.list?.name || '',
   projectId: props.list?.projectId ?? null,
 })
-const selectedIds = ref(new Set())
-const sourceProjectFilter = ref('') // optional dropdown
+// Map<inventoryId, quantity>. Replaced (never mutated) so computeds re-run.
+const selected = ref(new Map())
 const categoryFilter = ref('') // taxonomy code
 const typeFilter = ref('') // taxonomy code, cascades off categoryFilter
-const positionFilter = ref('')
 const q = ref('')
 const showSelectedOnly = ref(false)
 const saving = ref(false)
@@ -48,22 +47,16 @@ const projectOptions = computed(() =>
   ),
 )
 
-// Pool of candidate rows. We use the bom store rows directly — same data the
-// /bom page already showed the user.
-const pool = computed(() => bomStore.rows || [])
+// Pool of candidate rows: the inventory catalogue. Entries are project-
+// independent, so there is no source-project filter here.
+const pool = computed(() => inventoryStore.rows || [])
 
 // Category/Type options come from the lookup_type/lookup_value taxonomy
-// (lookupsStore), not from row values — mirrors BomGlobalView's approach so
-// the picker offers the same taxonomy-backed choices. Position has no
-// taxonomy, so it still derives from the loaded pool.
+// (lookupsStore), mirroring BomGlobalView so the picker offers the same
+// taxonomy-backed choices.
 const categoryOptions = computed(() => lookupsStore.types)
 const typeOptions = computed(
   () => lookupsStore.typeByCode(categoryFilter.value)?.values || [],
-)
-const positionOptions = computed(() =>
-  [...new Set(pool.value.map((r) => r.position).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b),
-  ),
 )
 
 // Type is meaningless without a Category, so clearing/changing Category also
@@ -72,61 +65,40 @@ watch(categoryFilter, () => {
   typeFilter.value = ''
 })
 
-// A row's free-text `category`/`type` matches a selected taxonomy entry when
-// it case-insensitively equals the entry's own code/name/description (or, for
-// Category, any of its child values) — legacy/imported rows only ever carry
-// free text, never the FK id. Mirrors BomGlobalView's matching helpers.
-const norm = (s) => String(s || '').trim().toLowerCase()
-
-function categoryMatchSet(typeCode) {
-  const t = lookupsStore.typeByCode(typeCode)
-  if (!t) return null
-  const set = new Set([t.code, t.name, t.description].filter(Boolean).map(norm))
-  for (const v of t.values || []) {
-    if (v.code) set.add(norm(v.code))
-    if (v.displayName) set.add(norm(v.displayName))
-  }
-  return set
-}
-
-function typeMatchSet(typeCode, valueCode) {
-  const v = lookupsStore.typeByCode(typeCode)?.values?.find((x) => x.code === valueCode)
-  if (!v) return null
-  return new Set([v.code, v.displayName].filter(Boolean).map(norm))
-}
-
+// Catalogue entries carry the taxonomy as real FK ids and have no free-text
+// `category` column, so matching is a direct id compare — none of the
+// free-text fallbacks BomGlobalView needs for legacy/imported BOM rows.
+// Unclassified entries (categoryId === null) simply never match a filter.
 const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
-  const pf = sourceProjectFilter.value
   const cat = categoryFilter.value
   const typ = typeFilter.value
-  const pos = positionFilter.value
 
   const selType = cat ? lookupsStore.typeByCode(cat) : null
   const selValue = selType && typ ? selType.values?.find((v) => v.code === typ) : null
-  const catSet = cat ? categoryMatchSet(cat) : null
-  const typeSet = cat && typ ? typeMatchSet(cat, typ) : null
 
   return pool.value.filter((r) => {
-    if (pf && r.projectId !== Number(pf)) return false
-    if (
-      cat &&
-      !((selType && r.categoryId === selType.id) || (catSet && catSet.has(norm(r.category))))
-    )
-      return false
-    if (
-      typ &&
-      !((selValue && r.typeId === selValue.id) || (typeSet && typeSet.has(norm(r.type))))
-    )
-      return false
-    if (pos && r.position !== pos) return false
-    if (showSelectedOnly.value && !selectedIds.value.has(r.id)) return false
+    if (cat && !(selType && r.categoryId === selType.id)) return false
+    if (typ && !(selValue && r.typeId === selValue.id)) return false
+    if (showSelectedOnly.value && !selected.value.has(r.id)) return false
     if (!term) return true
-    return ['deviceName', 'spec', 'category', 'type', 'supplier', 'projectName'].some(
-      (k) => String(r[k] || '').toLowerCase().includes(term),
+    return ['deviceName', 'spec', 'category', 'type', 'supplier'].some((k) =>
+      String(r[k] || '').toLowerCase().includes(term),
     )
   })
 })
+
+// --- Quantity + derived total -----------------------------------------------
+// Quantity lives in the selection, not on the catalogue entry, so an unticked
+// row has none. Total mirrors the server's rule: qty x unitPrice, and no total
+// at all when the entry is unpriced (rather than a misleading zero).
+function qtyOf(r) {
+  return selected.value.get(r.id) ?? null
+}
+function totalOf(r) {
+  const qty = qtyOf(r)
+  return qty == null || r.unitPrice == null ? null : qty * r.unitPrice
+}
 
 // --- Column sorting ---------------------------------------------------------
 // Click a header to sort by that field; click again to flip direction. Numeric
@@ -145,6 +117,13 @@ function sortBy(key) {
   }
 }
 
+// Qty/Total aren't row properties — they're derived from the selection.
+function sortValue(row, key) {
+  if (key === 'quantity') return qtyOf(row)
+  if (key === 'totalPrice') return totalOf(row)
+  return row[key]
+}
+
 const sorted = computed(() => {
   const key = sortKey.value
   if (!key) return filtered.value
@@ -152,8 +131,8 @@ const sorted = computed(() => {
   const numeric = NUMERIC_KEYS.has(key)
   const blank = (v) => v == null || v === ''
   return [...filtered.value].sort((a, b) => {
-    const av = a[key]
-    const bv = b[key]
+    const av = sortValue(a, key)
+    const bv = sortValue(b, key)
     if (blank(av) && blank(bv)) return 0
     if (blank(av)) return 1
     if (blank(bv)) return -1
@@ -164,11 +143,11 @@ const sorted = computed(() => {
   })
 })
 
-const selectedCount = computed(() => selectedIds.value.size)
+const selectedCount = computed(() => selected.value.size)
 const filteredAllSelected = computed(
   () =>
     filtered.value.length > 0 &&
-    filtered.value.every((r) => selectedIds.value.has(r.id)),
+    filtered.value.every((r) => selected.value.has(r.id)),
 )
 const invalid = computed(
   () => !form.value.name.trim() || !form.value.projectId || selectedCount.value === 0,
@@ -177,20 +156,32 @@ const targetProject = computed(
   () => projectsStore.projects.find((p) => p.id === Number(form.value.projectId)) || null,
 )
 
+// Ticking a row defaults it to qty 1; untickng forgets the quantity. Re-ticking
+// therefore starts at 1 again rather than resurrecting a stale value.
 function toggle(id) {
-  const s = new Set(selectedIds.value)
-  if (s.has(id)) s.delete(id)
-  else s.add(id)
-  selectedIds.value = s
+  const m = new Map(selected.value)
+  if (m.has(id)) m.delete(id)
+  else m.set(id, 1)
+  selected.value = m
 }
 function toggleAllVisible() {
-  const s = new Set(selectedIds.value)
+  const m = new Map(selected.value)
   if (filteredAllSelected.value) {
-    for (const r of filtered.value) s.delete(r.id)
+    for (const r of filtered.value) m.delete(r.id)
   } else {
-    for (const r of filtered.value) s.add(r.id)
+    // Keep any quantity already set; only newly-added rows default to 1.
+    for (const r of filtered.value) if (!m.has(r.id)) m.set(r.id, 1)
   }
-  selectedIds.value = s
+  selected.value = m
+}
+
+// The server rejects qty < 1, so clamp here rather than let the user build a
+// payload that 422s on save. A blank/NaN input falls back to 1.
+function setQty(id, raw) {
+  const n = Math.max(1, Math.floor(Number(raw) || 1))
+  const m = new Map(selected.value)
+  m.set(id, n)
+  selected.value = m
 }
 
 function num(v) {
@@ -202,10 +193,10 @@ function num(v) {
 // <colgroup> plus drag grips. Columns start in auto layout (so they size to
 // content and full device names show); on the first drag we snapshot those
 // widths and switch to fixed layout so columns can then grow AND shrink.
-const COL_COUNT = 11 // checkbox + 10 data columns
-// The Device column (colWidths index 2 → colgroup <col> #3) renders at a wider
+const COL_COUNT = 9 // checkbox + 8 data columns
+// The Device column (colWidths index 1 → colgroup <col> #2) renders at a wider
 // 350px default so full device names show, and never resizes below 200px.
-const DEVICE_COL = 2
+const DEVICE_COL = 1
 const DEVICE_DEFAULT = 350
 const COL_MIN = { [DEVICE_COL]: 200 }
 const tableEl = ref(null)
@@ -265,9 +256,9 @@ function startResize(index, e) {
 // On edit mode: seed selection from the detail endpoint (the list summary
 // passed in doesn't carry items[], so fetch detail once).
 onMounted(async () => {
-  if (!bomStore.rows.length) {
+  if (!inventoryStore.rows.length) {
     try {
-      await bomStore.fetchAll()
+      await inventoryStore.fetchAll()
     } catch (e) {
       ui.error(e.message)
     }
@@ -291,7 +282,12 @@ onMounted(async () => {
       const detail = await listsStore.fetchOne(props.list.id)
       form.value.name = detail.name
       form.value.projectId = detail.projectId
-      selectedIds.value = new Set((detail.items || []).map((it) => it.id))
+      // Seed quantities from the saved list, NOT a default of 1. save() always
+      // resends the full selection and the server clears-and-rebuilds, so
+      // defaulting here would let a plain rename wipe every stored quantity.
+      selected.value = new Map(
+        (detail.items || []).map((it) => [it.id, it.quantity ?? 1]),
+      )
     } catch (e) {
       ui.error(e.message)
     }
@@ -299,10 +295,12 @@ onMounted(async () => {
 })
 
 // Build the rows actually saved/exported (in the order they appear in the pool
-// so the user sees the same order as the table they picked from).
+// so the user sees the same order as the table they picked from). Exports need
+// the derived qty/total, which live in the selection rather than on the entry.
 function selectedRows() {
-  const idsInOrder = pool.value.filter((r) => selectedIds.value.has(r.id))
-  return idsInOrder
+  return pool.value
+    .filter((r) => selected.value.has(r.id))
+    .map((r) => ({ ...r, quantity: qtyOf(r), totalPrice: totalOf(r) }))
 }
 
 async function save({ thenExport } = {}) {
@@ -312,7 +310,10 @@ async function save({ thenExport } = {}) {
     const payload = {
       name: form.value.name.trim(),
       projectId: Number(form.value.projectId),
-      itemIds: [...selectedIds.value],
+      items: [...selected.value].map(([inventoryId, quantity]) => ({
+        inventoryId,
+        quantity,
+      })),
     }
     if (isEdit.value) await listsStore.update(props.list.id, payload)
     else await listsStore.create(payload)
@@ -377,13 +378,6 @@ watch(
         </label>
 
         <label class="field">
-          <span>Filter by source project</span>
-          <select v-model="sourceProjectFilter" class="input">
-            <option value="">— all projects —</option>
-            <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
-        <label class="field">
           <span>Category</span>
           <select v-model="categoryFilter" class="input">
             <option value="">— any category —</option>
@@ -397,13 +391,6 @@ watch(
           <select v-model="typeFilter" class="input" :disabled="!categoryFilter">
             <option value="">— any type —</option>
             <option v-for="v in typeOptions" :key="v.code" :value="v.code">{{ v.displayName }}</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Position</span>
-          <select v-model="positionFilter" class="input">
-            <option value="">— any position —</option>
-            <option v-for="pos in positionOptions" :key="pos" :value="pos">{{ pos }}</option>
           </select>
         </label>
         <label class="field">
@@ -443,65 +430,53 @@ watch(
                   @change="toggleAllVisible"
                 />
               </th>
-              <th :aria-sort="sortKey === 'projectName' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                <button type="button" class="sort-label" @click="sortBy('projectName')">
-                  Project<span class="sort-ind" :class="{ on: sortKey === 'projectName' }">{{ sortKey === 'projectName' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(1, $event)" />
-              </th>
               <th :aria-sort="sortKey === 'deviceName' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('deviceName')">
                   Device<span class="sort-ind" :class="{ on: sortKey === 'deviceName' }">{{ sortKey === 'deviceName' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(2, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(1, $event)" />
               </th>
               <th :aria-sort="sortKey === 'version' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('version')">
                   Version<span class="sort-ind" :class="{ on: sortKey === 'version' }">{{ sortKey === 'version' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(3, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(2, $event)" />
               </th>
               <th :aria-sort="sortKey === 'category' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('category')">
                   Category<span class="sort-ind" :class="{ on: sortKey === 'category' }">{{ sortKey === 'category' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(4, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(3, $event)" />
               </th>
               <th :aria-sort="sortKey === 'type' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('type')">
                   Type<span class="sort-ind" :class="{ on: sortKey === 'type' }">{{ sortKey === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(5, $event)" />
-              </th>
-              <th :aria-sort="sortKey === 'position' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                <button type="button" class="sort-label" @click="sortBy('position')">
-                  Position<span class="sort-ind" :class="{ on: sortKey === 'position' }">{{ sortKey === 'position' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(6, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(4, $event)" />
               </th>
               <th class="num" :aria-sort="sortKey === 'quantity' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('quantity')">
                   <span class="sort-ind" :class="{ on: sortKey === 'quantity' }">{{ sortKey === 'quantity' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Qty
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(7, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(5, $event)" />
               </th>
               <th class="num" :aria-sort="sortKey === 'unitPrice' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('unitPrice')">
                   <span class="sort-ind" :class="{ on: sortKey === 'unitPrice' }">{{ sortKey === 'unitPrice' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Unit price
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(8, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(6, $event)" />
               </th>
               <th class="num" :aria-sort="sortKey === 'totalPrice' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('totalPrice')">
                   <span class="sort-ind" :class="{ on: sortKey === 'totalPrice' }">{{ sortKey === 'totalPrice' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Total price
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(9, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(7, $event)" />
               </th>
               <th :aria-sort="sortKey === 'supplier' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('supplier')">
                   Supplier<span class="sort-ind" :class="{ on: sortKey === 'supplier' }">{{ sortKey === 'supplier' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(10, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(8, $event)" />
               </th>
             </tr>
           </thead>
@@ -510,25 +485,37 @@ watch(
               v-for="r in sorted"
               :key="r.id"
               class="row"
-              :class="{ on: selectedIds.has(r.id) }"
+              :class="{ on: selected.has(r.id) }"
               @click="toggle(r.id)"
             >
               <td class="check-col" @click.stop>
-                <input type="checkbox" :checked="selectedIds.has(r.id)" @change="toggle(r.id)" />
+                <input type="checkbox" :checked="selected.has(r.id)" @change="toggle(r.id)" />
               </td>
-              <td class="proj">{{ r.projectName || '—' }}</td>
               <td class="device">{{ r.deviceName || '—' }}</td>
               <td>{{ r.version || '—' }}</td>
               <td>{{ r.category || '—' }}</td>
               <td>{{ r.type || '—' }}</td>
-              <td>{{ r.position || '—' }}</td>
-              <td class="num">{{ num(r.quantity) }}</td>
+              <!-- Qty is editable only once the row is picked; @click.stop keeps
+                   typing in it from toggling the row off. -->
+              <td class="num" @click.stop>
+                <input
+                  v-if="selected.has(r.id)"
+                  class="qty"
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="qtyOf(r)"
+                  :aria-label="`Quantity for ${r.deviceName || 'item'}`"
+                  @input="setQty(r.id, $event.target.value)"
+                />
+                <span v-else>—</span>
+              </td>
               <td class="num">{{ num(r.unitPrice) }}</td>
-              <td class="num">{{ num(r.totalPrice) }}</td>
+              <td class="num">{{ num(totalOf(r)) }}</td>
               <td>{{ r.supplier || '—' }}</td>
             </tr>
             <tr v-if="!filtered.length">
-              <td colspan="11" class="empty">
+              <td colspan="9" class="empty">
                 <span class="empty-mark">—</span>
                 No rows match the current filter.
               </td>
@@ -670,7 +657,22 @@ tbody td {
   text-overflow: ellipsis;
 }
 td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
-td.proj { font-weight: 600; }
+/* Inline qty editor: sized to ~3 digits so it never widens the Qty column. */
+.qty {
+  width: 56px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  accent-color: var(--accent);
+}
+.qty:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .row { cursor: pointer; transition: background .1s; }
 .row:hover { background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
 .row.on { background: color-mix(in srgb, var(--accent) 11%, var(--surface)); }

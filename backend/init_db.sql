@@ -257,7 +257,26 @@ CREATE TABLE IF NOT EXISTS exception_log (
   date_new_pps  DATE
 );
 
--- ── bom_lists (saved, named selections of BOM rows) ───────────
+-- ── inventory (reusable device catalogue / price book) ────────
+-- Project-independent by design: no project_id, no position, no quantity.
+-- A catalogue entry is the device; how many a given list wants lives on
+-- bom_list_items.quantity. Saved BOM lists draw from this table.
+CREATE TABLE IF NOT EXISTS inventory (
+  id            SERIAL      PRIMARY KEY,
+  category_id   INTEGER,                 -- -> lookup_type.lookup_type_id (FK enforced by ORM)
+  type_id       INTEGER,                 -- -> lookup_value.lookup_value_id (FK enforced by ORM)
+  device_name   TEXT,
+  version       TEXT,
+  spec          TEXT,
+  unit          TEXT,
+  unit_price    INTEGER,
+  supplier      TEXT,
+  lead_time     INTEGER,
+  created_at    TIMESTAMP,
+  updated_at    TIMESTAMP
+);
+
+-- ── bom_lists (saved, named selections of catalogue entries) ──
 CREATE TABLE IF NOT EXISTS bom_lists (
   id          SERIAL   PRIMARY KEY,
   name        TEXT     NOT NULL,
@@ -267,11 +286,14 @@ CREATE TABLE IF NOT EXISTS bom_lists (
   updated_at  TIMESTAMP
 );
 
--- ── bom_list_items (M2M: bom_lists <-> bom_and_costing) ───────
+-- ── bom_list_items (M2M: bom_lists <-> inventory, + quantity) ─
+-- quantity belongs here, not on inventory: it is a property of THIS list's
+-- use of the catalogue entry, not of the device itself.
 CREATE TABLE IF NOT EXISTS bom_list_items (
-  list_id  INTEGER  NOT NULL REFERENCES bom_lists      (id) ON DELETE CASCADE,
-  bom_id   INTEGER  NOT NULL REFERENCES bom_and_costing (id) ON DELETE CASCADE,
-  PRIMARY KEY (list_id, bom_id)
+  list_id       INTEGER  NOT NULL REFERENCES bom_lists (id) ON DELETE CASCADE,
+  inventory_id  INTEGER  NOT NULL REFERENCES inventory (id) ON DELETE CASCADE,
+  quantity      INTEGER,
+  PRIMARY KEY (list_id, inventory_id)
 );
 
 -- ── project_documents (uploaded PDFs: quotation / tds / result) ─
@@ -317,6 +339,7 @@ CREATE TABLE lookup_value (
 -- DROP TABLE IF EXISTS project_documents     CASCADE;
 -- DROP TABLE IF EXISTS bom_list_items        CASCADE;
 -- DROP TABLE IF EXISTS bom_lists             CASCADE;
+-- DROP TABLE IF EXISTS inventory             CASCADE;
 -- DROP TABLE IF EXISTS exception_log         CASCADE;
 -- DROP TABLE IF EXISTS internal_verification CASCADE;
 -- DROP TABLE IF EXISTS bom_and_costing       CASCADE;

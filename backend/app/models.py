@@ -507,6 +507,56 @@ class BomAndCosting(Base):
         }
 
 
+class Inventory(Base):
+    """Reusable device catalogue (price book) that saved BOM lists draw from.
+
+    Deliberately project-independent: unlike ``BomAndCosting`` there is no
+    ``project_id``, ``position`` or ``quantity`` here. A catalogue entry is the
+    device itself; how many of it a given list wants lives on ``BomListItem``.
+    """
+
+    __tablename__ = "inventory"
+
+    id = Column(Integer, primary_key=True)
+    # Canonical taxonomy references, as on bom_and_costing. FK targets use the
+    # literal DB PK column names, since those models map ``id`` onto them.
+    category_id = Column(Integer, ForeignKey("lookup_type.lookup_type_id"))
+    type_id = Column(Integer, ForeignKey("lookup_value.lookup_value_id"))
+    device_name = Column(Text)
+    version = Column(Text)
+    spec = Column(Text)
+    unit = Column(Text)
+    unit_price = Column(Integer)
+    supplier = Column(Text)
+    lead_time = Column(Integer)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Eager (joined) so listing the catalogue resolves labels without N+1.
+    category_ref = relationship("LookupType", lazy="joined")
+    type_ref = relationship("LookupValue", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            # Unlike bom_and_costing there is no legacy free-text fallback --
+            # the catalogue only ever carries the taxonomy ids.
+            "category": (self.category_ref.description or self.category_ref.name)
+            if self.category_ref
+            else None,
+            "categoryId": self.category_id,
+            "type": self.type_ref.display_name if self.type_ref else None,
+            "typeId": self.type_id,
+            "deviceName": self.device_name,
+            "version": self.version,
+            "spec": self.spec,
+            "unit": self.unit,
+            "unitPrice": self.unit_price,
+            "supplier": self.supplier,
+            "leadTime": self.lead_time,
+        }
+
+
 class InternalVerification(Base):
     __tablename__ = "internal_verification"
 
@@ -606,10 +656,10 @@ class ProjectDocument(Base):
 
 
 class BomList(Base):
-    """Saved, named selection of bom_and_costing rows for a target project.
+    """Saved, named selection of inventory catalogue entries for a target project.
 
-    Items are FK references — edits to a source row flow through on next read,
-    and deleting a source row cascades the corresponding list-item away.
+    Items are FK references — repricing a catalogue entry flows through on next
+    read, and deleting one cascades the corresponding list-item away.
     """
 
     __tablename__ = "bom_lists"
@@ -646,7 +696,11 @@ class BomList(Base):
 
 
 class BomListItem(Base):
-    """Join row: bom_list <-> bom_and_costing (FK reference, composite PK)."""
+    """Join row: bom_list <-> inventory (FK reference, composite PK).
+
+    ``quantity`` lives here rather than on ``Inventory`` because it is a
+    property of *this list's* use of the catalogue entry, not of the device.
+    """
 
     __tablename__ = "bom_list_items"
 
@@ -655,14 +709,15 @@ class BomListItem(Base):
         ForeignKey("bom_lists.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    bom_id = Column(
+    inventory_id = Column(
         Integer,
-        ForeignKey("bom_and_costing.id", ondelete="CASCADE"),
+        ForeignKey("inventory.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    quantity = Column(Integer)
 
     parent = relationship("BomList", back_populates="items")
-    bom = relationship("BomAndCosting", lazy="joined")
+    inventory = relationship("Inventory", lazy="joined")
 
 
 class LookupType(Base):

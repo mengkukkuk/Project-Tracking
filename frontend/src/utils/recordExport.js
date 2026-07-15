@@ -137,10 +137,56 @@ function addRecordSheet(wb, resource, rows, sheetName) {
   return ws
 }
 
-// Append a bold "Total" row summing a numeric field beneath an
-// addRecordSheet-populated worksheet (column order must match `fields`).
-// Used by the BOM list exports so a saved list's total cost is visible
-// without opening a formula.
+// ---------------------------------------------------------------------------
+// Internal: same as addRecordSheet, but driven by an explicit column list
+// instead of a RECORD_SCHEMAS resource. Used where the rows aren't a record
+// resource at all (the BOM inventory's extra Project column; the BOM list's
+// catalogue-shaped rows).
+// ---------------------------------------------------------------------------
+function addColumnSheet(wb, columns, rows, sheetName) {
+  const ws = wb.addWorksheet(dedupeSheetName(wb, sheetName))
+  ws.columns = columns.map((c) => ({ header: c.label, key: c.key, width: 16 }))
+
+  for (const row of rows) {
+    const cells = {}
+    for (const c of columns) {
+      const v = row[c.key]
+      if (c.type === 'date') cells[c.key] = isoToExcelDate(v)
+      else if (c.type === 'number') cells[c.key] = v == null || v === '' ? null : Number(v)
+      else cells[c.key] = v ?? ''
+    }
+    ws.addRow(cells)
+  }
+
+  columns.forEach((c, i) => {
+    const col = ws.getColumn(i + 1)
+    if (c.type === 'date') col.numFmt = 'dd/mm/yyyy'
+    else if (c.type === 'number') col.numFmt = '#,##0'
+  })
+
+  const header = ws.getRow(1)
+  header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }
+  header.alignment = { vertical: 'middle' }
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } }
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
+
+  ws.columns.forEach((column) => {
+    let max = 0
+    column.eachCell({ includeEmpty: true }, (cell) => {
+      const len = cell.value == null ? 0 : String(cell.value).length
+      if (len > max) max = len
+    })
+    column.width = Math.min(Math.max(max + 4, 12), 60)
+  })
+
+  return ws
+}
+
+// Append a bold "Total" row summing a numeric column beneath a sheet populated
+// by addRecordSheet/addColumnSheet (column order must match `fields`). Used by
+// the BOM list exports so a saved list's total cost is visible without opening
+// a formula.
 function addFieldTotalRow(ws, fields, rows, key, label = 'Total') {
   const idx = fields.findIndex((f) => f.key === key)
   if (idx === -1 || !rows.length) return
@@ -550,44 +596,29 @@ const BOM_INVENTORY_COLUMNS = [
   ),
 ]
 
+// Saved BOM lists draw from the `inventory` catalogue, whose rows are shaped
+// differently from bom_and_costing: no dateApprove/position (a catalogue entry
+// is project-independent), and `quantity`/`totalPrice` are contributed by the
+// list itself (totalPrice = quantity x unitPrice, derived server-side).
+// Hence its own column list rather than reusing RECORD_SCHEMAS.bom, which
+// would render two permanently-blank columns and silently drop Type.
+const BOM_LIST_COLUMNS = [
+  { key: 'category', label: 'Category', type: 'text' },
+  { key: 'type', label: 'Type', type: 'text' },
+  { key: 'deviceName', label: 'Device name', type: 'text' },
+  { key: 'version', label: 'Version', type: 'text' },
+  { key: 'spec', label: 'Spec', type: 'text' },
+  { key: 'unit', label: 'Unit', type: 'text' },
+  { key: 'quantity', label: 'Quantity', type: 'number' },
+  { key: 'unitPrice', label: 'Unit price', type: 'number' },
+  { key: 'totalPrice', label: 'Total price', type: 'number' },
+  { key: 'leadTime', label: 'Lead time (days)', type: 'number' },
+  { key: 'supplier', label: 'Supplier', type: 'text' },
+]
+
 export async function exportBomInventoryExcel(rows, filename) {
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('BOM')
-  ws.columns = BOM_INVENTORY_COLUMNS.map((c) => ({ header: c.label, key: c.key, width: 16 }))
-
-  for (const row of rows) {
-    const cells = {}
-    for (const c of BOM_INVENTORY_COLUMNS) {
-      const v = row[c.key]
-      if (c.type === 'date') cells[c.key] = isoToExcelDate(v)
-      else if (c.type === 'number') cells[c.key] = v == null || v === '' ? null : Number(v)
-      else cells[c.key] = v ?? ''
-    }
-    ws.addRow(cells)
-  }
-
-  BOM_INVENTORY_COLUMNS.forEach((c, i) => {
-    const col = ws.getColumn(i + 1)
-    if (c.type === 'date') col.numFmt = 'dd/mm/yyyy'
-    else if (c.type === 'number') col.numFmt = '#,##0'
-  })
-
-  const header = ws.getRow(1)
-  header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }
-  header.alignment = { vertical: 'middle' }
-  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: BOM_INVENTORY_COLUMNS.length } }
-  ws.views = [{ state: 'frozen', ySplit: 1 }]
-
-  ws.columns.forEach((column) => {
-    let max = 0
-    column.eachCell({ includeEmpty: true }, (cell) => {
-      const len = cell.value == null ? 0 : String(cell.value).length
-      if (len > max) max = len
-    })
-    column.width = Math.min(Math.max(max + 4, 12), 60)
-  })
-
+  addColumnSheet(wb, BOM_INVENTORY_COLUMNS, rows, 'BOM')
   await writeAndDownload(wb, filename || `bom-inventory-${stamp()}.xlsx`)
 }
 
@@ -641,9 +672,9 @@ export function exportBomInventoryPdf(rows, filename) {
 export async function exportBomListExcel(project, listName, rows, filename) {
   const wb = new ExcelJS.Workbook()
   addProjectSummarySheet(wb, project)
-  // Sheet name = list name (deduped + clipped to 31 chars by addRecordSheet).
-  const ws = addRecordSheet(wb, 'bom', rows, listName || RECORD_SCHEMAS.bom.label)
-  addFieldTotalRow(ws, RECORD_SCHEMAS.bom.fields, rows, 'totalPrice')
+  // Sheet name = list name (deduped + clipped to 31 chars by addColumnSheet).
+  const ws = addColumnSheet(wb, BOM_LIST_COLUMNS, rows, listName || 'BOM List')
+  addFieldTotalRow(ws, BOM_LIST_COLUMNS, rows, 'totalPrice')
   const name =
     filename ||
     `${['bom-list', slug(listName), slug(project?.name), stamp()]
@@ -724,9 +755,8 @@ export async function exportBomListPdf(
     doc.addPage()
   }
 
-  // Page 2+: the BOM rows. Drop the leading Project column from the inventory
-  // columns since the document is already scoped to one target project.
-  const columns = BOM_INVENTORY_COLUMNS.filter((c) => c.key !== 'projectName')
+  // Page 2+: the catalogue entries the list selected, with their quantities.
+  const columns = BOM_LIST_COLUMNS
   const head = [columns.map((c) => c.label)]
   const body = rows.map((row) => columns.map((c) => displayValue(c, row[c.key])))
 
