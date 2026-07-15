@@ -293,7 +293,7 @@ const columnDefs = computed(() =>
     ? [
         folioCol,
         { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
-        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
+        { field: 'version', headerName: 'Version-', width: 100, valueFormatter: dash },
         { field: 'category', headerName: 'Category', width: 110, valueFormatter: dash },
         { field: 'type', headerName: 'Type', flex: 1, minWidth: 130, valueFormatter: dash },
         { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
@@ -305,7 +305,7 @@ const columnDefs = computed(() =>
     : [
         folioCol,
         { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
-        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
+        { field: 'version', headerName: 'Version--', width: 100, valueFormatter: dash },
         { field: 'quantity', headerName: 'Qty', minWidth: 65, maxWidth: 75, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
         { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },

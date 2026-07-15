@@ -441,7 +441,7 @@ watch(
               </th>
               <th :aria-sort="sortKey === 'version' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('version')">
-                  Version<span class="sort-ind" :class="{ on: sortKey === 'version' }">{{ sortKey === 'version' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                  Version--<span class="sort-ind" :class="{ on: sortKey === 'version' }">{{ sortKey === 'version' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
                 <span class="col-grip" @pointerdown.prevent.stop="startResize(2, $event)" />
               </th>
