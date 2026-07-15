@@ -1,7 +1,7 @@
 # Saved BOM lists on the inventory catalog
 
 **Date:** 2026-07-15
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented and verified — commit `35c2aeb`. Classification SQL (§6) executed.
 **Branch:** v1
 
 ## Context
@@ -164,7 +164,9 @@ Add the `inventory` DDL and update `bom_list_items` to `(list_id, inventory_id, 
 
 ### 6. Catalog classification (one-time, run separately)
 
-Populates `category_id` on unambiguous rows only. **Review before running; not executed as part of the code change.**
+> **STATUS: executed 2026-07-15** against live `pjtrk` with user approval — 18 rows classified, 24 left NULL, list data verified untouched (quantity histogram unchanged). Re-runnable but now a no-op for those 18 (`WHERE category_id IS NULL`).
+
+Populates `category_id` on unambiguous rows only.
 
 ```sql
 -- One-time classification of unambiguous inventory rows.
@@ -241,11 +243,12 @@ Restart Flask manually — **it does not auto-reload** (`FLASK_DEBUG=false`). Th
 
 ## Known gaps (accepted)
 
-- **The edit-mode quantity seed has no automated guard.** The project has **no frontend test framework** (no vitest/test script in `frontend/package.json`), so the `BomListPicker` seed — the one line that could reset 63 quantities to 1 — is protected only by the explicit requirement above and code review. The backend round-trip test cannot catch it (the API would be faithfully honouring a wrong payload), and read-only verification cannot either (it never saves). **Mitigation:** the first real edit after implementation should be done on a throwaway list, or by opening an existing list, saving without changes, and confirming quantities survive — this is the one place where the read-only-verification decision leaves real exposure, and it may be worth revisiting for this path alone.
+- **The edit-mode quantity seed has no automated *regression* guard.** The project has **no frontend test framework** (no vitest/test script in `frontend/package.json`), so the `BomListPicker` seed — the one line that could reset 63 quantities to 1 — has no test standing behind it. The backend round-trip test cannot cover it (the API would be faithfully honouring a wrong payload).
+  **Verified once, manually (2026-07-15, read-only):** opened list 10 (`ทดสอบยาสูบ`, 12 items) in edit mode against live Postgres; the qty inputs seeded to `[6,6,3,3,3,3,3,3,2,1,1,1]` — the stored values, not 1s — then cancelled without saving. Re-check this by hand if the seed or `save()` is ever touched.
 
 - **Postgres write-path behaviour is unverified** by automation. Composite-PK conflict handling and `ON DELETE CASCADE` differ between SQLite and Postgres; per decision 6 verification is read-only, so the first real save exercises this. Automated Postgres coverage would need a **disposable** database (throwaway schema or container) — its own scope.
-- **`search_path=pjtrk` resolution is untested** — the suite is SQLite-only. Already flagged in the Render/Supabase plan.
-- **Category filters match only 18 of 42 catalog rows, and Type matches none**, until classification is extended. Consistent with the "lights up as rows are reclassified" stance accepted for Type in the earlier lookup-taxonomy work.
+- **`search_path=pjtrk` resolution is untested** by the suite (SQLite-only) — though the live end-to-end verification below did exercise it. Already flagged in the Render/Supabase plan.
+- **Category filters match only 18 of 42 catalog rows, and Type matches none.** Classification ran (§6); the remaining 24 need domain knowledge. Consistent with the "lights up as rows are reclassified" stance accepted for Type in the earlier lookup-taxonomy work.
 
 ## Non-goals
 
