@@ -7,7 +7,7 @@ Development guide for Codex. Read this before making changes.
 ```bash
 # Backend (from backend/)
 .venv/Scripts/python -m flask run --port 5000          # Windows dev server
-.venv/Scripts/python -m pytest tests/ -v               # run all 40 tests
+.venv/Scripts/python -m pytest tests/ -v               # run all 94 tests
 py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 
 # Seed demo data (drops + recreates schema)
@@ -29,17 +29,21 @@ npm run build      # production bundle → dist/
 |---|---|
 | `app/__init__.py` | App factory — wires DB, JWT, CORS, rate limiter, blueprints |
 | `app/config.py` | All config from env vars; `Config` (prod) and `TestConfig` |
-| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception) |
+| `app/models.py` | SQLAlchemy ORM: `User`, `Project` (incl. nullable `team_size`/`complexity` used by the Summaries pipeline), `Task`, `Comment`, `Activity`, `Tag`, `PTrack`, `PTemplate`, `ProcessTag`, record models (BOM, MOM, Survey, Verification, Exception), `ProjectDocument` (uploaded PDF metadata) |
 | `app/auth.py` | `/api/auth/*` — register, login, `/me`; rate-limited |
 | `app/extensions.py` | Singletons: `jwt`, `limiter`, `Session` (scoped), `engine` |
 | `app/validation.py` | Lightweight field validators — raises `ValidationError` (422) |
 | `app/errors.py` | Centralized error handlers — all errors → `{"error": {...}}` |
-| `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` |
+| `app/permissions.py` | RBAC permission catalog — `ROLE_PERMISSIONS` (member ⊂ admin; super_admin = wildcard) + `role_has_permission()`. Plain data, no `models` import (avoids a cycle) |
+| `app/api/helpers.py` | `log_activity()`, `require_owner_or_admin()` (scope gate), `require_permission()` (capability gate) |
+| `app/api/users.py` | `GET /api/users` (directory for pickers) + `PATCH /api/users/:id/role` (role assignment, `roles.assign`-gated) |
 | `app/api/projects.py` | Project CRUD + `POST /<pid>/ptrack/generate` (backfill process checklist from template) |
 | `app/api/tasks.py` | Task CRUD with owner-or-admin authz on delete |
 | `app/api/comments.py` | Comment CRUD — delete requires author or admin |
 | `app/api/records.py` | Per-project auxiliary records: `ptrack`, `survey`, `mom`, `bom`, `verification`, `exceptions`; also `GET /api/bom/all` (BOM rows across all projects, joined with project name) |
-| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named subsets of BOM rows (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
+| `app/api/bom_lists.py` | `/api/bom-lists` CRUD — saved, named selections of **`inventory` catalogue entries + a per-item quantity** (by FK reference, no snapshot), scoped to a target project; owner-or-admin gated on update/delete |
+| `app/api/inventory.py` | Inventory catalogue (price book) that saved BOM lists draw from and the BOM page's INVENTORY toggle manages. `GET /api/inventory` (any authed user) + capability-gated writes: `POST` needs `inventory.create` (member-level), `PATCH`/`DELETE /api/inventory/:id` need `inventory.update`/`inventory.delete` (admin+) |
+| `app/api/documents.py` | Per-project PDF uploads (quotation/tds/result) — multipart upload, list, authenticated download, owner-or-admin delete |
 | `app/api/ptemplate.py` | Process checklist template (resolves process name via `process_tags` join) |
 | `app/api/sheets.py` | Google Sheets export/import |
 | `app/api/stats.py` | Dashboard aggregations via SQL `GROUP BY` (no Python loops) |
@@ -58,7 +62,7 @@ npm run build      # production bundle → dist/
 | `views/PipelineView.vue` | Read-only Kanban-style board grouping projects by delivery stage (`/pipeline`); per-column value + overdue/critical risk counts |
 | `views/PmCardsView.vue` | Read-only board grouping projects by PM (`/pm-cards`, `store.byPm`), incl. an "unassigned" column |
 | `views/TableView.vue` | Sortable, filterable, searchable project table; export via `ExportImportMenu` (Excel/PDF/CSV) |
-| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker` |
+| `views/BomGlobalView.vue` | Cross-project BOM inventory (`GET /api/bom/all`); Excel import (`parseBomInventoryExcel`) creates one `POST /api/projects/:id/records/bom` per matched row; Excel/PDF export; saved BOM lists via `BomListPicker`. **INVENTORY toggle** in the filters area glows when on and swaps the grid to the inventory catalogue (own column set, Project filter hidden, import disabled, catalogue-shaped exports; Edit/Delete shown only with `inventory.update`/`inventory.delete`). **Add New is inventory-first**: only Device name required; every submit creates a catalogue entry, and picking the optional Project additionally creates an independent `bom_and_costing` copy (sequenced, not atomic — partial-success toast) |
 | `views/DashboardView.vue` | Single-project executive report: summary/health, cost & procurement, document intelligence (survey/verification/mom/exceptions), week-grouped process checklist; per-section + full-pack Excel/PDF export |
 | `views/SummariesView.vue` | 4-step "Summaries" pipeline (`/summaries`): Project → editable Inputs (budget/team size/duration/complexity) → derived Calculations → Final Results (grade, ring gauges, charts) per project, plus an all-projects comparison chart. Math lives in `utils/summaryCalc.js` |
 | `views/LoginView.vue` | Login + register form; demo button visible in dev mode only |
@@ -68,7 +72,8 @@ npm run build      # production bundle → dist/
 | `components/RecordList.vue` / `RecordForm.vue` | Generic CRUD table + modal for the auxiliary record resources |
 | `components/ExportImportMenu.vue` | Shared export (Excel/PDF/CSV, configurable) + import trigger button cluster used by `RecordList`, `TableView`, `BomGlobalView`, `DashboardView` |
 | `components/ImportResultModal.vue` | Import preview: valid/error/unmatched counts, per-row error table, confirm-to-commit |
-| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the global BOM store, target-project picker |
+| `components/BomListPicker.vue` | Modal to create/edit a saved BOM list — filterable checkbox table over the **inventory catalogue store** (not the BOM store) with an inline per-row qty input, target-project picker. Two-column layout: 40% filters (List name, Target project, Category, Type, Search) / 60% table, with "Show selected only" + count above the table. Selection is a `Map<inventoryId, quantity>`; edit mode seeds quantities from `detail.items[].quantity` |
+| `components/ProjectDocuments.vue` | "Documents" drawer tab — three sections (Quotation/Technical Datasheet/Result) with multi-file PDF upload modal, in-place preview (`@embedpdf/vue-pdf-viewer`), blob download, delete |
 | `components/summaries/*.vue` | `RingGauge`, `GradeChip`, `MetricRow` (presentational) and `ScoreBarChart`/`PerformanceRadar`/`ProjectsCompareChart` (vue-echarts, follow the `FunnelChart.vue` pattern) — used only by `SummariesView.vue` |
 | `utils/recordExport.js` | Excel export (ExcelJS, styled/frozen/auto-filter), PDF export (jsPDF + autoTable, Thai font), CSV export (projects only), and `parseBomInventoryExcel()` for BOM Global import |
 | `utils/summaryCalc.js` | Pure-JS math for the Summaries pipeline: input seeding (`seedTeamSize`/`seedComplexity`/`derivedDurationWeeks`), `computeMetrics`/`computeResults`/`gradeFor`. No store/API access, so the view can recompute on every keystroke |
@@ -82,10 +87,19 @@ npm run build      # production bundle → dist/
 - The `.mono` helper class is kept for figures/labels but now maps to `var(--font)` with `font-variant-numeric: tabular-nums` for column alignment — it is no longer a monospaced face.
 
 ### Authorization model
-- **Admin**: full access to all resources
-- **Member**: can only edit/delete their own projects and tasks; can delete own comments
-- Enforced by `require_owner_or_admin(user, owner_id)` in `app/api/helpers.py`
-- First user to register is automatically assigned `admin` role
+Three roles (`app/models.py:ROLES`, ordered most-privileged first): `super_admin`, `admin`, `member`.
+- **super_admin**: system owner — wildcard permissions (`{"*"}`); the only role that can grant/modify the `super_admin` role.
+- **admin**: org-scoped full access — all member capabilities plus `sheets.sync`, `templates.manage`, `roles.assign` (but **cannot** grant `super_admin`).
+- **member**: own-record CRUD only (scope narrowed by ownership, not by missing capability).
+- **First user to register is `admin`** (unchanged — register does not mint super_admin). A `super_admin` is reachable only via `seed.py` (`admin@scada.local` is seeded as super_admin), a direct DB edit, or promotion by an existing super_admin through the role endpoint.
+
+**Two orthogonal axes** — do not conflate them:
+- **Capability** = "may this role do X at all?" → permission strings in `app/permissions.py` (`ROLE_PERMISSIONS`), checked via `User.has_permission(perm)` / `require_permission(user, perm)` in `app/api/helpers.py`. Resolved from the **live DB role at request time**, never from the JWT.
+- **Scope** = "own record vs any record?" → `require_owner_or_admin(user, owner_id)` (elevated roles = `admin`/`super_admin`). `member` still holds `projects.update` — the capability is granted, ownership narrows the scope.
+
+**Inventory catalogue writes** are a genuine capability gate (the `inventory` table has no owner column): `inventory.create` is member-level, `inventory.update`/`inventory.delete` are admin+ only.
+
+**Per-user page access**: `page.<key>` permission strings gate each side-nav tab; `User.page_access` (nullable CSV) lets a `member`'s set be narrowed, elevated roles always get every page. See [CLAUDE.md](CLAUDE.md#authorization-model) for the full model incl. role-assignment endpoint guardrails.
 
 ### Rate limiting (Flask-Limiter)
 - `POST /api/auth/login` — 10/min per IP
@@ -133,7 +147,7 @@ npm run build      # production bundle → dist/
 - Excel export uses `ExcelJS` (styled header, frozen pane, auto-filter, auto-fit columns, `dd/mm/yyyy` dates); PDF export uses `jsPDF` + `jspdf-autotable` with an embedded Thai font. Both are client-side only — no backend export endpoint.
 - CSV export exists **only** for the project list (`TableView` → `exportProjectsCsv`); records use Excel/PDF only.
 - BOM Global import (`parseBomInventoryExcel` in `utils/recordExport.js`) parses an `.xlsx`/`.xls` file, resolves each row's project by name or id, and returns `{valid, errors, unmatched}`. There is **no bulk-import endpoint** — `BomGlobalView.confirmImport()` issues one `POST /api/projects/<pid>/records/bom` per valid row.
-- **BOM lists** (`/api/bom-lists`) store a reusable, named subset of BOM rows **by FK reference** (item ids + target project), not a snapshot — editing/deleting a referenced BOM row changes what the list shows.
+- **BOM lists** (`/api/bom-lists`) store a reusable, named selection of **`inventory` catalogue entries + a per-item quantity**, **by FK reference** (not a snapshot) — repricing/deleting a referenced catalogue entry changes what the list shows. They do **not** reference `bom_and_costing`: the catalogue is project-independent (no `projectId`/`position`/`quantity`). Payload is `items: [{inventoryId, quantity}]`; `totalPrice` is derived server-side (`qty × unitPrice`), never stored. A PATCH with no `items` key leaves rows untouched.
 
 ## Testing
 
@@ -142,7 +156,7 @@ cd backend
 .venv/Scripts/python -m pytest tests/ -v
 ```
 
-- 40 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists, and per-project records (ptrack/bom/mom + ptrack generate + process counts)
+- 94 tests across auth, projects (incl. `teamSize`/`complexity` create/PATCH/validation/null-clear), tasks, comments, stats, BOM lists (quantity defaulting/validation/dedupe, derived `totalPrice`, catalogue-delete cascade), the inventory catalogue (list shape, taxonomy label resolution, capability-gated writes), per-project records (ptrack/bom/mom + ptrack generate + process counts), documents (upload/list/download/delete, magic-byte validation, delete authz), and RBAC (permission catalog, `/me` permissions, role-assignment authz, per-user page access)
 - Test DB: in-memory SQLite (`TestConfig`)
 - Auth fixture password: `secret123` (meets 8-char minimum)
 - Always run inside `.venv` to avoid global package conflicts
@@ -151,7 +165,7 @@ cd backend
 
 | Email | Password | Role |
 |---|---|---|
-| admin@scada.local | admin123 | admin |
+| admin@scada.local | admin123 | super_admin |
 | a@scada.local | password | member |
 | b@scada.local | password | member |
 | c@scada.local | password | member |
