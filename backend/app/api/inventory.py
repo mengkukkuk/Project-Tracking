@@ -115,4 +115,9 @@ def delete_inventory(iid):
         return _not_found()
     Session.delete(row)
     Session.commit()
+    # inventory_images rows cascade in the DB; sweep the item's image folder off
+    # disk too. Function-local import avoids a module-level cycle.
+    from .inventory_images import remove_inventory_imagestore
+
+    remove_inventory_imagestore(iid)
     return "", 204

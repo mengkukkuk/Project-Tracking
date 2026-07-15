@@ -6,10 +6,11 @@
 // of row is being edited: 'bom' keeps today's behavior (Project required,
 // reparenting works via PATCH /api/records/bom/<id>), 'inventory' edits a
 // catalogue entry (no project, no project-only fields).
-import { reactive, computed, watch } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
 import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
+import InventoryImageGallery from '@/components/InventoryImageGallery.vue'
 
 const props = defineProps({
   record: { type: Object, default: null },
@@ -71,6 +72,10 @@ const formFields = computed(() =>
   }),
 )
 
+// Staged product images (create mode only): File objects the gallery collects
+// before the item exists, uploaded by the view after createRow returns an id.
+const pendingImages = ref([])
+
 // Changing the Category invalidates any previously-chosen Type. Registered after
 // the reactive init, so it never clears a Type seeded on edit.
 watch(() => form.categoryId, () => { form.typeId = null })
@@ -113,7 +118,8 @@ function submit() {
   // Default unit to "pcs" when left blank — mirrors the field's placeholder so
   // the common case needs no typing.
   if (out.unit == null || String(out.unit).trim() === '') out.unit = 'pcs'
-  emit('submit', out)
+  // 2nd arg carries staged images for a new inventory item; BOM callers ignore it.
+  emit('submit', out, pendingImages.value)
 }
 </script>
 
@@ -202,6 +208,24 @@ function submit() {
       </label>
     </div>
 
+    <!-- Editing a catalogue entry (target inventory) uploads live; a brand-new
+         Add is inventory-first regardless of target, so it stages images the
+         view uploads after createRow. A BOM-row edit has no gallery. -->
+    <div v-if="target === 'inventory' || !isEdit" class="field span2">
+      <span class="glabel">Product images</span>
+      <InventoryImageGallery
+        v-if="isEdit"
+        :inventory-id="record.id"
+        editable
+      />
+      <InventoryImageGallery
+        v-else
+        :inventory-id="null"
+        editable
+        v-model:pending-files="pendingImages"
+      />
+    </div>
+
     <div class="actions">
       <button type="button" class="btn ghost" @click="emit('cancel')">Cancel</button>
       <button type="submit" class="btn" :disabled="submitting || invalid">
@@ -224,6 +248,15 @@ function submit() {
   text-transform: uppercase;
 }
 .req { color: var(--accent); font-style: normal; margin-left: 2px; }
+.glabel {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: block;
+}
 .field.check {
   grid-template-columns: auto 1fr;
   align-items: center;

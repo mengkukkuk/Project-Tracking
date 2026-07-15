@@ -1188,6 +1188,173 @@ export async function parseBomInventoryExcel(file, projects) {
 }
 
 /**
+ * Parse an uploaded Excel file as an inventory catalogue sheet (the INVENTORY
+ * toggle's export shape — no Project column). Columns come from
+ * INVENTORY_CATALOGUE_COLUMNS. Category/Type are stored as FK ids on a
+ * catalogue entry but exported as text labels, so this resolves each label back
+ * to a lookup id (round-tripping the export):
+ *   - Category: match norm(description)/norm(name)/norm(code) -> type.id
+ *   - Type: within the resolved category's values by norm(displayName)/
+ *     norm(code); if no Category cell is given, allow a globally-unique type
+ *     match across every category (ambiguous -> row error).
+ * Unknown Category/Type cells are per-row errors (excluded from `valid`);
+ * `unmatched` only carries ignored *columns*. deviceName is required.
+ *
+ * @param {File} file
+ * @param {{id:number, code:string, name:string, description:string,
+ *          values:{id:number, code:string, displayName:string}[]}[]} lookupTypes
+ * @returns {Promise<{ valid: object[], errors: {row:number,column:string,message:string}[], unmatched: string[] }>}
+ */
+export async function parseInventoryCatalogueExcel(file, lookupTypes) {
+  validateFileBasics(file)
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer())
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('The workbook has no sheets.')
+
+  const norm = (s) => String(s || '').trim().toLowerCase()
+  const types = lookupTypes || []
+
+  // Category label -> type. Type label -> value, both scoped to a category and
+  // globally (for the no-category case).
+  const catByLabel = new Map()
+  const valueByCatLabel = new Map() // key: `${typeId}\u0000${label}` -> value
+  const globalValueByLabel = new Map() // label -> [{ typeId, valueId }]
+  for (const t of types) {
+    for (const lbl of [t.description, t.name, t.code].filter(Boolean)) {
+      if (!catByLabel.has(norm(lbl))) catByLabel.set(norm(lbl), t)
+    }
+    for (const v of t.values || []) {
+      for (const lbl of [v.displayName, v.code].filter(Boolean)) {
+        valueByCatLabel.set(`${t.id}\u0000${norm(lbl)}`, v)
+        const arr = globalValueByLabel.get(norm(lbl)) || []
+        arr.push({ typeId: t.id, valueId: v.id })
+        globalValueByLabel.set(norm(lbl), arr)
+      }
+    }
+  }
+
+  // Header mapping: kind 'category' / 'type' get resolved to ids; every other
+  // catalogue column maps straight to its key.
+  const byHeader = new Map()
+  for (const c of INVENTORY_CATALOGUE_COLUMNS) {
+    const kind = c.key === 'category' ? 'category' : c.key === 'type' ? 'type' : 'field'
+    byHeader.set(c.label.trim().toLowerCase(), { kind, col: c })
+    byHeader.set(c.key.trim().toLowerCase(), { kind, col: c })
+  }
+
+  const colMap = {}
+  const unmatched = []
+  ws.getRow(1).eachCell((cell, col) => {
+    const raw = cellToString(cell.value).trim()
+    if (!raw) return
+    const m = byHeader.get(raw.toLowerCase())
+    if (m) colMap[col] = m
+    else unmatched.push(raw)
+  })
+
+  const hasCol = Object.keys(colMap).length > 0
+  if (!hasCol) {
+    throw new Error('No recognizable columns found. Check that the header row matches the field names.')
+  }
+
+  const valid = []
+  const errors = []
+
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const xlRow = ws.getRow(r)
+    const record = { categoryId: null, typeId: null }
+    let categoryLabel = ''
+    let typeLabel = ''
+    let hasValue = false
+    let rowHadError = false
+
+    for (const [colStr, m] of Object.entries(colMap)) {
+      const col = Number(colStr)
+      const str = cellToString(xlRow.getCell(col).value).trim()
+
+      if (m.kind === 'category') {
+        categoryLabel = str
+        continue
+      }
+      if (m.kind === 'type') {
+        typeLabel = str
+        continue
+      }
+
+      const field = m.col
+      if (field.type === 'number') {
+        if (str === '') {
+          record[field.key] = null
+        } else {
+          const n = Number(str.replace(/,/g, ''))
+          if (Number.isNaN(n)) {
+            errors.push({ row: r, column: field.label, message: `"${str}" is not a number` })
+            rowHadError = true
+          } else {
+            record[field.key] = n
+            hasValue = true
+          }
+        }
+      } else {
+        record[field.key] = sanitizeText(str)
+        if (str) hasValue = true
+      }
+    }
+
+    // Resolve Category -> id (unknown label is a row error).
+    let resolvedType = null
+    if (categoryLabel) {
+      resolvedType = catByLabel.get(norm(categoryLabel)) || null
+      if (!resolvedType) {
+        errors.push({ row: r, column: 'Category', message: `Unknown category "${categoryLabel}"` })
+        rowHadError = true
+      } else {
+        record.categoryId = resolvedType.id
+        hasValue = true
+      }
+    }
+
+    // Resolve Type -> value id, scoped to the category if we have one, else a
+    // globally-unique match.
+    if (typeLabel) {
+      if (resolvedType) {
+        const v = valueByCatLabel.get(`${resolvedType.id}\u0000${norm(typeLabel)}`)
+        if (v) record.typeId = v.id
+        else {
+          errors.push({ row: r, column: 'Type', message: `Unknown type "${typeLabel}" for that category` })
+          rowHadError = true
+        }
+      } else if (categoryLabel) {
+        // Category was given but didn't resolve — the type error would be noise.
+      } else {
+        const matches = globalValueByLabel.get(norm(typeLabel)) || []
+        if (matches.length === 1) {
+          record.typeId = matches[0].valueId
+          record.categoryId = matches[0].typeId
+        } else if (matches.length === 0) {
+          errors.push({ row: r, column: 'Type', message: `Unknown type "${typeLabel}"` })
+          rowHadError = true
+        } else {
+          errors.push({ row: r, column: 'Type', message: `Ambiguous type "${typeLabel}" — specify a Category` })
+          rowHadError = true
+        }
+      }
+      if (typeLabel) hasValue = true
+    }
+
+    if (!hasValue) continue // fully-empty row
+    if (!String(record.deviceName || '').trim()) {
+      errors.push({ row: r, column: 'Device name', message: 'Device name is required' })
+      rowHadError = true
+    }
+    if (!rowHadError) valid.push(record)
+  }
+
+  return { valid, errors, unmatched }
+}
+
+/**
  * Parse an uploaded Excel file as a multi-resource workbook. Each worksheet is
  * matched (case-insensitive) against the supplied resource list by either the
  * schema label or the resource key. Unmatched sheets are reported separately.

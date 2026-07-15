@@ -73,6 +73,16 @@ class Config:
     # Werkzeug rejects request bodies above this with 413 (handled by errors.py).
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
+    # --- Image store ----------------------------------------------------
+    # Folder for inventory catalogue images (product photos), laid out as
+    # <IMAGESTORE_DIR>/<inventory_id>/<uuid>.<ext>. Shares MAX_CONTENT_LENGTH.
+    IMAGESTORE_DIR = os.getenv(
+        "IMAGESTORE_DIR",
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "imagestore"
+        ),
+    )
+
     # --- Misc -----------------------------------------------------------
     DEBUG = _bool("FLASK_DEBUG", False)
     SEED_ON_START = _bool("SEED_ON_START", False)

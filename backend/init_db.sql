@@ -311,6 +311,21 @@ CREATE TABLE IF NOT EXISTS project_documents (
   created_at     TIMESTAMP
 );
 
+-- ── inventory_images (product photos attached to a catalogue entry) ─
+-- Disk files live at <IMAGESTORE_DIR>/<inventory_id>/<stored_name>;
+-- stored_name is server-generated (uuid + '.' + ext), original_name keeps the
+-- user's (possibly Thai) filename for display. Many images per item (gallery).
+CREATE TABLE IF NOT EXISTS inventory_images (
+  id             SERIAL        PRIMARY KEY,
+  inventory_id   INTEGER       NOT NULL REFERENCES inventory (id) ON DELETE CASCADE,
+  user_id        INTEGER                REFERENCES users     (id) ON DELETE SET NULL,
+  original_name  VARCHAR(255)  NOT NULL,
+  stored_name    VARCHAR(72)   NOT NULL,   -- uuid hex + '.' + ext
+  mime_type      VARCHAR(32)   NOT NULL,
+  size_bytes     INTEGER       NOT NULL,
+  created_at     TIMESTAMP
+);
+
 CREATE TABLE lookup_type (
      lookup_type_id SERIAL        PRIMARY KEY,
      code text UNIQUE NOT NULL,
@@ -336,6 +351,7 @@ CREATE TABLE lookup_value (
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
 -- SET search_path TO pjtrk;
+-- DROP TABLE IF EXISTS inventory_images      CASCADE;
 -- DROP TABLE IF EXISTS project_documents     CASCADE;
 -- DROP TABLE IF EXISTS bom_list_items        CASCADE;
 -- DROP TABLE IF EXISTS bom_lists             CASCADE;

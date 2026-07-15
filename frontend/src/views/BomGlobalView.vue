@@ -17,12 +17,14 @@ import BomGlobalForm from '@/components/BomGlobalForm.vue'
 import BomListPicker from '@/components/BomListPicker.vue'
 import BomListsManager from '@/components/BomListsManager.vue'
 import BomExportDocsModal from '@/components/BomExportDocsModal.vue'
+import InventoryImageGallery from '@/components/InventoryImageGallery.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
   exportInventoryCatalogueExcel,
   exportInventoryCataloguePdf,
   parseBomInventoryExcel,
+  parseInventoryCatalogueExcel,
 } from '@/utils/recordExport'
 import { RECORD_SCHEMAS } from '@/schemas/records'
 import { api } from '@/api'
@@ -49,6 +51,9 @@ const inventoryMode = ref(false)
 const canEditInventory = computed(
   () => auth.hasPermission('inventory.update') || auth.hasPermission('inventory.delete'),
 )
+// Image writes are member-level (inventory.create), unlike Edit/Delete of the
+// catalogue row itself (update/delete, admin+). Backend re-checks either way.
+const canManageImages = computed(() => auth.hasPermission('inventory.create'))
 
 function toggleInventory() {
   inventoryMode.value = !inventoryMode.value
@@ -389,7 +394,7 @@ const INVENTORY_KEYS = [
 const pickInventory = (payload) =>
   Object.fromEntries(INVENTORY_KEYS.map((k) => [k, payload[k] ?? null]))
 
-async function onSave(payload) {
+async function onSave(payload, pendingImages = []) {
   saving.value = true
   try {
     if (isEditing.value) {
@@ -406,8 +411,19 @@ async function onSave(payload) {
     } else {
       // Inventory-first, sequenced (not atomic): the catalogue entry is the
       // system of record; the optional project copy is best-effort on top.
-      await invStore.createRow(pickInventory(payload))
+      const created = await invStore.createRow(pickInventory(payload))
       ui.success('Added to inventory')
+      // Images can only attach once the entry has an id — upload the staged
+      // files now. Sequenced, not atomic: a failure here leaves the saved item
+      // intact and surfaces a partial-success toast (mirrors the project copy).
+      if (pendingImages.length && created?.id) {
+        try {
+          const { items } = await api.uploadInventoryImages(created.id, pendingImages)
+          ui.success(`${items.length} image(s) uploaded`)
+        } catch (e) {
+          ui.error(`Item saved, but image upload failed: ${e.message}`)
+        }
+      }
       if (payload.projectId) {
         try {
           const { projectId, ...body } = payload
@@ -472,7 +488,15 @@ const importing = ref(false)
 
 async function onImportFile(file) {
   try {
-    importResult.value = await parseBomInventoryExcel(file, projectsStore.projects)
+    if (inventoryMode.value) {
+      if (!lookupsStore.types.length) {
+        ui.error('Category/Type taxonomy not loaded yet — try again in a moment.')
+        return
+      }
+      importResult.value = await parseInventoryCatalogueExcel(file, lookupsStore.types)
+    } else {
+      importResult.value = await parseBomInventoryExcel(file, projectsStore.projects)
+    }
   } catch (e) {
     ui.error(e.message)
   }
@@ -492,13 +516,19 @@ async function confirmImport() {
   if (!rows.length) return
   importing.value = true
   try {
-    for (const r of rows) {
-      const { projectId, ...body } = r
-      body.totalPrice = computedTotal(body.quantity, body.unitPrice)
-      await api.createRecord(projectId, 'bom', body)
+    if (inventoryMode.value) {
+      // Catalogue rows carry no project — one POST /api/inventory each.
+      for (const r of rows) await invStore.createRow(r)
+      ui.success(`Imported ${rows.length} inventory item(s)`)
+    } else {
+      for (const r of rows) {
+        const { projectId, ...body } = r
+        body.totalPrice = computedTotal(body.quantity, body.unitPrice)
+        await api.createRecord(projectId, 'bom', body)
+      }
+      await store.fetchAll()
+      ui.success(`Imported ${rows.length} BOM record(s)`)
     }
-    await store.fetchAll()
-    ui.success(`Imported ${rows.length} BOM record(s)`)
     importResult.value = null
   } catch (e) {
     ui.error(e.message)
@@ -585,7 +615,7 @@ onMounted(() => {
           <ExportImportMenu
             :formats="['excel', 'pdf']"
             :rows="shownCount"
-            :import-enabled="!inventoryMode"
+            :import-enabled="true"
             @export="doExport"
             @import-file="onImportFile"
           />
@@ -774,6 +804,15 @@ onMounted(() => {
           <span class="dc-label">Spec</span>
           <div class="dc-spec-panel">{{ detailCard.spec || '—' }}</div>
         </div>
+        <!-- Images only exist for catalogue entries. Gate on inventoryMode: a
+             BOM-mode detailCard.id is a bom_and_costing id, not an inventory id. -->
+        <div v-if="inventoryMode && detailCard.id" class="dc-spec">
+          <span class="dc-label">Images</span>
+          <InventoryImageGallery
+            :inventory-id="detailCard.id"
+            :editable="canManageImages"
+          />
+        </div>
       </div>
     </Modal>
 
@@ -802,7 +841,7 @@ onMounted(() => {
 
     <ImportResultModal
       v-if="importResult"
-      title="Import BOM"
+      :title="inventoryMode ? 'Import Inventory' : 'Import BOM'"
       :result="importResult"
       :importing="importing"
       @close="importResult = null"

@@ -557,6 +557,43 @@ class Inventory(Base):
         }
 
 
+class InventoryImage(Base):
+    """Image attached to an inventory catalogue entry (gallery, many per item).
+
+    Mirrors ``ProjectDocument`` but keyed to an inventory item instead of a
+    project: the disk file lives at ``<IMAGESTORE_DIR>/<inventory_id>/<stored_name>``
+    with a server-generated uuid name, and the original (possibly Thai) filename
+    is kept here. Unlike documents, writes are capability-gated at member level
+    (``inventory.create``) since the catalogue has no owner column.
+    """
+
+    __tablename__ = "inventory_images"
+
+    id = Column(Integer, primary_key=True)
+    inventory_id = Column(
+        Integer, ForeignKey("inventory.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    original_name = Column(String(255), nullable=False)
+    stored_name = Column(String(72), nullable=False)  # uuid hex + "." + ext
+    mime_type = Column(String(32), nullable=False)
+    size_bytes = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "inventoryId": self.inventory_id,
+            "name": self.original_name,
+            "mimeType": self.mime_type,
+            "size": self.size_bytes,
+            "user": {"id": self.user.id, "name": self.user.name} if self.user else None,
+            "createdAt": _iso(self.created_at),
+        }
+
+
 class InternalVerification(Base):
     __tablename__ = "internal_verification"
 

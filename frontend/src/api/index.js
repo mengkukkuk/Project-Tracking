@@ -152,6 +152,16 @@ export const api = {
   deleteDocument: (id) => req(`/documents/${id}`, { method: 'DELETE' }),
   downloadDocument: (id) => reqBlob(`/documents/${id}/download`),
 
+  // per-inventory-item images (product photo gallery)
+  listInventoryImages: (iid) => req(`/inventory/${iid}/images`),
+  uploadInventoryImages: (iid, files) => {
+    const fd = new FormData()
+    for (const f of files) fd.append('files', f, f.name)
+    return req(`/inventory/${iid}/images`, { method: 'POST', body: fd })
+  },
+  deleteInventoryImage: (imgId) => req(`/inventory-images/${imgId}`, { method: 'DELETE' }),
+  inventoryImageBlob: (imgId) => reqBlob(`/inventory-images/${imgId}`),
+
   // misc
   stats: () => req('/stats'),
   listUsers: () => req('/users'),

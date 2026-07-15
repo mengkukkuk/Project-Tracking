@@ -12,9 +12,10 @@ from app.models import Base
 
 @pytest.fixture()
 def app():
-    # Point the document store at a per-test temp dir so uploads never touch
-    # the real backend/docstore folder.
+    # Point the document + image stores at per-test temp dirs so uploads never
+    # touch the real backend/docstore or backend/imagestore folders.
     TestConfig.DOCSTORE_DIR = tempfile.mkdtemp(prefix="docstore-")
+    TestConfig.IMAGESTORE_DIR = tempfile.mkdtemp(prefix="imagestore-")
     app = create_app(TestConfig)
     yield app
     # Tear the schema down between tests so each gets a clean slate.
@@ -23,6 +24,7 @@ def app():
     Session.remove()
     Base.metadata.drop_all(engine)
     shutil.rmtree(TestConfig.DOCSTORE_DIR, ignore_errors=True)
+    shutil.rmtree(TestConfig.IMAGESTORE_DIR, ignore_errors=True)
 
 
 @pytest.fixture()
