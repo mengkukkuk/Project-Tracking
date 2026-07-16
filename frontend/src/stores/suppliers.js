@@ -40,5 +40,19 @@ export const useSuppliersStore = defineStore('suppliers', {
         this.loading = false
       }
     },
+
+    // Create/update are admin-gated on the backend; both keep `items` sorted
+    // by name so the list stays consistent with fetchAll's server order.
+    async createRow(payload) {
+      const row = await api.createSupplier(payload)
+      this.items = [...this.items, row].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      return row
+    },
+
+    async updateRow(id, payload) {
+      const row = await api.updateSupplier(id, payload)
+      this.items = this.items.map((s) => (s.id === id ? row : s))
+      return row
+    },
   },
 })

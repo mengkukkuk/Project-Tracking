@@ -1,11 +1,19 @@
 <script setup>
-// Read-only profile card for the supplier picked in the BOM filter bar.
-// `supplier` is the matched pjtrk.supplier row (camelCase dict) or null when
-// the free-text filter value has no profile on record.
+// Profile card for the supplier picked in the BOM filter bar. `supplier` is
+// the matched pjtrk.supplier row (camelCase dict) or null when the free-text
+// filter value has no profile on record. Edit/Add are admin-gated
+// (suppliers.update/suppliers.create) — the parent view resolves the
+// permission via auth.hasPermission() and passes it down as a plain boolean,
+// keeping this component free of store/auth access.
+import AppIcon from './AppIcon.vue'
+
 defineProps({
   supplier: { type: Object, default: null },
   label: { type: String, default: '' },
+  canEdit: { type: Boolean, default: false },
+  canCreate: { type: Boolean, default: false },
 })
+defineEmits(['edit', 'add'])
 </script>
 
 <template>
@@ -14,6 +22,15 @@ defineProps({
       <div class="sc-head">
         <strong class="sc-name">{{ supplier.name || supplier.code }}</strong>
         <span v-if="supplier.code" class="sc-code">{{ supplier.code }}</span>
+        <button
+          v-if="canEdit"
+          type="button"
+          class="icon-btn sc-edit"
+          aria-label="Edit supplier"
+          @click="$emit('edit')"
+        >
+          <AppIcon name="edit" :size="14" />
+        </button>
         <span v-if="supplier.taxId" class="sc-tax mono">Tax ID {{ supplier.taxId }}</span>
       </div>
       <p v-if="supplier.description" class="sc-desc">{{ supplier.description }}</p>
@@ -44,7 +61,12 @@ defineProps({
         </div>
       </div>
     </template>
-    <p v-else class="sc-empty">No supplier profile on record for “{{ label }}”.</p>
+    <template v-else>
+      <p class="sc-empty">No supplier profile on record for "{{ label }}".</p>
+      <button v-if="canCreate" type="button" class="btn ghost sc-add" @click="$emit('add')">
+        <AppIcon name="plus" :size="14" /> Add supplier
+      </button>
+    </template>
   </aside>
 </template>
 
@@ -70,6 +92,7 @@ defineProps({
   font-weight: 700;
   letter-spacing: .06em;
 }
+.sc-edit { width: 22px; height: 22px; }
 .sc-tax { margin-left: auto; color: var(--text-dim); font-size: 11px; font-weight: 600; }
 .sc-desc { margin: 0; color: var(--text-dim); white-space: pre-line; }
 .sc-grid {
@@ -90,4 +113,5 @@ defineProps({
 .sc-item a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .sc-item a:hover { text-decoration: underline; }
 .sc-empty { margin: 0; color: var(--text-dim); font-style: italic; }
+.sc-add { margin-top: 6px; }
 </style>

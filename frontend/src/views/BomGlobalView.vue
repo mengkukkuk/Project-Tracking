@@ -20,6 +20,7 @@ import BomListsManager from '@/components/BomListsManager.vue'
 import BomExportDocsModal from '@/components/BomExportDocsModal.vue'
 import InventoryImageGallery from '@/components/InventoryImageGallery.vue'
 import SupplierInfoCard from '@/components/SupplierInfoCard.vue'
+import SupplierForm from '@/components/SupplierForm.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
@@ -57,6 +58,10 @@ const canEditInventory = computed(
 // Image writes are member-level (inventory.create), unlike Edit/Delete of the
 // catalogue row itself (update/delete, admin+). Backend re-checks either way.
 const canManageImages = computed(() => auth.hasPermission('inventory.create'))
+
+// Supplier directory write access is admin-only (unlike inventory.create).
+const canCreateSupplier = computed(() => auth.hasPermission('suppliers.create'))
+const canEditSupplier = computed(() => auth.hasPermission('suppliers.update'))
 
 function toggleInventory() {
   inventoryMode.value = !inventoryMode.value
@@ -384,6 +389,27 @@ function onCellClicked(e) {
 // `'new'` when creating. One Modal + one BomGlobalForm covers both flows.
 const panel = ref(null)
 const saving = ref(false)
+
+// --- Supplier add/edit -------------------------------------------------------
+// `undefined` = modal closed, `null` = create, object = edit (mirrors `panel`
+// but kept separate since it targets a different store/endpoint).
+const formSupplier = ref(undefined)
+const submittingSupplier = ref(false)
+
+async function handleSupplierSubmit(payload) {
+  const wasEdit = !!formSupplier.value
+  submittingSupplier.value = true
+  try {
+    if (wasEdit) await suppliersStore.updateRow(formSupplier.value.id, payload)
+    else await suppliersStore.createRow(payload)
+    formSupplier.value = undefined
+    ui.success(wasEdit ? 'Supplier updated' : 'Supplier added')
+  } catch (e) {
+    ui.error(e.message)
+  } finally {
+    submittingSupplier.value = false
+  }
+}
 
 const isEditing = computed(() => panel.value && panel.value !== 'new')
 
@@ -713,6 +739,10 @@ onMounted(() => {
       v-if="store.filters.supplier"
       :supplier="selectedSupplier"
       :label="store.filters.supplier"
+      :can-edit="canEditSupplier"
+      :can-create="canCreateSupplier"
+      @edit="formSupplier = selectedSupplier"
+      @add="formSupplier = null"
     />
 
     <div class="byline mono">
@@ -794,6 +824,19 @@ onMounted(() => {
         :submitting="saving"
         @submit="onSave"
         @cancel="panel = null"
+      />
+    </Modal>
+
+    <Modal
+      v-if="formSupplier !== undefined"
+      :title="formSupplier ? `Edit Supplier — ${formSupplier.name || ''}` : 'Add supplier'"
+      @close="formSupplier = undefined"
+    >
+      <SupplierForm
+        :supplier="formSupplier"
+        :submitting="submittingSupplier"
+        @submit="handleSupplierSubmit"
+        @cancel="formSupplier = undefined"
       />
     </Modal>
 

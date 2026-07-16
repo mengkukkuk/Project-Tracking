@@ -121,8 +121,11 @@ export const api = {
   // lookup_type/lookup_value taxonomy (BOM Category -> Type filter)
   listLookups: () => req('/lookups'),
 
-  // supplier directory (BOM page's supplier info card)
+  // supplier directory (BOM page's supplier info card).
+  // Create/update are admin-gated on the backend.
   listSuppliers: () => req('/suppliers'),
+  createSupplier: (d) => req('/suppliers', { method: 'POST', body: JSON.stringify(d) }),
+  updateSupplier: (id, d) => req(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
 
   // inventory catalogue (price book) that saved BOM lists draw from.
   // Create is member-level; update/delete are admin-gated on the backend.

@@ -63,6 +63,8 @@ _ADMIN = _MEMBER | {
     "pages.assign",
     "inventory.update",
     "inventory.delete",
+    "suppliers.create",
+    "suppliers.update",
 }
 
 # super_admin is the wildcard holder: "*" satisfies every has_permission check.
