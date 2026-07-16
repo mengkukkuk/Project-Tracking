@@ -33,11 +33,12 @@ const form = ref({
   name: props.list?.name || '',
   projectId: props.list?.projectId ?? null,
 })
-// Map<inventoryId, quantity>. Replaced (never mutated) so computeds re-run.
+// Map<inventoryId, quantity>. Replaced (never mutated) so compute and re-run.
 const selected = ref(new Map())
 const categoryFilter = ref('') // taxonomy code
 const typeFilter = ref('') // taxonomy code, cascades off categoryFilter
 const q = ref('')
+const supplierFilter = ref('') // empty string = "any supplier"
 const showSelectedOnly = ref(false)
 const saving = ref(false)
 
@@ -54,15 +55,24 @@ const pool = computed(() => inventoryStore.rows || [])
 // Category/Type options come from the lookup_type/lookup_value taxonomy
 // (lookupsStore), mirroring BomGlobalView so the picker offers the same
 // taxonomy-backed choices.
+// Supplier options come from the lookup_supplier taxonomy (lookupsStore), mirroring BomGlobalView so the picker offers the same
 const categoryOptions = computed(() => lookupsStore.types)
 const typeOptions = computed(
   () => lookupsStore.typeByCode(categoryFilter.value)?.values || [],
 )
+const supplierOptions = computed(() => {
+  const suppliers = new Set() // Extract unique supplier values from the filtered pool
+  for (const r of filtered.value) {
+    if (r.supplier) suppliers.add(r.supplier)
+  }
+  return [...suppliers].sort()
+})
 
 // Type is meaningless without a Category, so clearing/changing Category also
-// clears any previously-chosen Type (mirrors BomGlobalView's onCategoryChange).
+// clears any previously chosen Type (mirrors BomGlobalView's onCategoryChange).
 watch(categoryFilter, () => {
   typeFilter.value = ''
+  supplierFilter.value = ''
 })
 
 // Catalogue entries carry the taxonomy as real FK ids and have no free-text
@@ -73,6 +83,7 @@ const filtered = computed(() => {
   const term = q.value.trim().toLowerCase()
   const cat = categoryFilter.value
   const typ = typeFilter.value
+  const sup = supplierFilter.value
 
   const selType = cat ? lookupsStore.typeByCode(cat) : null
   const selValue = selType && typ ? selType.values?.find((v) => v.code === typ) : null
@@ -80,6 +91,7 @@ const filtered = computed(() => {
   return pool.value.filter((r) => {
     if (cat && !(selType && r.categoryId === selType.id)) return false
     if (typ && !(selValue && r.typeId === selValue.id)) return false
+    if (sup && r.supplier !== sup) return false
     if (showSelectedOnly.value && !selected.value.has(r.id)) return false
     if (!term) return true
     return ['deviceName', 'spec', 'category', 'type', 'supplier'].some((k) =>
@@ -206,7 +218,7 @@ const COL_MIN = { [DEVICE_COL]: 150,  // Device minimum
                   6: 150,
                   7: 100,
 }
-const COL_MAX = { [DEVICE_COL]: 300,  // Device maximum
+const COL_MAX = { [DEVICE_COL]: 500,  // Device maximum
                   2: 150,             // Qty maximum
                   3: 180,
                   4: 180,
@@ -412,7 +424,16 @@ watch(
             </select>
           </label>
 
-          <!-- Supplier dropdown option -->
+          <!-- Supplier filter dropdown option -->
+          <label class="field">
+            <span>Supplier</span>
+            <select v-model="supplierFilter" class="input">
+              <option value="">— any supplier —</option>
+              <option v-for="s in supplierOptions" :key="s" :value="s">
+                {{ s }}
+              </option>
+            </select>
+          </label>
 
           <label class="field">
             <span>Search</span>
