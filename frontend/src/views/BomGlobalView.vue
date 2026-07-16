@@ -6,6 +6,7 @@ import { useBomStore } from '@/stores/bom'
 import { useInventoryStore } from '@/stores/inventory'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
+import { useSuppliersStore } from '@/stores/suppliers'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useFormat } from '@/composables/useFormat'
@@ -18,6 +19,7 @@ import BomListPicker from '@/components/BomListPicker.vue'
 import BomListsManager from '@/components/BomListsManager.vue'
 import BomExportDocsModal from '@/components/BomExportDocsModal.vue'
 import InventoryImageGallery from '@/components/InventoryImageGallery.vue'
+import SupplierInfoCard from '@/components/SupplierInfoCard.vue'
 import {
   exportBomInventoryExcel,
   exportBomInventoryPdf,
@@ -37,6 +39,7 @@ const store = useBomStore()
 const invStore = useInventoryStore()
 const projectsStore = useProjectsStore()
 const lookupsStore = useLookupsStore()
+const suppliersStore = useSuppliersStore()
 const ui = useUiStore()
 const auth = useAuthStore()
 const { date } = useFormat()
@@ -200,6 +203,13 @@ const activeFilters = computed(() => {
   }
   return items
 })
+
+// Supplier profile for the active Supplier filter (null = no profile on
+// record — the card then shows a slim empty note). Matching is
+// case-insensitive on code/name because row text is free-form.
+const selectedSupplier = computed(() =>
+  store.filters.supplier ? suppliersStore.byLabel(store.filters.supplier) : null,
+)
 
 function clearOne(key) {
   // Type is meaningless without a Category, so clearing Category also clears Type.
@@ -585,6 +595,9 @@ onMounted(() => {
   if (!lookupsStore.types.length) {
     lookupsStore.fetchAll().catch((e) => ui.error(e.message))
   }
+  if (!suppliersStore.items.length) {
+    suppliersStore.fetchAll().catch((e) => ui.error(e.message))
+  }
 })
 </script>
 
@@ -695,6 +708,12 @@ onMounted(() => {
         <button type="button" class="clear" @click="store.clearFilters()">Clear all</button>
       </div>
     </section>
+
+    <SupplierInfoCard
+      v-if="store.filters.supplier"
+      :supplier="selectedSupplier"
+      :label="store.filters.supplier"
+    />
 
     <div class="byline mono">
       <span class="folio">{{ String(shownCount).padStart(2, '0') }}</span>
@@ -869,6 +888,7 @@ onMounted(() => {
 }
 .register.is-desktop .masthead,
 .register.is-desktop .filters,
+.register.is-desktop .supplier-card,
 .register.is-desktop .byline { flex-shrink: 0; }
 
 .masthead {
