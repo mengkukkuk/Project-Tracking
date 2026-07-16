@@ -195,10 +195,25 @@ function num(v) {
 // widths and switch to fixed layout so columns can then grow AND shrink.
 const COL_COUNT = 9 // checkbox + 8 data columns
 // The Device column (colWidths index 1 → colgroup <col> #2) renders at a wider
-// 350px default so full device names show, and never resizes below 200px.
+// 350px default, so full device names show, and never resizes below 200px.
 const DEVICE_COL = 1
-const DEVICE_DEFAULT = 350
-const COL_MIN = { [DEVICE_COL]: 200 }
+const DEVICE_DEFAULT = 250
+const COL_MIN = { [DEVICE_COL]: 150,  // Device minimum
+                  2: 80,              // Qty minimum
+                  3: 100,
+                  4: 150,
+                  5: 150,
+                  6: 150,
+                  7: 100,
+}
+const COL_MAX = { [DEVICE_COL]: 300,  // Device maximum
+                  2: 150,             // Qty maximum
+                  3: 180,
+                  4: 180,
+                  5: 180,
+                  6: 180,
+                  7: 180,
+}
 const tableEl = ref(null)
 const colWidths = ref([])
 const layoutFixed = ref(false)
@@ -240,9 +255,10 @@ function startResize(index, e) {
   const startX = e.clientX
   const startW = colWidths.value[index]
   const min = COL_MIN[index] ?? 48
+  const max = COL_MAX[index] ?? Infinity
   const onMove = (ev) => {
     const next = [...colWidths.value]
-    next[index] = Math.max(min, startW + (ev.clientX - startX))
+    next[index] = Math.max(min, Math.min(max, startW + (ev.clientX - startX)))
     colWidths.value = next
   }
   const onUp = () => {
@@ -387,6 +403,7 @@ watch(
               </option>
             </select>
           </label>
+
           <label class="field">
             <span>Type</span>
             <select v-model="typeFilter" class="input" :disabled="!categoryFilter">
@@ -394,6 +411,9 @@ watch(
               <option v-for="v in typeOptions" :key="v.code" :value="v.code">{{ v.displayName }}</option>
             </select>
           </label>
+
+          <!-- Supplier dropdown option -->
+
           <label class="field">
             <span>Search</span>
             <input v-model="q" class="input" type="search" placeholder="device, spec, supplier…" />
@@ -435,43 +455,45 @@ watch(
               </th>
               <th :aria-sort="sortKey === 'deviceName' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('deviceName')">
-                  Device<span class="sort-ind" :class="{ on: sortKey === 'deviceName' }">{{ sortKey === 'deviceName' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                  Device<span class="sort-ind" :class="{ on: sortKey === 'deviceName'}">{{ sortKey === 'deviceName' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
                 <span class="col-grip" @pointerdown.prevent.stop="startResize(1, $event)" />
               </th>
-              <th :aria-sort="sortKey === 'version' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                <button type="button" class="sort-label" @click="sortBy('version')">
-                  Version--<span class="sort-ind" :class="{ on: sortKey === 'version' }">{{ sortKey === 'version' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(2, $event)" />
-              </th>
-              <th :aria-sort="sortKey === 'category' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                <button type="button" class="sort-label" @click="sortBy('category')">
-                  Category<span class="sort-ind" :class="{ on: sortKey === 'category' }">{{ sortKey === 'category' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(3, $event)" />
-              </th>
-              <th :aria-sort="sortKey === 'type' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                <button type="button" class="sort-label" @click="sortBy('type')">
-                  Type<span class="sort-ind" :class="{ on: sortKey === 'type' }">{{ sortKey === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
-                </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(4, $event)" />
-              </th>
+
               <th class="num" :aria-sort="sortKey === 'quantity' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('quantity')">
                   <span class="sort-ind" :class="{ on: sortKey === 'quantity' }">{{ sortKey === 'quantity' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Qty
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(5, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(2, $event)" />
               </th>
               <th class="num" :aria-sort="sortKey === 'unitPrice' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('unitPrice')">
                   <span class="sort-ind" :class="{ on: sortKey === 'unitPrice' }">{{ sortKey === 'unitPrice' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Unit price
                 </button>
-                <span class="col-grip" @pointerdown.prevent.stop="startResize(6, $event)" />
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(3, $event)" />
               </th>
               <th class="num" :aria-sort="sortKey === 'totalPrice' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                 <button type="button" class="sort-label" @click="sortBy('totalPrice')">
                   <span class="sort-ind" :class="{ on: sortKey === 'totalPrice' }">{{ sortKey === 'totalPrice' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>Total price
+                </button>
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(4, $event)" />
+              </th>
+
+              <th :aria-sort="sortKey === 'category' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                <button type="button" class="sort-label" @click="sortBy('category')">
+                  Category<span class="sort-ind" :class="{ on: sortKey === 'category' }">{{ sortKey === 'category' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                </button>
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(5, $event)" />
+              </th>
+              <th :aria-sort="sortKey === 'type' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                <button type="button" class="sort-label" @click="sortBy('type')">
+                  Type<span class="sort-ind" :class="{ on: sortKey === 'type' }">{{ sortKey === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                </button>
+                <span class="col-grip" @pointerdown.prevent.stop="startResize(6, $event)" />
+              </th>
+              <th :aria-sort="sortKey === 'version' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                <button type="button" class="sort-label" @click="sortBy('version')">
+                  Version<span class="sort-ind" :class="{ on: sortKey === 'version' }">{{ sortKey === 'version' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
                 </button>
                 <span class="col-grip" @pointerdown.prevent.stop="startResize(7, $event)" />
               </th>
@@ -495,9 +517,6 @@ watch(
                 <input type="checkbox" :checked="selected.has(r.id)" @change="toggle(r.id)" />
               </td>
               <td class="device">{{ r.deviceName || '—' }}</td>
-              <td>{{ r.version || '—' }}</td>
-              <td>{{ r.category || '—' }}</td>
-              <td>{{ r.type || '—' }}</td>
               <!-- Qty is editable only once the row is picked; @click.stop keeps
                    typing in it from toggling the row off. -->
               <td class="num" @click.stop>
@@ -515,6 +534,9 @@ watch(
               </td>
               <td class="num">{{ num(r.unitPrice) }}</td>
               <td class="num">{{ num(totalOf(r)) }}</td>
+              <td>{{ r.category || '—' }}</td>
+              <td>{{ r.type || '—' }}</td>
+              <td>{{ r.version || '—' }}</td>
               <td>{{ r.supplier || '—' }}</td>
             </tr>
             <tr v-if="!filtered.length">

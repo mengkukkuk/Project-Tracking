@@ -298,34 +298,34 @@ const columnDefs = computed(() =>
     ? [
         folioCol,
         { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
-        { field: 'version', headerName: 'Version-', width: 100, valueFormatter: dash },
-        { field: 'category', headerName: 'Category', width: 110, valueFormatter: dash },
-        { field: 'type', headerName: 'Type', flex: 1, minWidth: 130, valueFormatter: dash },
         { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
         { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'category', headerName: 'Category', width: 110, valueFormatter: dash },
+        { field: 'type', headerName: 'Type', flex: 1, minWidth: 130, valueFormatter: dash },
+        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
         { field: 'supplier', headerName: 'Supplier', width: 130, valueFormatter: dash },
         { field: 'leadTime', headerName: 'Lead time', width: 96, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         ...(canEditInventory.value ? [{ ...actionsCol, width: 88 }] : []),
-      ]
+      ]//Inventory
     : [
         folioCol,
         { field: 'deviceName', headerName: 'Device name', pinned: 'left', flex: 1.4, minWidth: 160, sort: 'asc', cellRenderer: PrimaryCell },
-        { field: 'version', headerName: 'Version--', width: 100, valueFormatter: dash },
         { field: 'quantity', headerName: 'Qty', minWidth: 65, maxWidth: 75, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
         { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
         { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
         { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
+        { field: 'version', headerName: 'Version--', width: 100, valueFormatter: dash },
         { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 120, valueFormatter: dash },
         { field: 'position', headerName: 'Position', minWidth: 80, maxWidth: 100, valueFormatter: dash },
         { field: 'supplier', headerName: 'Supplier', width: 112, valueFormatter: dash },
         { field: 'leadTime', headerName: 'Lead time', width: 96, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         { field: 'dateApprove', headerName: 'Approved on', width: 108, valueFormatter: (p) => date(p.value) },
         actionsCol,
-      ],
+      ],//Bom-project
 )
-//
+
 const shownCount = computed(() => filtered.value.length)
 const noRowsTemplate = '<div class="empty"><span class="empty-mark">—</span>No records match the current view.</div>'
 const loadingTemplate = '<div class="empty">Loading…</div>'
