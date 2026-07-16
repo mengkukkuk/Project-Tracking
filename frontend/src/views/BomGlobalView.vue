@@ -131,7 +131,7 @@ function typeMatchSet(typeCode, valueCode) {
 }
 
 function onCategoryChange(value) {
-  store.setFilter({ category: value, type: '' })
+  store.setFilter({ category: value, type: '', supplier: '' })
 }
 
 const filtered = computed(() => {
