@@ -10,6 +10,7 @@ from .ptemplate import bp as ptemplate_bp
 from .records import bp as records_bp
 from .sheets import bp as sheets_bp
 from .stats import bp as stats_bp
+from .suppliers import bp as suppliers_bp
 from .tasks import bp as tasks_bp
 from .users import bp as users_bp
 
@@ -27,4 +28,5 @@ blueprints = [
     lookups_bp,
     inventory_bp,
     inventory_images_bp,
+    suppliers_bp,
 ]

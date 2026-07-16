@@ -347,10 +347,28 @@ CREATE TABLE lookup_value (
           REFERENCES lookup_type(lookup_type_id)
 );
 
+-- Supplier directory (created by hand in the live DB first; mirrored here).
+-- BOM/inventory rows keep a free-text supplier string; the BOM page matches
+-- it case-insensitively against sup_code / sup_name to show this profile.
+CREATE TABLE IF NOT EXISTS supplier (
+  id          SERIAL  PRIMARY KEY,
+  sup_name    TEXT,
+  sup_code    TEXT,
+  description TEXT,
+  address     TEXT,
+  mobile      TEXT,
+  telephone   TEXT,
+  email       TEXT,
+  lineacc     TEXT,
+  website     TEXT,
+  tax_id      TEXT
+);
+
 -- =============================================================
 -- TEARDOWN (uncomment to drop everything and start fresh)
 -- =============================================================
 -- SET search_path TO pjtrk;
+-- DROP TABLE IF EXISTS supplier              CASCADE;
 -- DROP TABLE IF EXISTS inventory_images      CASCADE;
 -- DROP TABLE IF EXISTS project_documents     CASCADE;
 -- DROP TABLE IF EXISTS bom_list_items        CASCADE;

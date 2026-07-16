@@ -594,6 +594,45 @@ class InventoryImage(Base):
         }
 
 
+class Supplier(Base):
+    """Supplier directory: one company profile per vendor.
+
+    BOM rows and inventory entries carry a free-text ``supplier`` string; the
+    BOM page matches that text case-insensitively against ``sup_code`` /
+    ``sup_name`` to surface this profile. Read-only via the API — rows are
+    maintained directly in the DB (schema leads the code on this project).
+    """
+
+    __tablename__ = "supplier"
+
+    id = Column(Integer, primary_key=True)
+    sup_name = Column(Text)
+    sup_code = Column(Text)
+    description = Column(Text)
+    address = Column(Text)
+    mobile = Column(Text)
+    telephone = Column(Text)
+    email = Column(Text)
+    lineacc = Column(Text)
+    website = Column(Text)
+    tax_id = Column(Text)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.sup_name,
+            "code": self.sup_code,
+            "description": self.description,
+            "address": self.address,
+            "mobile": self.mobile,
+            "telephone": self.telephone,
+            "email": self.email,
+            "lineAcc": self.lineacc,
+            "website": self.website,
+            "taxId": self.tax_id,
+        }
+
+
 class InternalVerification(Base):
     __tablename__ = "internal_verification"
 
