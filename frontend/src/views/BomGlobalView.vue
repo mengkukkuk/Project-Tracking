@@ -316,7 +316,7 @@ const columnDefs = computed(() =>
         { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
         { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
         { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
-        { field: 'version', headerName: 'Version--', width: 100, valueFormatter: dash },
+        { field: 'version', headerName: 'Version', width: 100, valueFormatter: dash },
         { field: 'projectName', headerName: 'Project', flex: 1.2, minWidth: 120, valueFormatter: dash },
         { field: 'position', headerName: 'Position', minWidth: 80, maxWidth: 100, valueFormatter: dash },
         { field: 'supplier', headerName: 'Supplier', width: 112, valueFormatter: dash },
