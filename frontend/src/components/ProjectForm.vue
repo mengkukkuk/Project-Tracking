@@ -333,7 +333,7 @@ function submit() {
               v-model="form.value"
               type="number"
               min="0"
-              step="100000"
+              step="any"
               class="u-input"
               placeholder="0"
             />

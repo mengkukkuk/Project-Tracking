@@ -64,6 +64,10 @@ const canCreateSupplier = computed(() => auth.hasPermission('suppliers.create'))
 const canEditSupplier = computed(() => auth.hasPermission('suppliers.update'))
 
 function toggleInventory() {
+  // Row ids are per-table (bom_and_costing vs inventory) and getRowId keys the
+  // selection on them, so a selection must not survive the swap — id 7 in one
+  // table is a different row in the other.
+  clearSelection()
   inventoryMode.value = !inventoryMode.value
   if (inventoryMode.value) {
     // Refetch on every switch-on: cheap, and keeps the catalogue fresh.
@@ -341,6 +345,100 @@ const columnDefs = computed(() =>
       ],//Bom-project
 )
 
+// --- Bulk selection / delete -------------------------------------------------
+// Checkbox column on every row + a header select-all (filtered rows only).
+// Inventory deletes are admin+ (inventory.delete), so members get no checkboxes
+// there; BOM deletes are re-checked per row by the backend (owner-or-admin).
+const canBulkDelete = computed(() => !inventoryMode.value || auth.hasPermission('inventory.delete'))
+const rowSelection = computed(() =>
+  canBulkDelete.value
+    ? { mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: false }
+    : undefined,
+)
+const selectionColumnDef = { pinned: 'left', width: 48, resizable: false, suppressMovable: true }
+// Stable ids keep the selection across rowData swaps (filter edits, deletes).
+const getRowId = (p) => String(p.data.id)
+
+const selectedRows = ref([])
+const bulkDeleting = ref(false)
+
+function onSelectionChanged(e) {
+  selectedRows.value = e.api.getSelectedRows()
+}
+function clearSelection() {
+  gridApi.value?.deselectAll()
+  selectedRows.value = []
+}
+
+// Mobile cards have no grid, so selectedRows is the source of truth there.
+const selectedIds = computed(() => new Set(selectedRows.value.map((r) => r.id)))
+const allShownSelected = computed(
+  () => filtered.value.length > 0 && filtered.value.every((r) => selectedIds.value.has(r.id)),
+)
+function toggleCard(r) {
+  selectedRows.value = selectedIds.value.has(r.id)
+    ? selectedRows.value.filter((x) => x.id !== r.id)
+    : [...selectedRows.value, r]
+}
+function toggleAllCards() {
+  selectedRows.value = allShownSelected.value ? [] : [...filtered.value]
+}
+// Mirror the grid's behaviour on mobile: rows that leave the view (filtered
+// out, or deleted) drop out of the selection.
+watch(filtered, (rows) => {
+  if (!isMobile.value || !selectedRows.value.length) return
+  const ids = new Set(rows.map((r) => r.id))
+  selectedRows.value = selectedRows.value.filter((r) => ids.has(r.id))
+})
+// The grid unmounts below 760px (v-if), so its api goes stale — drop it and the
+// selection whenever the layout flips.
+watch(isMobile, () => {
+  gridApi.value = null
+  selectedRows.value = []
+})
+
+async function bulkRemove() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  const n = rows.length
+  const noun = inventoryMode.value ? 'inventory entr' + (n === 1 ? 'y' : 'ies') : 'BOM record' + (n === 1 ? '' : 's')
+  const msg = inventoryMode.value
+    ? `Delete ${n} ${noun} from the inventory catalogue? They will also be removed from any saved BOM lists that reference them.`
+    : `Delete ${n} ${noun}?`
+  if (!window.confirm(msg)) return
+  const del = inventoryMode.value ? (id) => invStore.deleteRow(id) : (id) => store.deleteRow(id)
+  bulkDeleting.value = true
+  let failed = 0
+  let firstError = ''
+  try {
+    // No bulk endpoint — one DELETE per row, a few at a time so a large
+    // selection doesn't flood the backend.
+    const CHUNK = 6
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const results = await Promise.allSettled(rows.slice(i, i + CHUNK).map((r) => del(r.id)))
+      for (const res of results) {
+        if (res.status === 'rejected') {
+          failed += 1
+          firstError ||= res.reason?.message || 'Unknown error'
+        }
+      }
+    }
+  } finally {
+    bulkDeleting.value = false
+  }
+  const ok = n - failed
+  if (ok) ui.success(`${ok} ${inventoryMode.value ? 'inventory entr' + (ok === 1 ? 'y' : 'ies') : 'BOM record' + (ok === 1 ? '' : 's')} deleted`)
+  if (failed) ui.error(`${failed} of ${n} could not be deleted: ${firstError}`)
+  // Successful rows left rowData (and so the selection); failed ones stay
+  // selected so the user can see what's left and retry.
+  if (isMobile.value) {
+    const live = new Set(activeRows.value.map((r) => r.id))
+    selectedRows.value = selectedRows.value.filter((r) => live.has(r.id))
+  } else {
+    selectedRows.value = gridApi.value?.getSelectedRows() ?? []
+  }
+}
+
 const shownCount = computed(() => filtered.value.length)
 const noRowsTemplate = '<div class="empty"><span class="empty-mark">—</span>No records match the current view.</div>'
 const loadingTemplate = '<div class="empty">Loading…</div>'
@@ -381,6 +479,8 @@ const detailCard = ref(null)
 
 function onCellClicked(e) {
   if (e.colDef?.colId === 'actions') return
+  // The checkbox column toggles selection; it shouldn't also open the card.
+  if (e.column?.getColId?.().startsWith('ag-Grid-SelectionColumn')) return
   detailCard.value = e.data
 }
 
@@ -749,6 +849,14 @@ onMounted(() => {
       <span class="folio">{{ String(shownCount).padStart(2, '0') }}</span>
       {{ inventoryMode ? 'inventory item' : 'record' }}{{ shownCount === 1 ? '' : 's' }} in view
       <span class="of">of {{ activeRows.length }} on record</span>
+      <span v-if="selectedRows.length" class="bulk-bar">
+        <span class="bulk-count">{{ selectedRows.length }} selected</span>
+        <button type="button" class="btn sm bulk-delete" :disabled="bulkDeleting" @click="bulkRemove">
+          <AppIcon name="trash" :size="13" />
+          {{ bulkDeleting ? 'Deleting…' : 'Delete selected' }}
+        </button>
+        <button type="button" class="btn sm ghost" :disabled="bulkDeleting" @click="clearSelection">Clear</button>
+      </span>
     </div>
 
     <div v-if="!isMobile" class="ledger" :style="{ '--row-h': rowHeight + 'px' }">
@@ -764,7 +872,11 @@ onMounted(() => {
         :suppressCellFocus="true"
         :overlayNoRowsTemplate="noRowsTemplate"
         :overlayLoadingTemplate="loadingTemplate"
+        :rowSelection="rowSelection"
+        :selectionColumnDef="selectionColumnDef"
+        :getRowId="getRowId"
         @grid-ready="onGridReady"
+        @selection-changed="onSelectionChanged"
         @cell-clicked="onCellClicked"
       />
     </div>
@@ -772,13 +884,41 @@ onMounted(() => {
     <!-- Mobile: stacked cards instead of the wide grid --------------------- -->
     <div v-else class="card-list">
       <button
+        v-if="canBulkDelete && filtered.length"
+        type="button"
+        class="bc-select-all"
+        role="checkbox"
+        :aria-checked="allShownSelected"
+        @click="toggleAllCards"
+      >
+        <span class="bc-check" :class="{ 'is-on': allShownSelected }" aria-hidden="true">
+          <AppIcon v-if="allShownSelected" name="check" :size="12" />
+        </span>
+        Select all {{ filtered.length }}
+      </button>
+      <button
         v-for="(r, i) in filtered"
         :key="r.id"
         type="button"
         class="bom-card card"
+        :class="{ 'is-selected': selectedIds.has(r.id) }"
         @click="detailCard = r"
       >
         <div class="bc-top">
+          <span
+            v-if="canBulkDelete"
+            class="bc-check"
+            :class="{ 'is-on': selectedIds.has(r.id) }"
+            role="checkbox"
+            tabindex="0"
+            :aria-checked="selectedIds.has(r.id)"
+            :aria-label="`Select ${r.deviceName || 'row'}`"
+            @click.stop="toggleCard(r)"
+            @keydown.space.prevent.stop="toggleCard(r)"
+            @keydown.enter.prevent.stop="toggleCard(r)"
+          >
+            <AppIcon v-if="selectedIds.has(r.id)" name="check" :size="12" />
+          </span>
           <span class="bc-folio mono">{{ String(i + 1).padStart(2, '0') }}</span>
           <strong class="bc-name">{{ r.deviceName || '—' }}</strong>
           <span v-if="!inventoryMode || canEditInventory" class="bc-actions">
@@ -1135,6 +1275,35 @@ onMounted(() => {
 }
 .byline .folio { font-size: 13px; color: var(--accent-dim); font-weight: 700; }
 .byline .of { color: color-mix(in srgb, var(--text-dim) 70%, transparent); }
+/* Bulk-selection actions ride the byline's right edge; fixed height so showing
+   them doesn't shift the grid below. */
+.bulk-bar {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 0;
+  overflow: visible;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.bulk-count { font-size: 12px; color: var(--text); }
+.bulk-bar .btn { font-size: 12px; }
+.bulk-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.bulk-delete:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 85%, #000); }
+.bulk-delete:disabled { opacity: .6; cursor: progress; }
+@media (max-width: 760px) {
+  /* Card layout: give the bulk actions their own row instead of overlaying. */
+  .byline { flex-wrap: wrap; }
+  .bulk-bar { height: auto; width: 100%; margin-left: 0; }
+}
 
 .ledger {
   border-top: 1.5px solid var(--rule);
@@ -1156,6 +1325,39 @@ onMounted(() => {
   cursor: pointer;
 }
 .bom-card:active { transform: translateY(1px); }
+.bom-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+/* Custom checkbox (a native <input> inside the card <button> is unreliable). */
+.bc-check {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: #fff;
+  cursor: pointer;
+}
+.bc-check.is-on { background: var(--accent); border-color: var(--accent); }
+.bc-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bc-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
 .bc-top { display: flex; align-items: center; gap: 9px; }
 .bc-folio {
   font-size: 11px; font-weight: 700;
