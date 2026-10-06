@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useProjectsStore, STAGES, taskProgress } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
@@ -32,6 +32,21 @@ const tabs = [
   ['activity', 'Activity', 'activity'],
 ]
 const recordTabs = new Set(RECORD_ORDER)
+
+// Header cost summary: BOM total vs. the project's budget (value). The BOM
+// records are normally lazy-loaded by the BOM tab, so load them as soon as a
+// project opens to keep the header figures populated on every tab.
+const cost = computed(() => {
+  const total = store.bomTotal
+  if (total == null) return null
+  return { total, remaining: (Number(store.current?.value) || 0) - total }
+})
+const money = (n) => `฿${n.toLocaleString()}`
+watch(
+  () => store.current?.id,
+  (id) => { if (id && !('bom' in store.records)) store.fetchRecords('bom') },
+  { immediate: true },
+)
 
 // Sliding tab underline: measure the active button and glide a bar to it.
 const tabBtns = ref([])
@@ -142,6 +157,10 @@ function dueClass(iso) {
               <StatusBadge :status="store.current.status" />
               <PriorityBadge :priority="store.current.priority" />
               <span class="value mono">{{ baht(store.current.value) }}</span>
+              <template v-if="cost">
+                <span class="cost-chip mono"><em>Total cost</em>{{ money(cost.total) }}</span>
+                <span class="cost-chip mono" :class="{ over: cost.remaining < 0 }"><em>Remaining</em>{{ money(cost.remaining) }}</span>
+              </template>
             </div>
             <div class="head-actions">
               <button class="btn ghost sm" @click="emit('edit', store.current)">
@@ -352,6 +371,23 @@ function dueClass(iso) {
   flex-wrap: wrap;
 }
 .value { font-size: 15px; font-weight: 800; }
+.cost-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+.cost-chip em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.cost-chip.over { color: var(--danger, #ef4444); }
 .quick {
   display: grid;
   grid-template-columns: minmax(150px, 190px) 1fr auto;

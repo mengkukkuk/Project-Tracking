@@ -171,6 +171,15 @@ function display(row, key) {
             </td>
           </tr>
         </tbody>
+        <tfoot v-if="resource === 'bom'">
+          <tr class="sum-row">
+            <td v-for="(c, i) in schema.columns" :key="c" :class="{ num: c === 'totalPrice' }">
+              <template v-if="i === 0">Total</template>
+              <template v-else-if="c === 'totalPrice'">{{ (store.bomTotal ?? 0).toLocaleString() }}</template>
+            </td>
+            <td class="actions-col" />
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -233,6 +242,13 @@ th {
   background: var(--bg-sunken);
 }
 tbody tr:last-child td { border-bottom: 0; }
+.sum-row td {
+  font-weight: 800;
+  background: var(--bg-sunken);
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+}
+.sum-row td.actions-col { display: table-cell; }
 td.num { text-align: center; font-variant-numeric: tabular-nums; }
 .actions-col { width: 1%; text-align: right; }
 td.actions-col { display: flex; gap: 4px; justify-content: flex-end; }

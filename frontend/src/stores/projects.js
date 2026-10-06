@@ -40,6 +40,17 @@ export const useProjectsStore = defineStore('projects', {
   }),
 
   getters: {
+    // Sum of the open project's BOM total prices (falls back to qty x unit price
+    // for rows with no stored total). Null until the BOM records have loaded.
+    bomTotal: (s) => {
+      const rows = s.records.bom
+      if (!rows) return null
+      return rows.reduce(
+        (a, r) => a + (Number(r.totalPrice) || (Number(r.quantity) || 0) * (Number(r.unitPrice) || 0)),
+        0,
+      )
+    },
+
     byStage: (s) => {
       const map = Object.fromEntries(STAGES.map((st) => [st, []]))
       for (const p of s.projects) (map[p.status] ??= []).push(p)
