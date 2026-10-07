@@ -9,7 +9,7 @@ import AppIcon from './AppIcon.vue'
 
 const props = defineProps({ project: Object })
 defineEmits(['open'])
-const { baht, daysUntil } = useFormat()
+const { bahtFull, daysUntil } = useFormat()
 
 const due = computed(() => {
   const d = daysUntil(props.project.dueDate)
@@ -59,7 +59,7 @@ const taskLabel = computed(() => {
         <AppIcon name="clock" :size="12" />
         {{ due.text }}
       </span>
-      <span class="value mono">{{ baht(project.value) }}</span>
+      <span class="value mono">{{ bahtFull(project.value) }}</span>
     </span>
 
     <ProgressBar :value="taskProgress(project)" :height="4" />

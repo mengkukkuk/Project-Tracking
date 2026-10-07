@@ -9,6 +9,12 @@ export function useFormat() {
     return `฿${value}`
   }
 
+  // Full, unrounded amount (e.g. ฿1,234,567) — for places that must show the exact budget.
+  const bahtFull = (v) => {
+    if (v == null) return '-'
+    return `฿${Number(v).toLocaleString('en-US', { maximumFractionDigits: 6 })}`
+  }
+
   const fy = (y) => (y === 'future' || !y ? 'Future' : `FY${y}`)
 
   const date = (iso) => {
@@ -46,5 +52,5 @@ export function useFormat() {
     return Math.round((d - today) / 86400000)
   }
 
-  return { baht, fy, date, relative, daysUntil }
+  return { baht, bahtFull, fy, date, relative, daysUntil }
 }

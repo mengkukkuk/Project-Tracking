@@ -16,7 +16,7 @@ import { RECORD_SCHEMAS, RECORD_ORDER } from '@/schemas/records'
 const emit = defineEmits(['close', 'edit'])
 const store = useProjectsStore()
 const ui = useUiStore()
-const { baht, date, relative, daysUntil } = useFormat()
+const { bahtFull, date, relative, daysUntil } = useFormat()
 
 const newTask = ref('')
 const newComment = ref('')
@@ -156,7 +156,7 @@ function dueClass(iso) {
             <div class="badges">
               <StatusBadge :status="store.current.status" />
               <PriorityBadge :priority="store.current.priority" />
-              <span class="value mono">{{ baht(store.current.value) }}</span>
+              <span class="value mono">{{ bahtFull(store.current.value) }}</span>
               <template v-if="cost">
                 <span class="cost-chip mono"><em>Total cost</em>{{ money(cost.total) }}</span>
                 <span class="cost-chip mono" :class="{ over: cost.remaining < 0 }"><em>Remaining</em>{{ money(cost.remaining) }}</span>
