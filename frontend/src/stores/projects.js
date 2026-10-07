@@ -327,6 +327,14 @@ export const useProjectsStore = defineStore('projects', {
       await this.fetchRecords('ptrack')
     },
 
+    // Switch the open project to another process template (replaces its ptrack).
+    async changeTemplate(pid, templateNo) {
+      const updated = await api.changeProjectTemplate(pid, templateNo)
+      if (this.current?.id === pid) this.current = updated
+      this._upsert(updated)
+      await this.fetchRecords('ptrack')
+    },
+
     async addTask(pid, data) {
       const task = await api.createTask(pid, data)
       if (this.current?.id === pid) this.current.tasks.push(task)

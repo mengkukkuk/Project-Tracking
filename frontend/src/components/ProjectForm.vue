@@ -1,12 +1,15 @@
 <script setup>
 import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { api } from '@/api'
+import { useFormat } from '@/composables/useFormat'
 
 const props = defineProps({
   project: { type: Object, default: null },
   submitting: Boolean,
 })
 const emit = defineEmits(['submit', 'cancel'])
+
+const { templateLabel } = useFormat()
 
 const DOMAINS = ['Vision Sensor', 'Robot', 'PLC', 'IoT', 'AI']
 const PRIORITIES = [
@@ -66,7 +69,24 @@ function closePmMenuOnClickOutside(e) {
   if (!pmAnchor.value.contains(e.target)) pmMenuOpen.value = false
 }
 
+// ── Process template (chosen once, at creation; the backend ignores it on edit) ──
+const templates = ref([])
+const templateNo = ref(1)
+
 onMounted(async () => {
+  if (!p) {
+    try {
+      const { items } = await api.listTemplates()
+      templates.value = items || []
+      // Default to template 1, else the first one that exists.
+      if (!templates.value.some((t) => t.templateNo === 1) && templates.value.length) {
+        templateNo.value = templates.value[0].templateNo
+      }
+    } catch (e) {
+      // Degrade to the backend default (template 1) — the select just stays hidden.
+      templates.value = []
+    }
+  }
   try {
     const { items } = await api.listUsers()
     allUsers.value = items || []
@@ -135,6 +155,7 @@ function submit() {
     dueDate: form.dueDate || null,
     tags: tags.value,
     pmIds: selectedPms.value.map((u) => u.id),
+    ...(!p && templates.value.length ? { templateNo: templateNo.value } : {}),
   })
 }
 </script>
@@ -363,6 +384,15 @@ function submit() {
               class="u-input"
               placeholder="Optional"
             />
+          </label>
+
+          <label v-if="!project && templates.length" class="under span2">
+            <span>Process template</span>
+            <select v-model.number="templateNo" class="u-input">
+              <option v-for="t in templates" :key="t.templateNo" :value="t.templateNo">
+                {{ templateLabel(t.templateNo, t.name) }} — {{ t.processCount }} processes · {{ t.taskCount }} tasks
+              </option>
+            </select>
           </label>
 
           <p class="prog-note span2">

@@ -169,6 +169,7 @@ class Project(Base):
     fiscal_year = Column(String(8))             # "69", "70", "71", "future"
     start_date = Column(Date)
     due_date = Column(Date)
+    template_no = Column(Integer)               # process template used; NULL = template 1
 
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -227,6 +228,7 @@ class Project(Base):
             "progress": self.progress or 0,
             "teamSize": self.team_size,
             "complexity": self.complexity,
+            "templateNo": self.template_no or 1,
             "fiscalYear": self.fiscal_year,
             "startDate": _iso(self.start_date),
             "dueDate": _iso(self.due_date),
@@ -331,12 +333,20 @@ class PTemplate(Base):
     id = Column(Integer, primary_key=True)
     task = Column(Text)
     processid = Column(Integer)
+    results = Column(Text)
+    undertaker = Column(Text)
+    # Rows sharing a template_no form one template; processid is unique only
+    # *within* a template. NULL (legacy rows) is read as template 1.
+    template_no = Column(Integer, default=1)
 
     def to_dict(self):
         return {
             "id": self.id,
             "task": self.task,
             "processId": self.processid,
+            "results": self.results,
+            "undertaker": self.undertaker,
+            "templateNo": self.template_no or 1,
         }
 
 
@@ -347,6 +357,7 @@ class ProcessTag(Base):
     processid = Column(Integer)
     process = Column(Text)
     day_range = Column(Integer)
+    template_no = Column(Integer, default=1)
 
     def to_dict(self):
         return {
@@ -354,7 +365,20 @@ class ProcessTag(Base):
             "processId": self.processid,
             "process": self.process,
             "dayRange": self.day_range,
+            "templateNo": self.template_no or 1,
         }
+
+
+class TemplateName(Base):
+    """Optional display name for a process template (keyed by template_no).
+
+    Templates have no table of their own (they exist as process_tags rows), so
+    the name lives here. No row = unnamed; the UI falls back to "Template N".
+    """
+    __tablename__ = "template_names"
+
+    template_no = Column(Integer, primary_key=True, autoincrement=False)
+    name = Column(String(100), nullable=False)
 
 
 class PTrack(Base):

@@ -15,6 +15,9 @@ export function useFormat() {
     return `฿${Number(v).toLocaleString('en-US', { maximumFractionDigits: 6 })}`
   }
 
+  // Display label for a process template: its name if set, else "Template N".
+  const templateLabel = (no, name) => (name ? `${name} (#${no})` : `Template ${no}`)
+
   const fy = (y) => (y === 'future' || !y ? 'Future' : `FY${y}`)
 
   const date = (iso) => {
@@ -52,5 +55,5 @@ export function useFormat() {
     return Math.round((d - today) / 86400000)
   }
 
-  return { baht, bahtFull, fy, date, relative, daysUntil }
+  return { baht, bahtFull, templateLabel, fy, date, relative, daysUntil }
 }

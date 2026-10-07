@@ -88,13 +88,15 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at  TIMESTAMP,
   updated_at  TIMESTAMP,
   team_size   INTEGER,
-  complexity  INTEGER
+  complexity  INTEGER,
+  template_no INTEGER                        -- process template used (NULL = template 1)
 );
 
 -- Existing installs predating team_size/complexity: CREATE TABLE IF NOT EXISTS
 -- above is a no-op once the table exists, so add the columns explicitly.
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size  INTEGER;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS complexity INTEGER;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS template_no INTEGER;
 
 -- ── project_tags (M2M join table) ─────────────────────────────
 CREATE TABLE IF NOT EXISTS project_tags (
@@ -146,15 +148,23 @@ CREATE TABLE IF NOT EXISTS ptemplate (
   task       TEXT,
   processid  INTEGER,
   results    TEXT,
-  undertaker TEXT
+  undertaker TEXT,
+  template_no INTEGER                 -- rows sharing template_no form one template (NULL = 1)
 );
 
 -- ── process_tags ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS process_tags (
     id          SERIAL  PRIMARY KEY,
-    processid   INTEGER,
+    processid   INTEGER,                -- unique only within a template_no
     process     TEXT,
-    day_range   INTEGER
+    day_range   INTEGER,
+    template_no INTEGER                 -- NULL = 1
+);
+
+-- ── template_names (optional display name per template_no) ────
+CREATE TABLE IF NOT EXISTS template_names (
+    template_no INTEGER      PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL
 );
 
 -- ── ptrack (per-project process tracking) ─────────────────────

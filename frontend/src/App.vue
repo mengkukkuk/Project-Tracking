@@ -31,6 +31,10 @@ const nav = computed(() => {
   if (auth.hasPermission('roles.assign')) {
     items.push({ to: '/users', label: 'Users', icon: 'users' })
   }
+  // Process-template authoring is gated on templates.manage (admin+).
+  if (auth.hasPermission('templates.manage')) {
+    items.push({ to: '/templates', label: 'Templates', icon: 'doc' })
+  }
   return items
 })
 

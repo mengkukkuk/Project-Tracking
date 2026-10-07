@@ -102,6 +102,8 @@ export const api = {
   createProject: (d) => req('/projects', { method: 'POST', body: JSON.stringify(d) }),
   updateProject: (id, d) => req(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
   deleteProject: (id) => req(`/projects/${id}`, { method: 'DELETE' }),
+  changeProjectTemplate: (pid, templateNo) =>
+    req(`/projects/${pid}/template`, { method: 'POST', body: JSON.stringify({ templateNo }) }),
   generatePtrack: (pid) => req(`/projects/${pid}/ptrack/generate`, { method: 'POST' }),
 
   // tasks
@@ -112,6 +114,21 @@ export const api = {
   // comments
   createComment: (pid, d) => req(`/projects/${pid}/comments`, { method: 'POST', body: JSON.stringify(d) }),
   deleteComment: (id) => req(`/comments/${id}`, { method: 'DELETE' }),
+
+  // process templates (rows sharing a template_no). Reads are open to any
+  // authed user (New Project picker); writes need `templates.manage`.
+  listTemplates: () => req('/templates'),
+  getTemplate: (no) => req(`/templates/${no}`),
+  createTemplate: (d) => req('/templates', { method: 'POST', body: JSON.stringify(d || {}) }),
+  renameTemplate: (no, name) =>
+    req(`/templates/${no}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  createTemplateProcess: (no, d) =>
+    req(`/templates/${no}/processes`, { method: 'POST', body: JSON.stringify(d) }),
+  updateProcessTag: (id, d) => req(`/process-tags/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteProcessTag: (id) => req(`/process-tags/${id}`, { method: 'DELETE' }),
+  createTemplateTask: (d) => req('/ptemplate', { method: 'POST', body: JSON.stringify(d) }),
+  updateTemplateTask: (id, d) => req(`/ptemplate/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteTemplateTask: (id) => req(`/ptemplate/${id}`, { method: 'DELETE' }),
 
   // per-project records (ptrack, survey, mom, bom, verification, exceptions)
   listRecords: (pid, resource) => req(`/projects/${pid}/records/${resource}`),

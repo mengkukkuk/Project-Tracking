@@ -5,7 +5,7 @@ users registered afterwards are `member`. A `super_admin` is minted by flipping
 a member's role directly in the DB (mirrors the seed/DB bootstrap path).
 """
 from app.extensions import Session
-from app.models import User
+from app.models import ProcessTag, User
 from app.permissions import PAGE_KEYS, permissions_for, role_has_permission
 
 
@@ -123,7 +123,9 @@ def test_templates_manage_gate(client, auth):
     # member lacks templates.manage
     denied = client.post("/api/ptemplate", json={"task": "T", "processId": 1}, headers=member)
     assert denied.status_code == 403
-    # admin holds it
+    # admin holds it (the target process must exist in the template)
+    Session.add(ProcessTag(processid=1, process="P1", day_range=1))
+    Session.commit()
     ok = client.post("/api/ptemplate", json={"task": "T", "processId": 1}, headers=auth)
     assert ok.status_code == 201, ok.get_json()
 

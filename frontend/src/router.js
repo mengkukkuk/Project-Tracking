@@ -16,6 +16,11 @@ const routes = [
     component: () => import('@/views/UsersView.vue'),
     meta: { permission: 'roles.assign' },
   },
+  {
+    path: '/templates',
+    component: () => import('@/views/TemplatesView.vue'),
+    meta: { permission: 'templates.manage' },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

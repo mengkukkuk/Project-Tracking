@@ -157,6 +157,7 @@ function dueClass(iso) {
               <StatusBadge :status="store.current.status" />
               <PriorityBadge :priority="store.current.priority" />
               <span class="value mono">{{ bahtFull(store.current.value) }}</span>
+              <span class="cost-chip mono"><em>Template</em>{{ store.current.templateNo }}</span>
               <template v-if="cost">
                 <span class="cost-chip mono"><em>Total cost</em>{{ money(cost.total) }}</span>
                 <span class="cost-chip mono" :class="{ over: cost.remaining < 0 }"><em>Remaining</em>{{ money(cost.remaining) }}</span>

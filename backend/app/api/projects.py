@@ -17,11 +17,16 @@ from ..validation import (
 )
 from .documents import remove_project_docstore
 from .helpers import (
+    DEFAULT_TEMPLATE_NO,
     log_activity,
+    project_template_no,
+    ptemplate_in_template,
     recompute_project_status,
     recompute_ptrack_dates,
     recompute_ptrack_status,
     require_owner_or_admin,
+    tag_in_template,
+    template_exists,
 )
 
 bp = Blueprint("projects", __name__, url_prefix="/api/projects")
@@ -183,6 +188,12 @@ def create_project():
     """
     data = require_dict(request.get_json(silent=True))
     user = current_user()
+    # The template is fixed at creation (PATCH ignores templateNo). Default 1.
+    # Only an *explicitly chosen* template must exist: an omitted templateNo
+    # keeps the old behaviour (seed whatever template 1 holds, possibly nothing).
+    template_no = int_field(data, "templateNo", default=DEFAULT_TEMPLATE_NO, minimum=1)
+    if data.get("templateNo") is not None and not template_exists(template_no):
+        raise ValidationError({"templateNo": f"template {template_no} does not exist"})
     p = Project(
         name=str_field(data, "name", required=True, max_len=255),
         description=str_field(data, "description"),
@@ -197,6 +208,7 @@ def create_project():
         progress=int_field(data, "progress", default=0, minimum=0, maximum=100),
         team_size=int_field(data, "teamSize", minimum=1, maximum=999),
         complexity=int_field(data, "complexity", minimum=1, maximum=10),
+        template_no=template_no,
         fiscal_year=str_field(data, "fiscalYear", default="future", max_len=8),
         start_date=date_field(data, "startDate"),
         due_date=date_field(data, "dueDate"),
@@ -222,13 +234,24 @@ def create_project():
 
 
 def _seed_ptrack(project):
-    """Bulk-insert the ptemplate checklist into a new project's ptrack.
+    """Bulk-insert the project's template checklist into its ptrack.
 
-    ptemplate only stores the task + processid; the process *name* lives in
-    process_tags, so resolve it by processid to fill ptrack.process.
+    Only rows of the project's own ``template_no`` are copied. ptemplate only
+    stores the task + processid; the process *name* lives in process_tags, so
+    resolve it by processid (within the same template) to fill ptrack.process.
     """
-    tag_names = dict(Session.query(ProcessTag.processid, ProcessTag.process).all())
-    templates = Session.query(PTemplate).order_by(PTemplate.id.asc()).all()
+    template_no = project_template_no(project)
+    tag_names = dict(
+        Session.query(ProcessTag.processid, ProcessTag.process)
+        .filter(tag_in_template(template_no))
+        .all()
+    )
+    templates = (
+        Session.query(PTemplate)
+        .filter(ptemplate_in_template(template_no))
+        .order_by(PTemplate.id.asc())
+        .all()
+    )
     for t in templates:
         Session.add(
             PTrack(
@@ -333,6 +356,70 @@ def delete_project(pid):
     # on disk are not, so sweep the project's docstore folder afterwards.
     remove_project_docstore(pid)
     return "", 204
+
+
+@bp.post("/<int:pid>/template")
+@jwt_required()
+def change_template(pid):
+    """POST /api/projects/<pid>/template — switch the project's process template.
+
+    Body: {templateNo}. The project's ``ptrack`` checklist is replaced by the new
+    template's rows. Rows whose task text also exists in the new template keep
+    their ``checked`` state and ``reference`` so ticked work isn't lost; all other
+    old rows are dropped. Owner-or-admin only; picking the current template is a
+    no-op. Dates/status/progress are re-derived afterwards.
+    """
+    p = Session.get(Project, pid)
+    if not p:
+        return {"error": {"type": "http", "code": 404, "message": "Not found"}}, 404
+    user = current_user()
+    denied = require_owner_or_admin(user, p.owner_id)
+    if denied:
+        return denied
+    data = require_dict(request.get_json(silent=True))
+    new_no = int_field(data, "templateNo", minimum=1)
+    if new_no is None:
+        raise ValidationError({"templateNo": "is required"})
+    if not template_exists(new_no):
+        raise ValidationError({"templateNo": f"template {new_no} does not exist"})
+    old_no = project_template_no(p)
+    if new_no == old_no:
+        return p.to_dict(detail=True)
+
+    # Remember ticked state per task text before the old checklist is dropped.
+    carried = {}
+    for r in Session.query(PTrack).filter(PTrack.project_id == pid).all():
+        keep = carried.setdefault(r.task, {"checked": False, "reference": None})
+        keep["checked"] = keep["checked"] or bool(r.checked)
+        keep["reference"] = keep["reference"] or r.reference
+    Session.query(PTrack).filter(PTrack.project_id == pid).delete(
+        synchronize_session=False
+    )
+    Session.expire(p, ["ptracks"])
+    p.template_no = new_no
+    Session.flush()
+    _seed_ptrack(p)
+    Session.flush()
+    kept = 0
+    for r in Session.query(PTrack).filter(PTrack.project_id == pid).all():
+        old = carried.get(r.task)
+        if old and (old["checked"] or old["reference"]):
+            r.checked = old["checked"]
+            r.reference = old["reference"]
+            kept += 1 if old["checked"] else 0
+    log_activity(
+        pid,
+        "updated",
+        f"Changed process template {old_no} → {new_no} ({kept} completed task"
+        f"{'' if kept == 1 else 's'} carried over)",
+        user,
+    )
+    Session.commit()
+    recompute_ptrack_dates(pid)
+    recompute_ptrack_status(pid)
+    recompute_project_status(pid)
+    Session.expire(p)
+    return p.to_dict(detail=True)
 
 
 @bp.post("/<int:pid>/ptrack/generate")

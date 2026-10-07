@@ -30,10 +30,12 @@ from ..validation import (
 )
 from .helpers import (
     log_activity,
+    project_template_no,
     recompute_project_status,
     recompute_ptrack_dates,
     recompute_ptrack_status,
     require_owner_or_admin,
+    tag_in_template,
 )
 
 bp = Blueprint("records", __name__, url_prefix="/api")
@@ -223,12 +225,13 @@ def list_records(pid, resource):
 
     # For ptrack: enrich each row with the day_range from process_tags
     # plus a running cumulative offset across the canonical process order
-    # (process_tags.processid asc). The client derives per-group due dates as
+    # (process_tags.processid asc, within the project's template). The client derives per-group due dates as
     #   due_date  = project.start_date + cumulativeDays
     #   start_date = previous group's due_date + 1 (first group: project.start_date)
     if resource == "ptrack" and items:
         tag_rows = (
             Session.query(ProcessTag.process, ProcessTag.day_range)
+            .filter(tag_in_template(project_template_no(Session.get(Project, pid))))
             .order_by(ProcessTag.processid.asc())
             .all()
         )

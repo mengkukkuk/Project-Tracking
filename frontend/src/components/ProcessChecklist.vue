@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { api } from '@/api'
 import { useProjectsStore } from '@/stores/projects'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
 
 const store = useProjectsStore()
 const ui = useUiStore()
-const { date, daysUntil } = useFormat()
+const { date, daysUntil, templateLabel } = useFormat()
 
 const rows = computed(() => store.records['ptrack'] || [])
 
@@ -106,6 +107,60 @@ async function toggle(rec) {
   }
 }
 
+// ── Template switcher ──────────────────────────────────────────────────────
+const templates = ref([])
+const pickedNo = ref(null)
+const currentNo = computed(() => store.current?.templateNo ?? 1)
+const switching = ref(false)
+
+watch(
+  () => store.current?.id,
+  async (id) => {
+    if (id == null) return
+    pickedNo.value = currentNo.value
+    try {
+      templates.value = (await api.listTemplates()).items || []
+    } catch {
+      templates.value = [] // switcher stays hidden; checklist itself is unaffected
+    }
+  },
+  { immediate: true },
+)
+// Keep the select in sync after a successful switch.
+watch(currentNo, (n) => (pickedNo.value = n))
+
+const pickedTemplate = computed(() => templates.value.find((t) => t.templateNo === pickedNo.value))
+const currentTemplate = computed(() => templates.value.find((t) => t.templateNo === currentNo.value))
+
+async function switchTemplate() {
+  const to = pickedNo.value
+  if (to == null || to === currentNo.value) return
+  const from = templateLabel(currentNo.value, currentTemplate.value?.name)
+  const target = templateLabel(to, pickedTemplate.value?.name)
+  const ticked = rows.value.filter((r) => r.checked).length
+  const msg =
+    `Switch this project from ${from} to ${target}?
+
+` +
+    `The process checklist will be replaced with the new template's tasks. ` +
+    `Completed tasks with the same wording are kept` +
+    (ticked ? ` (${ticked} currently completed); the rest are dropped.` : '.')
+  if (!window.confirm(msg)) {
+    pickedNo.value = currentNo.value
+    return
+  }
+  switching.value = true
+  try {
+    await store.changeTemplate(store.current.id, to)
+    ui.success(`Switched to ${target}`)
+  } catch (e) {
+    ui.error(e.message)
+    pickedNo.value = currentNo.value
+  } finally {
+    switching.value = false
+  }
+}
+
 async function generate() {
   busy.value = true
   try {
@@ -120,6 +175,24 @@ async function generate() {
 
 <template>
   <section class="panel proc">
+    <div v-if="templates.length > 1" class="tpl-bar">
+      <label>
+        <span>Process template</span>
+        <select v-model.number="pickedNo" :disabled="switching">
+          <option v-for="t in templates" :key="t.templateNo" :value="t.templateNo">
+            {{ templateLabel(t.templateNo, t.name) }}
+          </option>
+        </select>
+      </label>
+      <button
+        class="btn sm"
+        :disabled="switching || pickedNo === currentNo"
+        @click="switchTemplate"
+      >
+        {{ switching ? 'Switching…' : 'Switch template' }}
+      </button>
+    </div>
+
     <div v-if="store.recordsLoading && !rows.length" class="empty">Loading...</div>
 
     <template v-else-if="rows.length">
@@ -181,6 +254,19 @@ async function generate() {
 
 <style scoped>
 .proc { display: grid; gap: 16px; font-family: var(--font); }
+.tpl-bar {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.tpl-bar label { display: grid; gap: 4px; flex: 1; min-width: 180px; }
+.tpl-bar label span {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim);
+}
+.tpl-bar select {
+  padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px;
+}
 .proc-group { display: grid; gap: 8px; }
 .sec-title {
   display: flex;

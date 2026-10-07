@@ -1,16 +1,44 @@
 """Shared helpers for API resources: activity logging and authorization."""
 from datetime import date, timedelta
 
+from sqlalchemy import func
+
 from ..extensions import Session
 from ..models import (
     ELEVATED_ROLES,
     Activity,
     ProcessTag,
     Project,
+    PTemplate,
     PTrack,
     Task,
     derived_status,
 )
+
+DEFAULT_TEMPLATE_NO = 1
+
+
+def project_template_no(project):
+    """Template a project was created from; legacy NULL means template 1."""
+    return (project.template_no if project else None) or DEFAULT_TEMPLATE_NO
+
+
+def tag_in_template(template_no):
+    """Filter clause: process_tags rows of ``template_no`` (NULL counts as 1)."""
+    return func.coalesce(ProcessTag.template_no, DEFAULT_TEMPLATE_NO) == template_no
+
+
+def ptemplate_in_template(template_no):
+    """Filter clause: ptemplate rows of ``template_no`` (NULL counts as 1)."""
+    return func.coalesce(PTemplate.template_no, DEFAULT_TEMPLATE_NO) == template_no
+
+
+def template_exists(template_no):
+    """A template exists iff it has at least one process_tags row."""
+    return (
+        Session.query(ProcessTag.id).filter(tag_in_template(template_no)).first()
+        is not None
+    )
 
 
 def _forbidden():
@@ -57,7 +85,8 @@ def recompute_ptrack_dates(project_id):
         first process:  start = project.start_date,    due = start + day_range
         subsequent:     start = previous due + 1 day,  due = start + day_range
 
-    Canonical order is process_tags.processid asc. No-ops silently if the
+    Canonical order is process_tags.processid asc within the project's own
+    template (``projects.template_no``). No-ops silently if the
     project has no start_date or no process tags configured.
 
     Caller does NOT need to commit — this function commits its own changes
@@ -69,6 +98,7 @@ def recompute_ptrack_dates(project_id):
 
     tag_chain = (
         Session.query(ProcessTag.process, ProcessTag.day_range)
+        .filter(tag_in_template(project_template_no(project)))
         .order_by(ProcessTag.processid.asc())
         .all()
     )
