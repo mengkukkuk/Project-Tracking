@@ -97,6 +97,8 @@ const today = new Date()
   .toUpperCase()
 
 const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+// Discount % display: no discount (null/0) reads as a dash, otherwise `20%`.
+const pct = (v) => (v == null || v === '' || Number(v) === 0 ? '—' : `${Number(v).toLocaleString()}%`)
 const dash = (p) => (p.value == null || p.value === '' ? '—' : p.value)
 
 // --- Filters -----------------------------------------------------------------
@@ -332,6 +334,10 @@ const columnDefs = computed(() =>
         { field: 'quantity', headerName: 'Qty', minWidth: 65, maxWidth: 75, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
         { field: 'unit', headerName: 'Unit', minWidth: 75, maxWidth: 80, valueFormatter: dash },
         { field: 'unitPrice', headerName: 'Unit price', width: 126, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        // discountBath = NET unit price after discount; both discount columns and
+        // totalPrice are computed by the backend trigger, never in the frontend.
+        { field: 'discountBath', headerName: 'Discounted price', width: 176, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => num(p.value) },
+        { field: 'discountPct', headerName: 'Disc. %', width: 92, cellClass: 'num', headerClass: 'num', valueFormatter: (p) => pct(p.value) },
         { field: 'totalPrice', headerName: 'Total price', width: 126, cellClass: 'num', headerClass: 'num', cellRenderer: TotalCell },
         { field: 'category', headerName: 'Category', width: 96, valueFormatter: dash },
         { field: 'type', headerName: 'Type', width: 120, valueFormatter: dash },
@@ -608,7 +614,15 @@ async function remove(row) {
 async function duplicate(row) {
   try {
     const body = {}
+    const seenGroups = new Set()
     for (const f of RECORD_SCHEMAS.bom.fields) {
+      if (f.derived) continue // total is recomputed by the backend trigger
+      // Of an `exclusive` pair (discountBath / discountPct) copy only the first,
+      // so the trigger derives the other and the two can never disagree.
+      if (f.exclusive) {
+        if (seenGroups.has(f.exclusive)) continue
+        seenGroups.add(f.exclusive)
+      }
       body[f.key] = row[f.key] ?? (f.type === 'number' ? null : f.type === 'checkbox' ? false : '')
     }
     await store.createRow(row.projectId, body)
@@ -638,15 +652,6 @@ async function onImportFile(file) {
   }
 }
 
-// Total price is a derived field: quantity × unitPrice. Apply the same formula
-// the edit form's watcher uses, so imported rows display the computed total
-// immediately — without needing an Edit → Save round-trip to materialize it.
-function computedTotal(qty, unitPrice) {
-  const q = qty === '' || qty == null ? null : Number(qty)
-  const u = unitPrice === '' || unitPrice == null ? null : Number(unitPrice)
-  return q != null && u != null && !isNaN(q) && !isNaN(u) ? q * u : null
-}
-
 async function confirmImport() {
   const rows = importResult.value?.valid || []
   if (!rows.length) return
@@ -658,8 +663,8 @@ async function confirmImport() {
       ui.success(`Imported ${rows.length} inventory item(s)`)
     } else {
       for (const r of rows) {
+        // total_price (and the discount pair) are computed by the backend trigger.
         const { projectId, ...body } = r
-        body.totalPrice = computedTotal(body.quantity, body.unitPrice)
         await api.createRecord(projectId, 'bom', body)
       }
       await store.fetchAll()
@@ -939,6 +944,7 @@ onMounted(() => {
         <div class="bc-figures">
           <span v-if="!inventoryMode"><em>Qty</em> {{ num(r.quantity) }}{{ r.unit ? ' ' + r.unit : '' }}</span>
           <span><em>Unit</em> {{ num(r.unitPrice) }}</span>
+          <span v-if="!inventoryMode && Number(r.discountPct)"><em>Disc.</em> {{ pct(r.discountPct) }}</span>
           <span v-if="!inventoryMode" class="bc-total"><em>Total</em> {{ num(r.totalPrice) }}</span>
         </div>
       </button>
@@ -997,6 +1003,10 @@ onMounted(() => {
         <div class="dc-row">
           <span class="dc-label">Price / unit</span>
           <span class="dc-price">{{ num(detailCard.unitPrice) }}</span>
+        </div>
+        <div v-if="!inventoryMode && Number(detailCard.discountPct)" class="dc-row">
+          <span class="dc-label">Discounted price</span>
+          <span>{{ num(detailCard.discountBath) }} ({{ pct(detailCard.discountPct) }} off)</span>
         </div>
         <div class="dc-row">
           <span class="dc-label">Supplier</span>

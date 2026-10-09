@@ -122,7 +122,12 @@ function display(row, key) {
   const v = row[key]
   if (f?.type === 'checkbox') return v ? '✓' : '—'
   if (f?.type === 'date') return v ? date(v) : '—'
-  if (f?.type === 'number') return v == null ? '—' : v.toLocaleString()
+  if (f?.type === 'number') {
+    if (v == null) return '—'
+    // A zero discount % reads as "no discount" rather than "0%".
+    if (f.suffix) return Number(v) === 0 ? '—' : `${v.toLocaleString()}${f.suffix}`
+    return v.toLocaleString()
+  }
   return v || '—'
 }
 </script>

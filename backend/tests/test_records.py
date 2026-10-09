@@ -122,6 +122,67 @@ def test_bom_category_type_ids_resolve_to_labels(client, auth):
     assert legacy["typeId"] is None
 
 
+def test_bom_discount_fields_round_trip(client, auth):
+    """discountBath/discountPct pass through the API untouched.
+
+    The discount math (deriving the counterpart + total_price) lives in the
+    Postgres trigger trg_bom_discount_total, which SQLite — the test DB — does
+    not have, so here the values are simply stored as sent. The trigger itself is
+    verified manually against Postgres (see CLAUDE.md).
+    """
+    pid = _project(client, auth)
+    res = client.post(
+        f"/api/projects/{pid}/records/bom",
+        json={"deviceName": "Cam", "quantity": 5, "unitPrice": 2000, "discountPct": 20.5},
+        headers=auth,
+    )
+    assert res.status_code == 201, res.get_json()
+    rec = res.get_json()
+    assert rec["discountPct"] == 20.5
+    assert rec["discountBath"] is None  # omitted key -> NULL (the trigger fills it on Postgres)
+    rid = rec["id"]
+
+    res = client.patch(
+        f"/api/records/bom/{rid}", json={"discountBath": 1600}, headers=auth
+    )
+    assert res.status_code == 200, res.get_json()
+    assert res.get_json()["discountBath"] == 1600
+    assert res.get_json()["discountPct"] == 20.5  # untouched key left alone
+
+    items = client.get(f"/api/projects/{pid}/records/bom", headers=auth).get_json()["items"]
+    assert items[0]["discountBath"] == 1600
+    assert items[0]["discountPct"] == 20.5
+
+    # A null clears the field (the trigger reads this as "no discount").
+    res = client.patch(f"/api/records/bom/{rid}", json={"discountPct": None}, headers=auth)
+    assert res.get_json()["discountPct"] is None
+
+    all_items = client.get("/api/bom/all", headers=auth).get_json()["items"]
+    assert "discountBath" in all_items[0] and "discountPct" in all_items[0]
+
+
+def test_bom_discount_validation(client, auth):
+    pid = _project(client, auth)
+    url = f"/api/projects/{pid}/records/bom"
+
+    res = client.post(url, json={"deviceName": "X", "discountPct": 100.5}, headers=auth)
+    assert res.status_code == 422
+    assert "discountPct" in res.get_json()["error"]["fields"]
+
+    res = client.post(url, json={"deviceName": "X", "discountBath": -1}, headers=auth)
+    assert res.status_code == 422
+    assert "discountBath" in res.get_json()["error"]["fields"]
+
+    res = client.post(url, json={"deviceName": "X", "discountPct": "abc"}, headers=auth)
+    assert res.status_code == 422
+
+    # A negative % is allowed: the trigger stores one when the discounted price
+    # exceeds the unit price, and a round-trip must not 422 on it.
+    res = client.post(url, json={"deviceName": "X", "discountPct": -5}, headers=auth)
+    assert res.status_code == 201, res.get_json()
+    assert res.get_json()["discountPct"] == -5
+
+
 def test_list_all_bom_across_projects(client, auth):
     # Two projects, each with one BOM row.
     p1 = _project(client, auth, name="Alpha")

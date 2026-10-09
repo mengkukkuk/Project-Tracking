@@ -1026,10 +1026,27 @@ function parseWorksheet(ws, resource) {
     }
 
     if (!hasValue) continue
+    if (missingRequired(fields, record, r, errors)) rowHadError = true
     if (!rowHadError) valid.push(record)
   }
 
   return { valid, errors, unmatched }
+}
+
+// Schema fields flagged `required` must be filled (bom.unitPrice: the DB discount
+// trigger rejects a NULL one, which would otherwise abort an import part-way,
+// after the earlier rows were already committed). Pushes one error per gap.
+function missingRequired(fields, record, row, errors) {
+  let missing = false
+  for (const f of fields) {
+    if (!f.required) continue
+    const v = record[f.key]
+    if (v == null || v === '') {
+      errors.push({ row, column: f.label, message: `${f.label} is required` })
+      missing = true
+    }
+  }
+  return missing
 }
 
 /**
@@ -1181,6 +1198,7 @@ export async function parseBomInventoryExcel(file, projects) {
       })
       rowHadError = true
     }
+    if (missingRequired(fields, record, r, errors)) rowHadError = true
     if (!rowHadError) valid.push({ ...record, projectId })
   }
 

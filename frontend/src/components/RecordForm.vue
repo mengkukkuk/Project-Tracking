@@ -1,6 +1,7 @@
 <script setup>
 import { reactive } from 'vue'
 import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
+import { useExclusiveFields } from '@/composables/useExclusiveFields'
 
 const props = defineProps({
   resource: { type: String, required: true },
@@ -21,15 +22,20 @@ if (props.record) {
   }
 }
 
+// Fields in an `exclusive` group (BOM discount pair): the user fills either one
+// and the backend trigger derives the other, so only the typed one is submitted.
+const exclusive = useExclusiveFields(schema.fields, form)
+
 function submit() {
   const out = {}
   for (const f of schema.fields) {
+    if (f.derived) continue // computed by the backend; never submitted
     let v = form[f.key]
     if (f.type === 'number') v = v === '' || v == null ? null : Number(v)
     else if (f.type === 'date') v = v || null
     out[f.key] = v
   }
-  emit('submit', out)
+  emit('submit', exclusive.prune(out))
 }
 </script>
 
@@ -42,7 +48,7 @@ function submit() {
         class="field"
         :class="{ span2: f.type === 'textarea', check: f.type === 'checkbox' }"
       >
-        <span>{{ f.label }}</span>
+        <span>{{ f.label }}<em v-if="f.required" class="req">*</em></span>
 
         <textarea
           v-if="f.type === 'textarea'"
@@ -57,10 +63,26 @@ function submit() {
           class="input"
         />
         <input
+          v-else-if="f.derived"
+          :value="record?.[f.key] ?? ''"
+          type="number"
+          class="input computed"
+          readonly
+          tabindex="-1"
+          :placeholder="record ? '' : 'Calculated on save'"
+          title="Calculated automatically by the backend"
+        />
+        <input
           v-else-if="f.type === 'number'"
           v-model="form[f.key]"
           type="number"
           class="input"
+          :required="f.required"
+          :min="f.min"
+          :max="f.max"
+          :step="f.step"
+          :placeholder="exclusive.isAuto(f.key) ? 'auto on save' : ''"
+          @input="exclusive.onTyped(f.key)"
         />
         <input
           v-else-if="f.type === 'checkbox'"
@@ -100,6 +122,14 @@ function submit() {
 }
 .field.check > span { order: 2; text-transform: none; font-size: 12px; }
 .checkbox { width: 16px; height: 16px; accent-color: var(--accent); }
+.req { color: var(--accent); font-style: normal; margin-left: 2px; }
+.input.computed {
+  background: var(--bg-sunken);
+  color: var(--text-dim);
+  cursor: not-allowed;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
 .actions { display: flex; justify-content: flex-end; gap: 10px; }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }

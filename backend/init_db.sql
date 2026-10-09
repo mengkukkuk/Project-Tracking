@@ -227,7 +227,9 @@ CREATE TABLE IF NOT EXISTS bom_and_costing (
   unit          TEXT,
   "position"    TEXT,
   unit_price    INTEGER,
-  total_price   INTEGER,
+  discount_bath INTEGER       DEFAULT 0,       -- NET unit price after discount (trigger-maintained)
+  discount_pct  NUMERIC(12,2) DEFAULT 0.00,    -- discount % (trigger-maintained)
+  total_price   INTEGER,                       -- discount_bath * quantity (trigger-maintained)
   lead_time     INTEGER,
   supplier      TEXT
 );
@@ -238,6 +240,12 @@ CREATE TABLE IF NOT EXISTS bom_and_costing (
 -- so an inline FK here would forward-reference — the FK is ORM-enforced).
 ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS category_id INTEGER;
 ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS type_id     INTEGER;
+
+-- Discount columns. discount_bath / discount_pct / total_price are computed by the
+-- trg_bom_discount_total trigger — install it separately from
+-- backend/bom_discount_trigger.sql (re-run it after seed.py, which drops the table).
+ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS discount_bath INTEGER       DEFAULT 0;
+ALTER TABLE bom_and_costing ADD COLUMN IF NOT EXISTS discount_pct  NUMERIC(12,2) DEFAULT 0.00;
 
 -- ── internal_verification ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS internal_verification (

@@ -10,6 +10,7 @@ import { reactive, ref, computed, watch } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useLookupsStore } from '@/stores/lookups'
 import { RECORD_SCHEMAS, emptyRecord } from '@/schemas/records'
+import { useExclusiveFields } from '@/composables/useExclusiveFields'
 import InventoryImageGallery from '@/components/InventoryImageGallery.vue'
 
 const props = defineProps({
@@ -59,7 +60,9 @@ const typeOptions = computed(() => lookupsStore.typeById(form.categoryId)?.value
 // Fields that only exist on a bom_and_costing row, not a catalogue entry.
 // Hidden when editing an inventory row, and in create mode until a project is
 // picked (they'd be silently dropped from the inventory payload anyway).
-const PROJECT_ONLY = new Set(['dateApprove', 'quantity', 'position', 'totalPrice'])
+const PROJECT_ONLY = new Set([
+  'dateApprove', 'quantity', 'position', 'totalPrice', 'discountBath', 'discountPct',
+])
 
 // The Category slot is handled by the dropdowns; drop it from the generic field
 // loop so it isn't also rendered as a free-text input.
@@ -72,6 +75,17 @@ const formFields = computed(() =>
   }),
 )
 
+// A BOM row (not a catalogue entry) needs a unit price: the DB trigger that
+// computes the discount refuses a NULL one. Catalogue entries keep it optional.
+const savesBomRow = computed(
+  () => props.target === 'bom' && (isEdit.value || !!form.projectId),
+)
+const isRequired = (f) =>
+  f.key === 'deviceName' || (f.required && savesBomRow.value)
+
+// Discount pair: fill either; the backend trigger derives the other + total.
+const exclusive = useExclusiveFields(schema.fields, form)
+
 // Staged product images (create mode only): File objects the gallery collects
 // before the item exists, uploaded by the view after createRow returns an id.
 const pendingImages = ref([])
@@ -80,25 +94,21 @@ const pendingImages = ref([])
 // the reactive init, so it never clears a Type seeded on edit.
 watch(() => form.categoryId, () => { form.typeId = null })
 
-// totalPrice is derived: quantity × unitPrice. The field is read-only; this
-// watcher (immediate) also corrects any stale persisted total on edit, so the
-// formula is always the source of truth.
-watch(
-  () => [form.quantity, form.unitPrice],
-  ([q, u]) => {
-    const qn = q === '' || q == null ? null : Number(q)
-    const un = u === '' || u == null ? null : Number(u)
-    form.totalPrice = qn != null && un != null && !isNaN(qn) && !isNaN(un) ? qn * un : null
-  },
-  { immediate: true },
-)
+// totalPrice is derived by the backend trigger (discounted price × quantity), so
+// the form never computes it: it shows the stored value on edit and is never
+// submitted.
 
 // Device name is the one universally required field. A project is only
-// mandatory when editing an existing bom row (it must stay parented).
+// mandatory when editing an existing bom row (it must stay parented); a BOM
+// row also needs a unit price (see savesBomRow).
+const unitPriceMissing = computed(
+  () => savesBomRow.value && (form.unitPrice === '' || form.unitPrice == null),
+)
 const invalid = computed(
   () =>
     !String(form.deviceName || '').trim() ||
-    (isEdit.value && props.target === 'bom' && !form.projectId),
+    (isEdit.value && props.target === 'bom' && !form.projectId) ||
+    unitPriceMissing.value,
 )
 
 function submit() {
@@ -110,11 +120,14 @@ function submit() {
   }
   for (const f of schema.fields) {
     if (f.key === 'category') continue // replaced by the Category/Type dropdowns
+    if (f.derived) continue // computed by the backend; never submitted
     let v = form[f.key]
     if (f.type === 'number') v = v === '' || v == null ? null : Number(v)
     else if (f.type === 'date') v = v || null
     out[f.key] = v
   }
+  // Send only the discount field the user typed in; the trigger derives the rest.
+  exclusive.prune(out)
   // Default unit to "pcs" when left blank — mirrors the field's placeholder so
   // the common case needs no typing.
   if (out.unit == null || String(out.unit).trim() === '') out.unit = 'pcs'
@@ -165,7 +178,7 @@ function submit() {
         class="field"
         :class="{ span2: f.type === 'textarea', check: f.type === 'checkbox' }"
       >
-        <span>{{ f.label }}<em v-if="f.key === 'deviceName'" class="req">*</em></span>
+        <span>{{ f.label }}<em v-if="isRequired(f)" class="req">*</em></span>
         <textarea
           v-if="f.type === 'textarea'"
           v-model="form[f.key]"
@@ -179,19 +192,25 @@ function submit() {
           class="input"
         />
         <input
-          v-else-if="f.key === 'totalPrice'"
-          :value="form.totalPrice ?? ''"
+          v-else-if="f.derived"
+          :value="record?.[f.key] ?? ''"
           type="number"
           class="input computed"
           readonly
           tabindex="-1"
-          title="Auto-calculated: Unit price × Quantity"
+          :placeholder="isEdit ? '' : 'Calculated on save'"
+          title="Calculated automatically by the backend"
         />
         <input
           v-else-if="f.type === 'number'"
           v-model="form[f.key]"
           type="number"
           class="input"
+          :min="f.min"
+          :max="f.max"
+          :step="f.step"
+          :placeholder="exclusive.isAuto(f.key) ? 'auto on save' : ''"
+          @input="exclusive.onTyped(f.key)"
         />
         <input
           v-else-if="f.type === 'checkbox'"

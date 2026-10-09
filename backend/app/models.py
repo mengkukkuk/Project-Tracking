@@ -497,6 +497,14 @@ class BomAndCosting(Base):
     unit = Column(Text)
     position = Column("position", Text)
     unit_price = Column(Integer)
+    # Discount pair + total are maintained by the Postgres trigger
+    # trg_bom_discount_total (backend/bom_discount_trigger.sql): ``discount_bath``
+    # is the NET unit price after discount (not the discount amount), the trigger
+    # derives whichever of bath/pct was not supplied, and sets
+    # ``total_price = discount_bath * quantity``. Never compute these in Python/JS.
+    discount_bath = Column(Integer)
+    # asdecimal=False -> float; a Decimal would be serialised as a string by Flask.
+    discount_pct = Column(Numeric(12, 2, asdecimal=False))
     total_price = Column(Integer)
     lead_time = Column(Integer)
     supplier = Column(Text)
@@ -525,6 +533,8 @@ class BomAndCosting(Base):
             "unit": self.unit,
             "position": self.position,
             "unitPrice": self.unit_price,
+            "discountBath": self.discount_bath,
+            "discountPct": self.discount_pct,
             "totalPrice": self.total_price,
             "leadTime": self.lead_time,
             "supplier": self.supplier,

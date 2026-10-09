@@ -25,6 +25,7 @@ from ..validation import (
     bool_field,
     date_field,
     int_field,
+    number_field,
     require_dict,
     str_field,
 )
@@ -57,6 +58,17 @@ def _int(data, key):
 
 def _bool(data, key):
     return bool_field(data, key, default=False)
+
+
+def _discount_bath(data, key):
+    return int_field(data, key, minimum=0)
+
+
+def _discount_pct(data, key):
+    # No lower bound on purpose: when the discounted price exceeds the unit price
+    # the DB trigger stores a negative %, and a round-trip (Duplicate, export ->
+    # re-import) must not 422 on a value the database itself produced.
+    return number_field(data, key, maximum=100)
 
 
 # --- Resource registry ------------------------------------------------------
@@ -119,6 +131,10 @@ RECORD_TYPES = {
             ("unit", "unit", _text),
             ("position", "position", _text),
             ("unitPrice", "unit_price", _int),
+            # Either may be sent; the trg_bom_discount_total trigger derives the
+            # other and total_price (totalPrice stays accepted but is overwritten).
+            ("discountBath", "discount_bath", _discount_bath),
+            ("discountPct", "discount_pct", _discount_pct),
             ("totalPrice", "total_price", _int),
             ("leadTime", "lead_time", _int),
             ("supplier", "supplier", _text),

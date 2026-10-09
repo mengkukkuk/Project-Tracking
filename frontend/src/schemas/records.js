@@ -69,12 +69,19 @@ export const RECORD_SCHEMAS = {
       { key: 'quantity', label: 'Quantity', type: 'number' },
       { key: 'unit', label: 'Unit', type: 'text' },
       { key: 'position', label: 'Position', type: 'text' },
-      { key: 'unitPrice', label: 'Unit price', type: 'number' },
-      { key: 'totalPrice', label: 'Total price', type: 'number' },
+      // `required`: the DB trigger that computes the discount refuses a NULL unit price.
+      { key: 'unitPrice', label: 'Unit price', type: 'number', required: true },
+      // Fill EITHER discount field (`exclusive` group): the backend trigger derives
+      // the other one and the total, so the frontend never computes any of it.
+      // discountBath holds the NET unit price after discount, not the discount amount.
+      { key: 'discountBath', label: 'Discounted price (฿)', type: 'number', exclusive: 'discount', min: 0 },
+      { key: 'discountPct', label: 'Discount %', type: 'number', exclusive: 'discount', suffix: '%', max: 100, step: 'any' }, // no min: the trigger can store a negative % (see records.py)
+      // `derived`: computed by the backend trigger; shown read-only, never submitted.
+      { key: 'totalPrice', label: 'Total price', type: 'number', derived: true },
       { key: 'leadTime', label: 'Lead time (days)', type: 'number' },
       { key: 'supplier', label: 'Supplier', type: 'text' },
     ],
-    columns: ['deviceName', 'category', 'quantity', 'unitPrice', 'totalPrice'],
+    columns: ['deviceName', 'category', 'quantity', 'unitPrice', 'discountBath', 'discountPct', 'totalPrice'],
   },
 
   verification: {

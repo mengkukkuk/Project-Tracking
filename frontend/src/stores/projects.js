@@ -40,15 +40,15 @@ export const useProjectsStore = defineStore('projects', {
   }),
 
   getters: {
-    // Sum of the open project's BOM total prices (falls back to qty x unit price
-    // for rows with no stored total). Null until the BOM records have loaded.
+    // Sum of the open project's BOM total prices. total_price is computed by the
+    // backend trigger (discounted price x quantity), so there is deliberately no
+    // qty x unit price fallback here — it would be wrong for any discounted row,
+    // including a fully-discounted one whose stored total is 0.
+    // Null until the BOM records have loaded.
     bomTotal: (s) => {
       const rows = s.records.bom
       if (!rows) return null
-      return rows.reduce(
-        (a, r) => a + (Number(r.totalPrice) || (Number(r.quantity) || 0) * (Number(r.unitPrice) || 0)),
-        0,
-      )
+      return rows.reduce((a, r) => a + (Number(r.totalPrice) || 0), 0)
     },
 
     byStage: (s) => {
