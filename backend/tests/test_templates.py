@@ -297,3 +297,132 @@ def test_change_template_validation_and_authz(client, auth):
     member = _register(client, "m@x.com")
     assert client.post(url, json={"templateNo": 2}, headers=member).status_code == 403
     assert client.post("/api/projects/999/template", json={"templateNo": 2}, headers=auth).status_code == 404
+
+
+# ── import / delete ───────────────────────────────────────────────────────────
+
+
+_IMPORT = {
+    "name": "Imported",
+    "processes": [
+        {"process": "Survey", "dayRange": 5, "tasks": [
+            {"task": "- walk site", "results": "report", "undertaker": "PM"},
+            {"task": "photos"},
+        ]},
+        {"process": "Handover", "tasks": []},
+    ],
+}
+
+
+def test_import_template_creates_everything(client, auth):
+    _two_templates()
+    res = client.post("/api/templates/import", json=_IMPORT, headers=auth)
+    assert res.status_code == 201, res.get_json()
+    body = res.get_json()
+    assert body == {"templateNo": 3, "name": "Imported", "processCount": 2, "taskCount": 2}
+    t = client.get("/api/templates/3", headers=auth).get_json()
+    assert t["name"] == "Imported"
+    assert [(p["processId"], p["process"], p["dayRange"]) for p in t["processes"]] == [
+        (1, "Survey", 5), (2, "Handover", 1),
+    ]
+    tasks = t["processes"][0]["tasks"]
+    assert [x["task"] for x in tasks] == ["- walk site", "photos"]
+    assert tasks[0]["results"] == "report" and tasks[1]["undertaker"] is None
+    p = _project(client, auth, templateNo=3)
+    assert sorted(r["task"] for r in _ptrack(client, auth, p["id"])) == ["- walk site", "photos"]
+
+
+def test_import_template_is_all_or_nothing(client, auth):
+    _two_templates()
+    before = (Session.query(ProcessTag).count(), Session.query(PTemplate).count())
+    bad = [
+        {"processes": []},
+        {"processes": [{"process": "A"}, {"process": " "}]},
+        {"processes": [{"process": "A", "dayRange": -1}]},
+        {"processes": [{"process": "A", "tasks": [{"task": "ok"}, {"task": ""}]}]},
+    ]
+    for body in bad:
+        assert client.post("/api/templates/import", json=body, headers=auth).status_code == 422
+    assert (Session.query(ProcessTag).count(), Session.query(PTemplate).count()) == before
+    member = _register(client, "m@x.com")
+    assert client.post("/api/templates/import", json=_IMPORT, headers=member).status_code == 403
+
+
+def test_delete_unused_template(client, auth):
+    _two_templates()
+    no = client.post("/api/templates", json={"cloneFrom": 2, "name": "Tmp"}, headers=auth).get_json()[
+        "templateNo"
+    ]
+    member = _register(client, "m@x.com")
+    assert client.delete(f"/api/templates/{no}", headers=member).status_code == 403
+    assert client.delete(f"/api/templates/{no}", headers=auth).status_code == 204
+    assert client.get(f"/api/templates/{no}", headers=auth).status_code == 404
+    assert not Session.query(PTemplate).filter(PTemplate.template_no == no).count()
+    from app.models import TemplateName
+    assert Session.get(TemplateName, no) is None
+    assert client.delete(f"/api/templates/{no}", headers=auth).status_code == 404
+
+
+def test_delete_used_or_default_template_is_refused(client, auth):
+    _two_templates()
+    _project(client, auth, templateNo=2)
+    assert client.delete("/api/templates/2", headers=auth).status_code == 409
+    assert client.delete("/api/templates/1", headers=auth).status_code == 409
+    assert client.get("/api/templates/2", headers=auth).status_code == 200
+    assert client.get("/api/templates/1", headers=auth).status_code == 200
+
+
+# ── detach ────────────────────────────────────────────────────────────────────
+
+
+def test_detach_keeps_checklist_and_dates(client, auth):
+    _two_templates()
+    start = date(2026, 1, 5)
+    p = _project(client, auth, templateNo=1, startDate=start.isoformat())
+    legacy = _project(client, auth, templateNo=1)
+    Session.get(Project, legacy["id"]).template_no = None  # legacy NULL ≡ 1
+    Session.commit()
+    rows = _ptrack(client, auth, p["id"])
+    ticked = rows[0]["id"]
+    client.patch(f"/api/records/ptrack/{ticked}", json={"checked": True},
+                 headers=auth)
+    before = {r["id"]: (r["task"], r["startDate"], r["dueDate"]) for r in _ptrack(client, auth, p["id"])}
+
+    member = _register(client, "m@x.com")
+    assert client.post("/api/templates/1/detach", headers=member).status_code == 403
+    assert client.post("/api/templates/9/detach", headers=auth).status_code == 404
+    res = client.post("/api/templates/1/detach", headers=auth)
+    assert res.status_code == 200 and res.get_json()["detached"] == 2
+
+    proj = client.get(f"/api/projects/{p['id']}", headers=auth).get_json()
+    assert proj["templateNo"] is None
+    after = _ptrack(client, auth, p["id"])
+    assert {r["id"]: (r["task"], r["startDate"], r["dueDate"]) for r in after} == before
+    assert next(r for r in after if r["id"] == ticked)["checked"] is True
+    # own rows now drive the chain: A=3 days, B=4 days, in that order
+    by_proc = {r["process"]: (r["dayRange"], r["cumulativeDays"]) for r in after}
+    assert by_proc == {"A": (3, 3), "B": (4, 7)}
+    assert {t["templateNo"]: t["projectCount"] for t in
+            client.get("/api/templates", headers=auth).get_json()["items"]}[1] == 0
+
+    # moving the project start shifts its own chain
+    client.patch(f"/api/projects/{p['id']}", json={"startDate": "2026-02-02"}, headers=auth)
+    moved = {r["process"]: (r["startDate"], r["dueDate"]) for r in _ptrack(client, auth, p["id"])}
+    assert moved == {"A": ("2026-02-02", "2026-02-05"), "B": ("2026-02-06", "2026-02-10")}
+
+    # editing the template no longer affects the detached project
+    tag = Session.query(ProcessTag).filter_by(template_no=1, process="A").one()
+    client.patch(f"/api/process-tags/{tag.id}", json={"dayRange": 30}, headers=auth)
+    assert {r["process"]: r["dayRange"] for r in _ptrack(client, auth, p["id"])}["A"] == 3
+
+    # and it can pick a template again
+    res = client.post(f"/api/projects/{p['id']}/template", json={"templateNo": 2}, headers=auth)
+    assert res.status_code == 200 and res.get_json()["templateNo"] == 2
+
+
+def test_detach_then_delete(client, auth):
+    _two_templates()
+    _project(client, auth, templateNo=2)
+    assert client.delete("/api/templates/2", headers=auth).status_code == 409
+    assert client.post("/api/templates/2/detach", headers=auth).get_json()["detached"] == 1
+    assert client.delete("/api/templates/2", headers=auth).status_code == 204

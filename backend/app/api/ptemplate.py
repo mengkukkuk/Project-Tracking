@@ -21,7 +21,10 @@ from ..models import ProcessTag, Project, PTemplate, TemplateName
 from ..validation import ValidationError, int_field, require_dict, str_field
 from .helpers import (
     DEFAULT_TEMPLATE_NO,
+    DETACHED_TEMPLATE_NO,
+    log_activity,
     ptemplate_in_template,
+    recompute_ptrack_dates,
     require_permission,
     tag_in_template,
     template_exists,
@@ -159,6 +162,129 @@ def create_template():
         Session.add(TemplateName(template_no=new_no, name=name))
     Session.commit()
     return {"templateNo": new_no, "name": name}, 201
+
+
+def _import_processes(data):
+    """Validate the ``processes`` list of an import body; raise 422 on any problem."""
+    processes = data.get("processes")
+    if not isinstance(processes, list) or not processes:
+        raise ValidationError({"processes": "must be a non-empty list"})
+    out = []
+    for i, p in enumerate(processes, start=1):
+        if not isinstance(p, dict):
+            raise ValidationError({"processes": f"process {i} must be an object"})
+        try:
+            tasks = p.get("tasks") or []
+            if not isinstance(tasks, list):
+                raise ValidationError({"tasks": "must be a list"})
+            out.append({
+                "process": str_field(p, "process", required=True),
+                "dayRange": int_field(p, "dayRange", default=1, minimum=0),
+                "tasks": [
+                    {
+                        "task": str_field(require_dict(t), "task", required=True),
+                        "results": _optional_text(t, "results"),
+                        "undertaker": _optional_text(t, "undertaker"),
+                    }
+                    for t in tasks
+                ],
+            })
+        except ValidationError as e:
+            raise ValidationError({f"processes[{i}]": e.errors}) from None
+    return out
+
+
+@bp.post("/templates/import")
+@jwt_required()
+def import_template():
+    """POST /api/templates/import — create a whole template in one transaction.
+
+    Body: ``{name?, processes: [{process, dayRange?=1, tasks?: [{task, results?,
+    undertaker?}]}]}``. Processes get processid 1..n in order. Everything is
+    validated before anything is written, so a bad sheet leaves no half template.
+    """
+    denied = require_permission(current_user(), "templates.manage")
+    if denied:
+        return denied
+    data = require_dict(request.get_json(silent=True))
+    name = str_field(data, "name", max_len=100) or None
+    processes = _import_processes(data)
+
+    new_no = (Session.query(func.max(_NO)).scalar() or 0) + 1
+    for pid, p in enumerate(processes, start=1):
+        Session.add(
+            ProcessTag(processid=pid, process=p["process"], day_range=p["dayRange"],
+                       template_no=new_no)
+        )
+        for t in p["tasks"]:
+            Session.add(PTemplate(processid=pid, template_no=new_no, **t))
+    if name:
+        Session.add(TemplateName(template_no=new_no, name=name))
+    Session.commit()
+    return {
+        "templateNo": new_no,
+        "name": name,
+        "processCount": len(processes),
+        "taskCount": sum(len(p["tasks"]) for p in processes),
+    }, 201
+
+
+@bp.delete("/templates/<int:no>")
+@jwt_required()
+def delete_template(no):
+    """DELETE /api/templates/<no> — drop an unused template (processes, tasks, name).
+
+    Refused (409) while any project references it, and always for the default
+    template 1: ``create_project`` falls back to it when ``templateNo`` is
+    omitted, and new numbers are max + 1 so it could never come back.
+    """
+    denied = require_permission(current_user(), "templates.manage")
+    if denied:
+        return denied
+    if not template_exists(no):
+        return _not_found()
+    if no == DEFAULT_TEMPLATE_NO:
+        return _conflict("The default template cannot be deleted")
+    used = Session.query(func.count(Project.id)).filter(_PROJECT_NO == no).scalar()
+    if used:
+        return _conflict(f"Template {no} is used by {used} project(s)")
+    Session.query(PTemplate).filter(ptemplate_in_template(no)).delete(synchronize_session=False)
+    Session.query(ProcessTag).filter(tag_in_template(no)).delete(synchronize_session=False)
+    Session.query(TemplateName).filter(TemplateName.template_no == no).delete(
+        synchronize_session=False
+    )
+    Session.commit()
+    return "", 204
+
+
+@bp.post("/templates/<int:no>/detach")
+@jwt_required()
+def detach_template(no):
+    """POST /api/templates/<no>/detach — disconnect the template from every project.
+
+    Each project using it (incl. legacy NULL for template 1) gets
+    ``template_no = DETACHED_TEMPLATE_NO``. Its checklist, ticks and dates are
+    kept as-is; from then on its own ptrack rows drive its date chain
+    (``helpers.process_chain``), and it can pick a template again later via
+    ``POST /api/projects/<pid>/template``. Afterwards the template is unused, so
+    it can be deleted (except template 1).
+    """
+    user = current_user()
+    denied = require_permission(user, "templates.manage")
+    if denied:
+        return denied
+    if not template_exists(no):
+        return _not_found()
+    projects = Session.query(Project).filter(_PROJECT_NO == no).all()
+    # Settle each date chain on the template first, so the persisted dates
+    # (which become the project's own day budgets) are canonical.
+    for p in projects:
+        recompute_ptrack_dates(p.id)
+    for p in projects:
+        p.template_no = DETACHED_TEMPLATE_NO
+        log_activity(p.id, "updated", f"Disconnected from process template {no}", user)
+    Session.commit()
+    return {"templateNo": no, "detached": len(projects)}
 
 
 @bp.patch("/templates/<int:no>")

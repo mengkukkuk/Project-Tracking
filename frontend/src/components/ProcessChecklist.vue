@@ -110,7 +110,8 @@ async function toggle(rec) {
 // ── Template switcher ──────────────────────────────────────────────────────
 const templates = ref([])
 const pickedNo = ref(null)
-const currentNo = computed(() => store.current?.templateNo ?? 1)
+// null = disconnected from its template (checklist kept, no template followed)
+const currentNo = computed(() => store.current?.templateNo ?? null)
 const switching = ref(false)
 
 watch(
@@ -135,7 +136,8 @@ const currentTemplate = computed(() => templates.value.find((t) => t.templateNo 
 async function switchTemplate() {
   const to = pickedNo.value
   if (to == null || to === currentNo.value) return
-  const from = templateLabel(currentNo.value, currentTemplate.value?.name)
+  const from =
+    currentNo.value == null ? 'no template' : templateLabel(currentNo.value, currentTemplate.value?.name)
   const target = templateLabel(to, pickedTemplate.value?.name)
   const ticked = rows.value.filter((r) => r.checked).length
   const msg =
@@ -175,10 +177,11 @@ async function generate() {
 
 <template>
   <section class="panel proc">
-    <div v-if="templates.length > 1" class="tpl-bar">
+    <div v-if="templates.length > 1 || (currentNo == null && templates.length)" class="tpl-bar">
       <label>
         <span>Process template</span>
         <select v-model.number="pickedNo" :disabled="switching">
+          <option v-if="currentNo == null" :value="null" disabled>No template (disconnected)</option>
           <option v-for="t in templates" :key="t.templateNo" :value="t.templateNo">
             {{ templateLabel(t.templateNo, t.name) }}
           </option>
@@ -245,7 +248,8 @@ async function generate() {
 
     <div v-else class="empty-state">
       <p class="empty">No process checklist yet for this project.</p>
-      <button class="btn sm" :disabled="busy" @click="generate">
+      <!-- A disconnected project has no template to generate from; pick one above. -->
+      <button v-if="currentNo != null" class="btn sm" :disabled="busy" @click="generate">
         {{ busy ? 'Generating...' : 'Generate from template' }}
       </button>
     </div>

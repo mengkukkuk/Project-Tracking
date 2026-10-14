@@ -16,7 +16,6 @@ from ..models import (
     CustomerMom,
     ExceptionLog,
     InternalVerification,
-    ProcessTag,
     Project,
     PTrack,
     SurveyReport,
@@ -31,12 +30,11 @@ from ..validation import (
 )
 from .helpers import (
     log_activity,
-    project_template_no,
+    process_chain,
     recompute_project_status,
     recompute_ptrack_dates,
     recompute_ptrack_status,
     require_owner_or_admin,
-    tag_in_template,
 )
 
 bp = Blueprint("records", __name__, url_prefix="/api")
@@ -245,12 +243,7 @@ def list_records(pid, resource):
     #   due_date  = project.start_date + cumulativeDays
     #   start_date = previous group's due_date + 1 (first group: project.start_date)
     if resource == "ptrack" and items:
-        tag_rows = (
-            Session.query(ProcessTag.process, ProcessTag.day_range)
-            .filter(tag_in_template(project_template_no(Session.get(Project, pid))))
-            .order_by(ProcessTag.processid.asc())
-            .all()
-        )
+        tag_rows = process_chain(Session.get(Project, pid))
         cumulative_by_name = {}
         running = 0
         for name, dr in tag_rows:

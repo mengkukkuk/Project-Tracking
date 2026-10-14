@@ -16,11 +16,50 @@ from ..models import (
 )
 
 DEFAULT_TEMPLATE_NO = 1
+# ``projects.template_no = 0``: the project was disconnected from its template
+# (NULL can't be used — it already means template 1). It keeps its ptrack rows,
+# and those rows act as its own template (see :func:`process_chain`).
+DETACHED_TEMPLATE_NO = 0
 
 
 def project_template_no(project):
     """Template a project was created from; legacy NULL means template 1."""
-    return (project.template_no if project else None) or DEFAULT_TEMPLATE_NO
+    no = project.template_no if project else None
+    return DEFAULT_TEMPLATE_NO if no is None else no
+
+
+def process_chain(project):
+    """Canonical ``[(process, day_range)]`` order driving a project's date chain.
+
+    Normally the project's template ``process_tags`` (by processid). A detached
+    project has no template, so the chain is read back from its own ptrack rows:
+    each process's day budget is its persisted ``due - start`` (exactly what
+    :func:`recompute_ptrack_dates` wrote while it was attached), ordered by start
+    date. Processes without dates get ``None`` and sort last.
+    """
+    no = project_template_no(project)
+    if no != DETACHED_TEMPLATE_NO:
+        return (
+            Session.query(ProcessTag.process, ProcessTag.day_range)
+            .filter(tag_in_template(no))
+            .order_by(ProcessTag.processid.asc())
+            .all()
+        )
+    spans = {}  # process -> [min start, max due, min id]
+    rows = Session.query(PTrack).filter(PTrack.project_id == project.id).order_by(PTrack.id)
+    for r in rows.all():
+        if r.process is None:
+            continue
+        s = spans.setdefault(r.process, [None, None, r.id])
+        if r.start_date and (s[0] is None or r.start_date < s[0]):
+            s[0] = r.start_date
+        if r.due_date and (s[1] is None or r.due_date > s[1]):
+            s[1] = r.due_date
+    ordered = sorted(spans.items(), key=lambda kv: (kv[1][0] or date.max, kv[1][2]))
+    return [
+        (name, (due - start).days if start and due else None)
+        for name, (start, due, _) in ordered
+    ]
 
 
 def tag_in_template(template_no):
@@ -96,12 +135,7 @@ def recompute_ptrack_dates(project_id):
     if not project or not project.start_date:
         return 0
 
-    tag_chain = (
-        Session.query(ProcessTag.process, ProcessTag.day_range)
-        .filter(tag_in_template(project_template_no(project)))
-        .order_by(ProcessTag.processid.asc())
-        .all()
-    )
+    tag_chain = process_chain(project)
     group_dates = {}
     prev_due = None
     for name, dr in tag_chain:

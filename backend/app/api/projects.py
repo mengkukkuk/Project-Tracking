@@ -410,7 +410,7 @@ def change_template(pid):
     log_activity(
         pid,
         "updated",
-        f"Changed process template {old_no} → {new_no} ({kept} completed task"
+        f"Changed process template {old_no or 'none'} → {new_no} ({kept} completed task"
         f"{'' if kept == 1 else 's'} carried over)",
         user,
     )

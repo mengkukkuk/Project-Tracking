@@ -1426,3 +1426,130 @@ export async function parseRecordsExcelMulti(resources, file) {
 
   return { perResource, unknownSheets }
 }
+
+// ---------------------------------------------------------------------------
+// Process templates — one flat sheet, one row per task:
+//   Process | Days | Task | Result | Owner
+// A blank Process cell continues the process above (so vertically merged cells
+// work); the same name on consecutive rows is one process, while a name that
+// reappears after a different process starts a new one (templates may hold two
+// same-named processes, and export must round-trip them). Days
+// is read once per process (blank → 1). A process row with no Task is allowed
+// (a process without tasks). Export and import use the same columns, so an
+// exported template round-trips.
+// ---------------------------------------------------------------------------
+
+const TEMPLATE_COLUMNS = [
+  { key: 'process', label: 'Process' },
+  { key: 'dayRange', label: 'Days', type: 'number' },
+  { key: 'task', label: 'Task' },
+  { key: 'results', label: 'Result' },
+  { key: 'undertaker', label: 'Owner' },
+]
+
+const TEMPLATE_HEADERS = {
+  process: ['process', 'process name'],
+  dayRange: ['days', 'day', 'day range', 'dayrange', 'duration'],
+  task: ['task', 'tasks'],
+  results: ['result', 'results'],
+  undertaker: ['owner', 'undertaker'],
+}
+
+/**
+ * Export a template detail ({name, processes:[{process, dayRange, tasks}]}) in
+ * the import format. The process name + days are written on every task row so
+ * the sheet still reads correctly after sorting/filtering in Excel.
+ */
+export async function exportTemplateExcel(template, filename) {
+  const rows = []
+  for (const p of template.processes) {
+    const base = { process: p.process, dayRange: p.dayRange }
+    if (!p.tasks.length) rows.push(base)
+    for (const t of p.tasks) {
+      rows.push({ ...base, task: t.task, results: t.results || '', undertaker: t.undertaker || '' })
+    }
+  }
+  const wb = new ExcelJS.Workbook()
+  addColumnSheet(wb, TEMPLATE_COLUMNS, rows, 'Template')
+  await writeAndDownload(wb, filename || `template-${slug(template.name || 'export')}-${stamp()}.xlsx`)
+}
+
+/**
+ * Parse a template sheet (first worksheet). All-or-nothing: the caller should
+ * only import when `errors` is empty.
+ *
+ * @returns {Promise<{processes: {process:string, dayRange:number, tasks:object[]}[],
+ *   errors: {row:number,column:string,message:string}[], taskCount:number}>}
+ */
+export async function parseTemplateExcel(file) {
+  validateFileBasics(file)
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer())
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('The workbook has no sheets.')
+
+  const col = {}
+  ws.getRow(1).eachCell((cell, n) => {
+    const h = cellToString(cell.value).trim().toLowerCase()
+    for (const [key, aliases] of Object.entries(TEMPLATE_HEADERS)) {
+      if (aliases.includes(h) && !col[key]) col[key] = n
+    }
+  })
+  if (!col.process || !col.task) {
+    throw new Error('Header row must include at least "Process" and "Task" columns.')
+  }
+
+  // Template text is stored verbatim (never evaluated as a formula), and task
+  // text often starts with "- ", so cells are deliberately not sanitizeText'd.
+  const text = (row, key) => (col[key] ? cellToString(row.getCell(col[key]).value).trim() : '')
+  const processes = []
+  const errors = []
+  let current = null
+
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r)
+    const name = text(row, 'process')
+    const days = text(row, 'dayRange')
+    const task = text(row, 'task')
+    const results = text(row, 'results')
+    const undertaker = text(row, 'undertaker')
+    if (!name && !days && !task && !results && !undertaker) continue
+
+    if (name) {
+      if (current?.process.toLowerCase() !== name.toLowerCase()) {
+        current = { process: name, dayRange: null, tasks: [] }
+        processes.push(current)
+      }
+    } else if (!current) {
+      errors.push({ row: r, column: 'Process', message: 'Row has no process (and none above it)' })
+      continue
+    }
+
+    if (days) {
+      const d = Number(days)
+      if (!Number.isInteger(d) || d < 0) {
+        errors.push({ row: r, column: 'Days', message: `"${days}" is not a whole number ≥ 0` })
+      } else if (current.dayRange == null) {
+        current.dayRange = d
+      } else if (current.dayRange !== d) {
+        errors.push({
+          row: r,
+          column: 'Days',
+          message: `"${current.process}" already has ${current.dayRange} days`,
+        })
+      }
+    }
+
+    if (task) {
+      current.tasks.push({ task, results, undertaker })
+    } else if (results || undertaker) {
+      errors.push({ row: r, column: 'Task', message: 'Result/Owner given without a task' })
+    }
+  }
+
+  for (const p of processes) if (p.dayRange == null) p.dayRange = 1
+  if (!processes.length && !errors.length) {
+    errors.push({ row: 2, column: 'Process', message: 'The sheet has no processes' })
+  }
+  return { processes, errors, taskCount: processes.reduce((n, p) => n + p.tasks.length, 0) }
+}

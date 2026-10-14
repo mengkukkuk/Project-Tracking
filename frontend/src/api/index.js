@@ -120,6 +120,9 @@ export const api = {
   listTemplates: () => req('/templates'),
   getTemplate: (no) => req(`/templates/${no}`),
   createTemplate: (d) => req('/templates', { method: 'POST', body: JSON.stringify(d || {}) }),
+  importTemplate: (d) => req('/templates/import', { method: 'POST', body: JSON.stringify(d) }),
+  detachTemplate: (no) => req(`/templates/${no}/detach`, { method: 'POST' }),
+  deleteTemplate: (no) => req(`/templates/${no}`, { method: 'DELETE' }),
   renameTemplate: (no, name) =>
     req(`/templates/${no}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   createTemplateProcess: (no, d) =>

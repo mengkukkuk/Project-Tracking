@@ -228,7 +228,8 @@ class Project(Base):
             "progress": self.progress or 0,
             "teamSize": self.team_size,
             "complexity": self.complexity,
-            "templateNo": self.template_no or 1,
+            # 0 = disconnected from its template (helpers.DETACHED_TEMPLATE_NO)
+            "templateNo": None if self.template_no == 0 else (self.template_no or 1),
             "fiscalYear": self.fiscal_year,
             "startDate": _iso(self.start_date),
             "dueDate": _iso(self.due_date),

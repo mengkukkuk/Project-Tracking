@@ -4,7 +4,9 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { api } from '@/api'
 import { useUiStore } from '@/stores/ui'
 import { useFormat } from '@/composables/useFormat'
+import { exportTemplateExcel, parseTemplateExcel } from '@/utils/recordExport'
 import AppIcon from '@/components/AppIcon.vue'
+import Modal from '@/components/Modal.vue'
 import RouteSkeleton from '@/components/RouteSkeleton.vue'
 
 const ui = useUiStore()
@@ -108,6 +110,121 @@ async function createTemplate(cloneFrom) {
     ui.error(e.message)
   } finally {
     saving.value = false
+  }
+}
+
+// ── Delete / export / import ──────────────────────────────────────────────
+
+// Template 1 is the server-side default for projects created without a
+// templateNo, so it can't be deleted (the backend refuses it too).
+const deleteBlocker = computed(() => {
+  if (!selected.value) return 'No template selected'
+  if (selected.value.templateNo === 1) return 'The default template cannot be deleted'
+  if (selected.value.projectCount) return `Used by ${selected.value.projectCount} project(s)`
+  return null
+})
+
+async function deleteTemplate() {
+  const t = selected.value
+  if (!t || deleteBlocker.value) return
+  const label = t.name || `Template ${t.templateNo}`
+  if (!window.confirm(`Delete "${label}"? Its processes and tasks will be removed.`)) return
+  saving.value = true
+  try {
+    await api.deleteTemplate(t.templateNo)
+    draft.value = original.value = null // drop staged edits of the deleted template
+    await loadList()
+    await loadDetail()
+    ui.success(`"${label}" deleted`)
+  } catch (e) {
+    ui.error(e.message)
+    await loadList()
+  } finally {
+    saving.value = false
+  }
+}
+
+// Disconnect: every project using the template keeps its checklist as-is but
+// stops following the template (server sets template_no = 0).
+async function detachTemplate() {
+  const t = selected.value
+  if (!t?.projectCount) return
+  const label = t.name || `Template ${t.templateNo}`
+  const msg =
+    `Disconnect "${label}" from all ${t.projectCount} project(s)?\n\n` +
+    `Each project keeps its current process checklist, ticks and dates, but will no longer ` +
+    `follow this template.\n\nThere is no bulk undo: a project can pick a template again from its ` +
+    `Process tab, but that rebuilds its checklist (only ticked tasks with matching wording carry over).`
+  if (!window.confirm(msg)) return
+  saving.value = true
+  try {
+    const { detached } = await api.detachTemplate(t.templateNo)
+    await loadList()
+    ui.success(`"${label}" disconnected from ${detached} project(s)`)
+  } catch (e) {
+    ui.error(e.message)
+    await loadList()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function exportTemplate() {
+  if (!original.value) return
+  try {
+    // Exports the saved state, not unsaved staged edits.
+    await exportTemplateExcel({
+      name: original.value.name || templateLabel(selectedNo.value),
+      processes: original.value.processes,
+    })
+  } catch (e) {
+    ui.error(e.message)
+  }
+}
+
+const fileInput = ref(null)
+const importPreview = ref(null) // { fileName, name, processes, errors, taskCount }
+const importing = ref(false)
+
+function pickImportFile() {
+  if (!confirmDiscard()) return
+  fileInput.value?.click()
+}
+
+async function onImportFile(e) {
+  const file = e.target.files?.[0]
+  e.target.value = '' // allow re-picking the same file
+  if (!file) return
+  try {
+    const parsed = await parseTemplateExcel(file)
+    importPreview.value = {
+      ...parsed,
+      fileName: file.name,
+      name: file.name.replace(/\.[^.]+$/, '').slice(0, 100),
+    }
+  } catch (err) {
+    ui.error(err.message)
+  }
+}
+
+async function confirmImport() {
+  const pv = importPreview.value
+  if (!pv || pv.errors.length || !pv.processes.length) return
+  importing.value = true
+  try {
+    const made = await api.importTemplate({ name: pv.name.trim(), processes: pv.processes })
+    importPreview.value = null
+    draft.value = original.value = null // discard was already confirmed in pickImportFile
+    await loadList()
+    selectedNo.value = made.templateNo
+    await loadDetail()
+    ui.success(
+      `Imported template ${made.templateNo}: ${made.processCount} processes, ${made.taskCount} tasks`,
+    )
+  } catch (err) {
+    ui.error(err.message)
+  } finally {
+    importing.value = false
   }
 }
 
@@ -312,6 +429,46 @@ onMounted(async () => {
           >
             <AppIcon name="copy" :size="14" /> Clone #{{ selected.templateNo }}
           </button>
+          <button
+            class="btn ghost sm"
+            :disabled="saving"
+            title="Create a template from an Excel sheet (Process | Days | Task | Result | Owner)"
+            @click="pickImportFile"
+          >
+            <AppIcon name="doc" :size="14" /> Import Excel
+          </button>
+          <button
+            v-if="selected"
+            class="btn ghost sm"
+            :disabled="saving || !original"
+            title="Download the saved template in the import format"
+            @click="exportTemplate"
+          >
+            <AppIcon name="download" :size="14" /> Export
+          </button>
+          <button
+            v-if="selected"
+            class="btn ghost sm"
+            :disabled="saving || !selected.projectCount"
+            :title="
+              selected.projectCount
+                ? `Disconnect from all ${selected.projectCount} project(s); they keep their checklists`
+                : 'No projects use this template'
+            "
+            @click="detachTemplate"
+          >
+            <AppIcon name="close" :size="14" /> Disconnect
+          </button>
+          <button
+            v-if="selected"
+            class="btn ghost sm danger"
+            :disabled="saving || !!deleteBlocker"
+            :title="deleteBlocker || 'Delete this unused template'"
+            @click="deleteTemplate"
+          >
+            <AppIcon name="trash" :size="14" /> Delete
+          </button>
+          <input ref="fileInput" type="file" accept=".xlsx,.xls" hidden @change="onImportFile" />
         </div>
       </aside>
 
@@ -442,6 +599,78 @@ onMounted(async () => {
         </template>
       </section>
     </div>
+
+    <Modal
+      v-if="importPreview"
+      wide
+      title="Import template from Excel"
+      @close="!importing && (importPreview = null)"
+    >
+      <div class="imp">
+        <p class="imp-file">
+          <strong>{{ importPreview.fileName }}</strong> —
+          {{ importPreview.processes.length }} processes, {{ importPreview.taskCount }} tasks
+          <span v-if="importPreview.errors.length" class="bad">
+            · {{ importPreview.errors.length }} problem(s)
+          </span>
+        </p>
+
+        <label class="name-field">
+          <span>Template name</span>
+          <input v-model="importPreview.name" class="input" maxlength="100" :disabled="importing" />
+        </label>
+
+        <div v-if="importPreview.errors.length" class="imp-table">
+          <p class="bad">
+            Fix these rows in the sheet and import again — nothing is created until the sheet is
+            clean.
+          </p>
+          <table>
+            <thead><tr><th>Row</th><th>Column</th><th>Problem</th></tr></thead>
+            <tbody>
+              <tr v-for="(er, i) in importPreview.errors" :key="i">
+                <td class="mono">{{ er.row }}</td>
+                <td>{{ er.column }}</td>
+                <td>{{ er.message }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-else class="imp-table">
+          <table>
+            <thead><tr><th>#</th><th>Process</th><th>Days</th><th>Tasks</th></tr></thead>
+            <tbody>
+              <tr v-for="(p, i) in importPreview.processes" :key="i">
+                <td class="mono">{{ i + 1 }}</td>
+                <td>{{ p.process }}</td>
+                <td class="mono">{{ p.dayRange }}</td>
+                <td class="mono">{{ p.tasks.length }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="imp-hint">
+          Columns: <b>Process · Days · Task · Result · Owner</b>. One row per task; a blank Process
+          cell (or the same name on the next row) continues the process above; a name that
+          reappears later starts a new process. Blank Days → 1. Use <b>Export</b> on any template to get a sample file.
+        </p>
+      </div>
+
+      <template #footer>
+        <button class="btn ghost" :disabled="importing" @click="importPreview = null">
+          Cancel
+        </button>
+        <button
+          class="btn"
+          :disabled="importing || !!importPreview.errors.length || !importPreview.processes.length"
+          @click="confirmImport"
+        >
+          {{ importing ? 'Importing…' : 'Create template' }}
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -511,6 +740,17 @@ onMounted(async () => {
   color: var(--text-dim); padding: 0 2px;
 }
 .task-row.add { margin-top: 4px; grid-template-columns: 2.4fr 1.6fr 1fr 64px; }
+
+.btn.danger:not(:disabled) { color: var(--danger); }
+
+.imp { display: grid; gap: 14px; }
+.imp-file { margin: 0; font-size: 13px; }
+.imp-hint { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.imp-table { max-height: 320px; overflow: auto; }
+.imp-table p { margin: 0 0 8px; }
+.imp-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.imp-table th, .imp-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.bad { color: var(--danger); font-weight: 700; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
